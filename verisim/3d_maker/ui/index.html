@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Maker</title>
+  <style>
+    /* 布局：canvas 全铺满底；header / footer / ai-box / bv-side 四个面板绝对定位浮于其上，
+       全部透明背景 + 空白处 pointer-events 穿透，不遮挡、不影响底层模型交互。 */
+    body {
+      position: relative;
+      height: 100%;
+      min-height: 480px;
+      padding: 0 !important;
+      /* 覆盖宿主默认留白，让画布充满内容区 */
+      overflow: hidden;
+    }
+
+    /* 核心内容：3D 画布，全局占满并在后方显示模型 */
+    #gl {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      outline: none;
+    }
+
+    .panel {
+      position: absolute;
+      z-index: 10;
+      background: transparent;
+      pointer-events: none;
+      /* 面板空白区域不拦截画布的轨道操作 */
+      color: var(--text-color);
+      font-size: var(--font-size-sm);
+    }
+
+    .panel :is(button, select, input, a, .bar, .pop, section, .st) {
+      pointer-events: auto;
+    }
+
+    .p-top {
+      top: var(--spacing-sm);
+      left: var(--spacing-sm);
+      right: var(--spacing-sm);
+      z-index: 30;
+      /* 让弹出面板的层叠高于左右侧面板 */
+    }
+
+    .p-bottom {
+      bottom: var(--spacing-sm);
+      left: var(--spacing-sm);
+      right: var(--spacing-sm);
+    }
+
+    .p-left {
+      left: var(--spacing-sm);
+      top: calc(var(--hh, 44px) + 14px);
+      /* 跟随 header 实际高度（换行自动下移） */
+      bottom: 52px;
+      width: 320px;
+      pointer-events: auto;
+      height: auto !important;
+      /* 覆盖组件自带 height:100%，让 top/bottom 锚定生效 */
+    }
+
+    .p-right {
+      right: var(--spacing-sm);
+      top: calc(var(--hh, 44px) + 14px);
+      bottom: 52px;
+      width: 250px;
+      overflow-y: auto;
+    }
+
+    /* ---------- 手机模式：左右面板全宽，且同时只显示一个（默认 ai-box） ---------- */
+    @media (max-width: 760px) {
+
+      .p-left,
+      .p-right {
+        left: var(--spacing-sm);
+        right: var(--spacing-sm);
+        width: auto;
+      }
+    }
+
+    /* 面板背景全透明：融入底层画布；仅弹出对话框保留半透明底以保证可读 */
+    .bar,
+    .p-right section,
+    .st {
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-lg);
+      box-shadow: none;
+    }
+
+    .pop {
+      background: color-mix(in srgb, var(--bg-color) 62%, transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ---------- 顶部工具栏 ---------- */
+    .bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 5px 8px;
+    }
+
+    .grp {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .sep {
+      width: 1px;
+      height: 18px;
+      background: var(--border-color);
+      margin: 0 4px;
+    }
+
+    .sp {
+      flex: 1;
+    }
+
+    .bar button,
+    .bar select,
+    .pop select {
+      font: inherit;
+      color: var(--text-color);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--radius-md);
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .bar button:hover,
+    .btns button:hover {
+      background: color-mix(in srgb, var(--text-color) 8%, transparent);
+    }
+
+    .bar button.on {
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+      background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    }
+
+    .bar select,
+    .pop select {
+      border-color: var(--border-color);
+    }
+
+    /* ---------- 内核加载进度条（header 中间） ---------- */
+    .kload {
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 0 10px;
+    }
+
+    .kload .ktext {
+      color: var(--text-color-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kload .kbar {
+      flex: 0 1 200px;
+      width: 200px;
+      height: 4px;
+      background: color-mix(in srgb, var(--text-color) 14%, transparent);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .kload .kbar i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--color-primary);
+      border-radius: 2px;
+      transition: width var(--transition-base);
+    }
+
+    .kload .kpct {
+      flex: 0 0 34px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+      color: var(--text-color-tertiary);
+    }
+
+    /* ---------- 弹出面板（剖切 / 设置，挂在 header 内） ---------- */
+    .pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      z-index: 20;
+      min-width: 230px;
+      padding: 10px 12px;
+    }
+
+    .pop.left {
+      left: 0;
+    }
+
+    .pop.right {
+      right: 0;
+    }
+
+    .pop h4,
+    .p-right h4 {
+      margin: 0 0 8px;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--text-color-secondary);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+    }
+
+    .row label {
+      flex: 0 0 auto;
+      max-width: 92px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-color-tertiary);
+    }
+
+    .row input[type="range"] {
+      flex: 1 1 auto;
+      min-width: 40px;
+      accent-color: var(--color-primary);
+    }
+
+    .row input[type="number"] {
+      flex: 0 0 60px;
+      width: 60px;
+      padding: 2px 4px;
+      font-size: var(--font-size-xs);
+      color: var(--text-color);
+      background: color-mix(in srgb, var(--text-color) 6%, transparent);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+    }
+
+    .row input[type="color"] {
+      width: 40px;
+      height: 24px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .row .val {
+      flex: 0 0 48px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+    }
+
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      color: var(--text-color-secondary);
+    }
+
+    /* ---------- 右侧属性面板 ---------- */
+    .p-right section {
+      padding: 8px 12px;
+      margin-bottom: 8px;
+    }
+
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+      color: var(--text-color-tertiary);
+    }
+
+    .kv>span:last-child {
+      color: var(--text-color);
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+    }
+
+    .btns {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .btns button {
+      font: inherit;
+      color: var(--text-color);
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    /* ---------- 底部状态栏 ---------- */
+    .p-bottom {
+      display: flex;
+    }
+
+    .st {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+      padding: 4px 12px;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+      color: var(--text-color-tertiary);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .st .ok {
+      color: var(--color-success);
+    }
+
+    .st .busy {
+      color: var(--color-warning);
+    }
+
+    .st .error {
+      color: var(--color-danger);
+    }
+
+    .st .ms {
+      color: var(--color-primary);
+    }
+
+    .spin {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid var(--border-color);
+      border-top-color: var(--color-primary);
+      animation: bv-spin 0.9s linear infinite;
+      vertical-align: -2px;
+      margin-right: 5px;
+    }
+
+    @keyframes bv-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 核心内容：3D 画布，全局占满并在后方显示模型 -->
+  <canvas id="gl" ref="gl" tabindex="0"></canvas>
+
+  <!-- 面板 1：顶部工具栏（header） -->
+  <header class="panel p-top" ref="topbar">
+    <div class="bar">
+      <div class="grp">
+        <button :key="m[0]" v-for="m in viewModes" :class="{ on: viewMode === m[0] }" @click="setMode(m[0])">{{ m[1]
+          }}</button>
+      </div>
+      <div class="sep"></div>
+      <div class="grp">
+        <button :class="{ on: measureOn }" @click="toggleMeasure()" title="距离测量 (M)">📐 测量</button>
+        <button @click="fit()" title="适应视图 (F)">🔍 适应</button>
+        <button :class="{ on: projection === 'orthographic' }" @click="toggleProj()" title="透视/正交">{{ projection ===
+          'orthographic' ? '🎥 透视' : '🎥 正交' }}</button>
+        <button :class="{ on: showSettings }" @click="showSettings = !showSettings" title="显示设置">⚙</button>
+      </div>
+      <!-- OCCT 高性能解析器加载进度（加载完成前使用内置 JS 解析器） -->
+      <div class="kload" v-if="kernelLoading">
+        <span class="ktext">{{ kernelLoadText }}</span>
+        <div class="kbar"><i :style="{ width: kernelProgress + '%' }"></i></div>
+        <span class="kpct">{{ kernelProgress }}%</span>
+      </div>
+      <div class="sp"></div>
+      <div class="grp">
+        <select ref="exSel" @change="pickExample()" title="加载内置案例模型">
+          <option value="">📦 案例…</option>
+          <option :key="e[0]" v-for="e in examples" :value="e[0]">{{ e[1] }}</option>
+        </select>
+        <select ref="fmtSel" title="导出格式">
+          <option :key="f[0]" v-for="f in exportFormats" :value="f[0]">{{ f[1] }}</option>
+        </select>
+        <button @click="doDownload()" title="下载模型">⬇ 下载</button>
+        <button :class="{ on: isMobile ? mobileShowSide : showSide }" @click="togglePanel()" title="属性面板">☰</button>
+      </div>
+    </div>
+
+    <!-- 剖切平面设置（弹出） -->
+    <div class="pop left" v-if="viewMode === 'section'">
+      <h4>✂️ 剖切平面</h4>
+      <div class="row">
+        <label>平面</label>
+        <select ref="secAxis" :value="section.axis" @change="onSecAxis()" style="flex:1">
+          <option value="XY">XY（水平剖）</option>
+          <option value="XZ">XZ（垂直剖 Y）</option>
+          <option value="YZ">YZ（垂直剖 X）</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>偏移</label>
+        <input ref="secOff" type="range" :min="section.min" :max="section.max" step="0.5" :value="section.offset"
+          @input="onSecOff()">
+        <span class="val">{{ fmtOff(section.offset) }}</span>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" :checked="section.invert" @click="toggleInvert()"> 翻转方向</label>
+      </div>
+    </div>
+
+    <!-- 显示设置（弹出） -->
+    <div class="pop right" v-if="showSettings">
+      <h4>⚙ 显示设置</h4>
+      <div class="row"><label class="chk"><input type="checkbox" :checked="settings.grid" @click="toggleSet('grid')">
+          网格</label></div>
+      <div class="row"><label class="chk"><input type="checkbox" :checked="settings.axes" @click="toggleSet('axes')">
+          坐标轴</label></div>
+      <div class="row"><label class="chk"><input type="checkbox" :checked="settings.ground"
+            @click="toggleSet('ground')"> 地面</label></div>
+      <div class="row"><label class="chk"><input type="checkbox" :checked="settings.shadows"
+            @click="toggleSet('shadows')"> 阴影</label></div>
+      <div class="row">
+        <label>透明度</label>
+        <input ref="setT" type="range" min="0.05" max="0.95" step="0.05" :value="settings.transparency"
+          @input="onSetT()">
+        <span class="val">{{ settings.transparency }}</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 面板 2：左侧 AI 对话（外部组件，双向绑定会话 ID，$watch 动态重绑 nc 事件） -->
+  <ai-box v:id="sid" class="panel p-left" v-show="!isMobile || !mobileShowSide"></ai-box>
+
+  <!-- 面板 3：右侧属性面板（bv-side） -->
+  <aside class="panel p-right" v-show="isMobile ? mobileShowSide : showSide">
+    <section v-if="params.length">
+      <h4>🎛 参数面板</h4>
+      <div class="row" :key="p.name" v-for="p in params">
+        <label :title="p.name">{{ p.label }}</label>
+        <input type="range" :min="p.min" :max="p.max" :step="p.step" v:value="p.value" @input="onParam(p)">
+        <input type="number" :min="p.min" :max="p.max" :step="p.step" v:value="p.value" @change="onParam(p)">
+      </div>
+    </section>
+    <section>
+      <h4>📦 模型属性</h4>
+      <div class="kv"><span>体积</span><span>{{ stats ? fmtVol(stats.volume) : '-' }}</span></div>
+      <div class="kv"><span>表面积</span><span>{{ stats ? fmtArea(stats.area) : '-' }}</span></div>
+      <div class="kv"><span>包围盒 X</span><span>{{ stats ? fmtLen(stats.boundingBox.size[0]) : '-' }}</span></div>
+      <div class="kv"><span>包围盒 Y</span><span>{{ stats ? fmtLen(stats.boundingBox.size[1]) : '-' }}</span></div>
+      <div class="kv"><span>包围盒 Z</span><span>{{ stats ? fmtLen(stats.boundingBox.size[2]) : '-' }}</span></div>
+    </section>
+    <section>
+      <h4>📊 几何统计</h4>
+      <div class="kv"><span>顶点</span><span>{{ stats ? fmtInt(stats.mesh.vertices) : '-' }}</span></div>
+      <div class="kv"><span>三角面</span><span>{{ stats ? fmtInt(stats.mesh.triangles) : '-' }}</span></div>
+      <div class="kv"><span>边</span><span>{{ stats ? fmtInt(stats.mesh.edges) : '-' }}</span></div>
+      <div class="kv"><span>部件</span><span>{{ stats ? stats.partCount : '-' }}</span></div>
+    </section>
+    <section>
+      <h4>🎨 材质</h4>
+      <div class="row">
+        <label>颜色</label>
+        <input ref="matC" type="color" :value="material.color" @input="onMat()">
+      </div>
+      <div class="row">
+        <label>金属度</label>
+        <input ref="matM" type="range" min="0" max="1" step="0.05" :value="material.metalness" @input="onMat()">
+        <span class="val">{{ material.metalness }}</span>
+      </div>
+      <div class="row">
+        <label>粗糙度</label>
+        <input ref="matR" type="range" min="0" max="1" step="0.05" :value="material.roughness" @input="onMat()">
+        <span class="val">{{ material.roughness }}</span>
+      </div>
+    </section>
+    <section v-if="selection.length">
+      <h4>🖱 选中部件</h4>
+      <div class="kv" :key="s.index" v-for="s in selection"><span>{{ s.name }}</span><span>{{ fmtVol(s.volume) }}</span>
+      </div>
+      <div class="btns">
+        <button @click="isolate()">👁 隔离显示</button>
+        <button @click="hideSel()">🚫 隐藏</button>
+        <button @click="showAll()">↩ 全部显示</button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- 面板 4：底部状态栏（footer） -->
+  <footer class="panel p-bottom">
+    <div class="st">
+      <span :class="{ ok: statusType === 'ok', busy: statusType === 'busy', error: statusType === 'error' }"><i
+          v-if="statusType === 'busy'" class="spin"></i>{{ statusText }}</span>
+      <span>顶点: {{ stats ? fmtInt(stats.mesh.vertices) : '-' }}</span>
+      <span>三角面: {{ stats ? fmtInt(stats.mesh.triangles) : '-' }}</span>
+      <span>体积: {{ stats ? fmtVol(stats.volume) : '-' }}</span>
+      <span>面积: {{ stats ? fmtArea(stats.area) : '-' }}</span>
+      <span>耗时: {{ lastTime }}</span>
+      <span class="ms">{{ measureText }}</span>
+    </div>
+  </footer>
+
+  <script setup>
+    import BrepView from './brepview.js';
+    import OCCT from './occt-kernel.js';
+
+    // 供模板使用的格式化函数（挂到 $data；工具以静态属性挂在 BrepView 上）
+    fmtInt = BrepView.fmtInt;
+    fmtVol = BrepView.fmtVol;
+    fmtArea = BrepView.fmtArea;
+    fmtLen = BrepView.fmtLen;
+    fmtOff = (v) => Number(v).toFixed(1);
+
+    // ---------- 会话 ID：与 ai-box 双向绑定，$watch 监听变化动态重绑 nc 事件 ----------
+    // 默认空串：等 ai-box 回写真实会话 ID 后再绑定 nc，避免无效订阅
+    sid = localStorage.getItem('3dmaker_sid') || '';
+
+    // ---------- 界面状态 ----------
+    viewModes = [
+      ['solid', '实体'], ['wireframe', '线框'], ['hidden', '隐藏线'],
+      ['transparent', '透明'], ['xray', 'X光'], ['section', '剖面'],
+    ];
+    exportFormats = [
+      ['stl', 'STL (二进制)'], ['stl-ascii', 'STL (文本)'], ['obj', 'OBJ'],
+      ['glb', 'GLTF (.glb)'], ['brep', 'BREP (JSON)'],
+    ];
+    examples = [
+      ['lego-brick', '乐高积木'], ['gear', '参数化齿轮'], ['pipe-joint', '三通接头'],
+      ['flanged-bracket', 'L 型支架'], ['gear-reducer', '两级齿轮减速器'],
+    ];
+    viewMode = 'solid';
+    projection = 'perspective';
+    measureOn = false;
+    measureText = '';
+    showSettings = false;
+    showSide = true;
+    // 手机模式：左右面板同时只显示一个，默认 ai-box（false=左/对话框，true=右/属性面板）
+    isMobile = false;
+    mobileShowSide = false;
+    statusType = 'ok';
+    statusText = '初始化…';
+    stats = null;
+    lastTime = '-';
+    params = [];
+    selection = [];
+    section = {axis: 'XY', offset: 0, invert: false, min: -100, max: 100};
+    settings = {grid: true, axes: true, ground: true, shadows: true, transparency: 0.5};
+    material = {color: '#8fa3bf', metalness: 0.1, roughness: 0.6};
+
+    // ---------- OCCT 高性能解析器：后台加载，完成前使用内置 JS 解析器 ----------
+    kernelLoading = false;
+    kernelProgress = 0;
+    kernelLoadText = '正在加载高性能解析器…';
+    kernelName = 'builtin';
+    loadOCCT = async () => {
+      const v = bv();
+      if (!v) return;
+      kernelLoading = true;
+      kernelProgress = 0;
+      try {
+        const kernel = await OCCT.createOCCTKernel(null, (pct, text) => {
+          kernelProgress = pct;
+          if (text) kernelLoadText = text;
+        });
+        const r = await v.setKernel(kernel, {name: 'occt'});
+        if (r && r.success) $message.success('高性能解析器已启用');
+        else $message.info('高性能解析器与当前模型不兼容，继续使用内置解析器');
+      } catch (e) {
+        console.warn('[OCCT] 加载失败，继续使用内置解析器:', (e && e.message) || e);
+      } finally {
+        kernelLoading = false;
+      }
+    };
+
+    // ---------- 工具栏动作：全部转发给 viewer 引擎（引擎实例放 window，避免响应式包装） ----------
+    const bv = () => window._bv;
+    setMode = (m) => {showSettings = false; bv()?.setViewMode(m);}
+    toggleMeasure = () => bv()?.enableMeasurement(!measureOn);
+    fit = () => bv()?.fitToView();
+    toggleProj = () => bv()?.toggleProjection();
+    applySettings = () => bv()?.setDisplay({
+      grid: settings.grid,
+      axes: settings.axes,
+      ground: settings.ground,
+      shadows: settings.shadows,
+      transparency: Number(settings.transparency),
+    });
+    applyMaterial = () => bv()?.setMaterial({
+      color: material.color,
+      metalness: Number(material.metalness),
+      roughness: Number(material.roughness),
+    });
+    applySection = () => {
+      const v = bv();
+      if (!v) return;
+      v.setSectionPlane(section.axis, Number(section.offset), section.invert);
+      const r = v.getSectionRange();
+      if (r) {section.min = r.min; section.max = r.max;}
+    };
+    toggleSet = (k) => {settings[k] = !settings[k]; applySettings();};
+    toggleInvert = () => {section.invert = !section.invert; applySection();};
+    onSetT = () => {settings.transparency = Number($refs.setT.value); applySettings();};
+    onSecAxis = () => {section.axis = $refs.secAxis.value; applySection();};
+    onSecOff = () => {section.offset = Number($refs.secOff.value); applySection();};
+    onMat = () => {
+      material.color = $refs.matC.value;
+      material.metalness = Number($refs.matM.value);
+      material.roughness = Number($refs.matR.value);
+      applyMaterial();
+    };
+    // 面板切换：桌面端开关右侧面板；手机端在 ai-box 与右侧面板之间互斥切换
+    togglePanel = () => {
+      if (isMobile) mobileShowSide = !mobileShowSide;
+      else showSide = !showSide;
+    };
+    isolate = () => bv()?.isolateSelected();
+    hideSel = () => bv()?.hideSelected();
+    showAll = () => bv()?.showAllParts();
+    doDownload = async () => {
+      try {
+        const r = await bv()?.download($refs.fmtSel.value);
+        $message.success(`已导出 ${r.filename}`);
+      } catch (e) {
+        $message.error('导出失败：' + (e?.message || e));
+      }
+    };
+
+    // ---------- 参数面板：防抖回写引擎 ----------
+    let _paramTimer = null;
+    onParam = (p) => {
+      p.value = Number(p.value);
+      clearTimeout(_paramTimer);
+      _paramTimer = setTimeout(() => bv()?.setParam(p.name, p.value), 350);
+    };
+
+    // ---------- 内置案例：加载 $AGENT/examples 示例模型 ----------
+    const agentId = String($mod.scoped || '').split('/')[3]; // /aic/agents/{id} → {id}
+    const fsBase = '/' + String($mod.scoped || '').split('/')[1] + '/fs'; // → /aic/fs 文件服务前缀
+    loadExample = async (name) => {
+      try {
+        const resp = await window.fetch(`${fsBase}/agents/${agentId}/examples/${name}.js`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await bv()?.run(await resp.text());
+      } catch (e) {
+        console.warn('[案例] 加载失败:', e.message);
+        $message.error('案例加载失败：' + (e?.message || e));
+        return {success: false, message: String((e && e.message) || e)};
+      }
+    };
+    pickExample = () => {
+      const v = $refs.exSel.value;
+      $refs.exSel.value = '';
+      if (v) loadExample(v);
+    };
+
+    // ---------- nc 事件：按 sid 动态绑定 / 解绑 ----------
+    unsubs = [];
+    unsubAll = () => {
+      for (const u of unsubs) {
+        try {typeof u === 'function' ? u() : u?.unsubscribe?.();} catch (_) { }
+      }
+      unsubs = [];
+    };
+    bindSession = (id) => {
+      unsubAll();
+      if (!id || !$mod.$nc) return;
+      // run_code：直接执行代码字符串
+      unsubs.push($mod.$nc.sub(`s.${id}.ui_run.run_code`, async (err, msg) => {
+        const code = JSON.parse(msg.string()).code;
+        return await bv()?.run(code);
+      }));
+      // run_file：执行 UFS 代码文件（全局路径，支持 sessions/ home/ agents/ 三个根目录）
+      // 用法：ui_run action=run_file argv=["--path", "sessions/{sid}/models/x.js"]
+      unsubs.push($mod.$nc.sub(`s.${id}.ui_run.run_file`, async (err, msg) => {
+        try {
+          const data = JSON.parse(msg.string());
+          const path = String(data.path || data.file || '').replace(/^\/+/, '');
+          if (!path || path.includes('..')) {
+            return {success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（UFS 全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）'};
+          }
+          const resp = await window.fetch(`${fsBase}/${path}`); // 必须用 window.fetch：$mod.fetch 会自动拼路由前缀
+          if (!resp.ok) {
+            return {success: false, code: 'FILE_NOT_FOUND', message: `文件读取失败（HTTP ${resp.status}）：${fsBase}/${path}`};
+          }
+          return await bv()?.run(await resp.text());
+        } catch (e) {
+          return {success: false, code: 'RUN_FILE_ERROR', message: String((e && e.message) || e)};
+        }
+      }));
+      console.log(`[BrepView] nc 已绑定会话: ${id}`);
+    };
+    // ai-box 的 ID 变化 → 解绑旧会话 nc 事件，绑定新会话
+    $watch(() => sid, (nv, ov) => {
+      if (nv && nv !== ov) {
+        console.log(`[BrepView] 会话切换: ${ov} → ${nv}`);
+        localStorage.setItem('3dmaker_sid', sid)
+        bindSession(nv);
+      }
+    });
+  </script>
+
+  <script>
+    // 创建引擎：接收 canvas 作为参数；JS 不做任何界面工作
+    window._bv = new BrepView($refs.gl, {
+      theme: 'light',
+      shadows: true,
+      grid: true,
+      axes: true,
+      groundPlane: true,
+      onReady: () => console.log('[BrepView] 就绪'),
+    });
+    const v = window._bv;
+
+    // 引擎事件 → 界面响应式状态
+    v.on('status', (s) => {statusType = s.type; statusText = s.text;});
+    v.on('shapeLoaded', (r) => {
+      stats = r.stats;
+      lastTime = r.executionTime + ' ms';
+      params = v.extractParams();
+      // 持久化最近成功运行的模型代码（代码体积小，重新执行即可复原模型）
+      try {localStorage.setItem('3dmaker_last_code', v.getCode());} catch (_) { }
+      console.log(`[BrepView] 模型更新：${r.stats.mesh.triangles} 三角面, ${r.stats.partCount} 部件, ${r.stats.mesh.complexity} 复杂度`);
+    });
+    v.on('error', (r) => {$message.error(r.message || '运行错误');});
+    v.on('warnings', (ws) => {if (ws.length) $message.info('⚠️ ' + ws[0]);});
+    v.on('viewModeChange', (m) => {viewMode = m;});
+    v.on('projectionChange', (m) => {projection = m;});
+    v.on('measureModeChange', (on) => {measureOn = on;});
+    v.on('measure', (m) => {measureText = m ? `📐 ${m.text}` : '';});
+    v.on('selectionChange', (list) => {selection = list;});
+    v.on('sectionRange', (r) => {
+      section.axis = r.axis;
+      section.min = r.min;
+      section.max = r.max;
+      section.offset = r.value;
+      if (viewMode === 'section') applySection();
+    });
+    v.on('reset', () => {
+      stats = null;
+      lastTime = '-';
+      params = [];
+      selection = [];
+      measureText = '';
+      try {localStorage.removeItem('3dmaker_last_code');} catch (_) { } // 场景已清空，清除缓存模型
+    });
+
+    // 绑定当前会话的 nc 事件 + 恢复最近运行的模型（无缓存则加载默认乐高积木案例）
+    bindSession(sid);
+    window._sid = sid; // 调试：暴露当前订阅的会话 ID
+    v.on('kernelChange', (k) => {kernelName = k.name;});
+
+    const lastCode = localStorage.getItem('3dmaker_last_code');
+    if (lastCode) v.run(lastCode);
+    else loadExample('lego-brick');
+
+    // 后台加载 OCCT 高性能解析器（完成前使用内置 JS 解析器）
+    loadOCCT();
+
+    // header 高度自适应：换行（如手机窄屏）时同步调整左右面板顶部偏移
+    window._bvCleanups = [];
+    const topbar = $refs.topbar;
+    if (topbar) {
+      const rootEl = topbar.parentNode;
+      const syncTop = () => rootEl.style.setProperty('--hh', topbar.offsetHeight + 'px');
+      syncTop();
+      const topRO = new ResizeObserver(syncTop);
+      topRO.observe(topbar);
+      window._bvCleanups.push(() => topRO.disconnect());
+    }
+
+    // 手机模式媒体查询
+    const mq = window.matchMedia('(max-width: 760px)');
+    const syncMq = () => {isMobile = mq.matches;};
+    syncMq();
+    mq.addEventListener('change', syncMq);
+    window._bvCleanups.push(() => mq.removeEventListener('change', syncMq));
+  </script>
+
+  <script dispose>
+    (window._bvCleanups || []).forEach((f) => {try {f();} catch (_) { } });
+    window._bvCleanups = [];
+    unsubAll();
+    window._bv?.dispose();
+    window._bv = null;
+  </script>
+</body>
+
+</html>
