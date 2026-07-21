@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VeriSim Pro</title>
+  </head>
+  <style>
+    .verisim {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      color: var(--text-color);
+      position: relative;
+      overflow: hidden;
+    }
+    .spacer { flex: 1; }
+    .btn {
+      background: var(--bg-color-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 6px 12px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: var(--font-size-sm);
+      transition: var(--transition-fast);
+    }
+    .btn:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+    .btn.primary {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-primary-text);
+      font-weight: var(--font-weight-medium);
+    }
+    .btn.primary:hover {
+      background: var(--color-primary-hover);
+      color: var(--color-primary-text);
+    }
+    .btn.synth {
+      background: transparent;
+      border-color: var(--color-secondary);
+      color: var(--color-secondary);
+    }
+    .btn.synth:hover {
+      background: var(--color-secondary);
+      color: var(--color-secondary-text);
+    }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .btn.sm {
+      padding: 3px 9px;
+      font-size: var(--font-size-xs);
+      border-radius: var(--radius-sm);
+    }
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-color-secondary);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .header-tabs {
+      display: flex;
+      align-items: stretch;
+      min-width: 0;
+      overflow-x: auto;
+      flex: 1 1 auto;
+    }
+    .header-tools {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .top-input {
+      width: 92px;
+    }
+    input.btn, select.btn {
+      width: 150px;
+      background: transparent;
+    }
+    select.btn {
+      width: auto;
+      max-width: 220px;
+    }
+    main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+    }
+    .workbench {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-color);
+    }
+    .ai-side {
+      width: 380px;
+      min-width: 320px;
+      max-width: 460px;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .ai-side:not(.open) { display: none; }
+    .ai-close {
+      display: none;
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 2;
+    }
+    .code-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      overflow: hidden;
+    }
+    .code-lines {
+      width: 46px;
+      min-width: 46px;
+      margin: 0;
+      padding: 10px 6px 10px 0;
+      overflow: hidden;
+      text-align: right;
+      color: var(--text-color-disabled);
+      background: var(--bg-color-secondary);
+      border-right: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: var(--font-size-sm);
+      line-height: 1.45;
+      user-select: none;
+      white-space: pre;
+    }
+    .code-area {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      resize: none;
+      padding: 10px 12px;
+      color: var(--text-color);
+      background: transparent;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-sm);
+      line-height: 1.45;
+      white-space: pre;
+      overflow: auto;
+    }
+    .code-pane {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .console-section {
+      height: 190px;
+      min-height: 190px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .console {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 34px 12px 8px;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .console .err { color: var(--color-danger); }
+    .console .ok { color: var(--color-success); }
+    .console .info { color: var(--text-color-tertiary); }
+    .console .wrn { color: var(--color-warning); }
+    .console .sys { color: var(--color-secondary); }
+    .tab {
+      padding: 8px 12px;
+      font-size: var(--font-size-sm);
+      color: var(--text-color-tertiary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .tab.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+    .result-bar {
+      padding: 6px var(--spacing-md);
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-color-secondary);
+      font-size: var(--font-size-xs);
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pane {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      overflow: auto;
+    }
+    .pane.active {
+      display: flex;
+      flex-direction: column;
+    }
+    .pane.wave.active { flex-direction: row; }
+    .sig-panel {
+      width: 230px;
+      min-width: 230px;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-color-secondary);
+    }
+    .sig-btns {
+      display: flex;
+      gap: 6px;
+      padding: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .sig-btns .btn { padding: 3px 10px; font-size: var(--font-size-xs); }
+    .sig-list {
+      flex: 1;
+      overflow: auto;
+      padding: 6px 0;
+    }
+    .sig-list label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      font-size: var(--font-size-xs);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      color: var(--text-color);
+    }
+    .sig-list label:hover { background: var(--bg-color-tertiary); }
+    .sig-list .w {
+      color: var(--text-color-tertiary);
+      font-size: 11px;
+      margin-left: auto;
+    }
+    .wave-right {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .wave-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: var(--font-size-xs);
+      color: var(--text-color-tertiary);
+      flex-wrap: wrap;
+    }
+    .wave-wrap {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+      cursor: crosshair;
+    }
+    .wave-canvas { display: block; }
+    .empty {
+      padding: 28px;
+      color: var(--text-color-tertiary);
+      font-size: var(--font-size-sm);
+      line-height: 1.8;
+    }
+    .sch-wrap {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    .sch-inner {
+      position: absolute;
+      transform-origin: 0 0;
+    }
+    .sch-inner svg { display: block; }
+    .sch-hint {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      font-size: 11px;
+      color: var(--text-color-tertiary);
+      background: var(--bg-color-secondary);
+      border: 1px solid var(--border-color);
+      padding: 2px 8px;
+      border-radius: var(--radius-md);
+    }
+    .sch-tools {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      z-index: 2;
+      display: flex;
+      gap: 6px;
+    }
+    .report { padding: 18px; }
+    .card {
+      background: var(--bg-color-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    .card h3 {
+      font-size: var(--font-size-md);
+      color: var(--color-primary);
+      margin: 0 0 10px 0;
+    }
+    .kpi {
+      display: flex;
+      gap: 26px;
+      flex-wrap: wrap;
+    }
+    .kpi .item b {
+      display: block;
+      font-size: 24px;
+      color: var(--color-success);
+    }
+    .kpi .item span {
+      font-size: var(--font-size-xs);
+      color: var(--text-color-tertiary);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-xs);
+    }
+    th, td {
+      text-align: left;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    th { color: var(--text-color-tertiary); font-weight: var(--font-weight-medium); }
+    td.num, th.num { text-align: right; font-family: var(--font-mono); }
+    .mono { font-family: var(--font-mono); }
+    .dim { color: var(--text-color-tertiary); }
+    .netlist {
+      flex: 1;
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+      line-height: 1.5;
+      color: var(--text-color-secondary);
+      white-space: pre;
+    }
+    .ai-box-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .run-status {
+      margin-left: 8px;
+      min-width: 0;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      align-self: center;
+    }
+    .console-tools {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 2;
+      display: flex;
+      gap: 6px;
+    }
+    @media (max-width: 860px) {
+      .run-status { display: none; }
+      .workbench { border-right: 0; }
+      .top-input { width: 72px; }
+      .header-tools { gap: 4px; }
+      .pane.wave.active { flex-direction: column; }
+      .sig-panel {
+        width: 100%;
+        min-width: 0;
+        max-height: 150px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .sig-list { max-height: 110px; }
+      .console-section { height: 160px; min-height: 160px; }
+      .ai-side {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+        width: min(92vw, 420px);
+        max-width: none;
+        border-left: 1px solid var(--border-color);
+        background: var(--bg-color);
+        box-shadow: var(--shadow-lg);
+        z-index: 30;
+        transform: translateX(105%);
+        transition: transform var(--transition-base);
+        pointer-events: none;
+      }
+      .ai-side.open {
+        transform: translateX(0);
+        pointer-events: auto;
+      }
+      .ai-side:not(.open) { display: flex; }
+      .ai-close { display: block; }
+      .ai-box-wrap { padding-top: 34px; }
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      background: color-mix(in srgb, var(--bg-color) 72%, transparent);
+    }
+    .overlay .box {
+      background: var(--bg-color-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg);
+      padding: 26px 34px;
+      text-align: center;
+      min-width: 340px;
+    }
+    .overlay .bar {
+      height: 8px;
+      background: var(--bg-color-tertiary);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      margin-top: 12px;
+    }
+    .overlay .bar i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--color-primary);
+      transition: width var(--transition-base);
+    }
+    a.dl {
+      color: var(--color-success);
+      font-size: var(--font-size-xs);
+      text-decoration: none;
+      border: 1px solid var(--color-success);
+      border-radius: var(--radius-md);
+      padding: 4px 10px;
+    }
+    code {
+      font-family: var(--font-mono);
+      color: var(--text-color-secondary);
+    }
+  </style>
+  <body>
+    <div class="verisim" ref="root">
+      <header class="app-header">
+        <div class="header-actions">
+          <button class="btn sm primary" :disabled="busy || !ready" @click="manualSim">仿真</button>
+          <button class="btn sm synth" :disabled="busy || !ready" @click="manualSynth">综合</button>
+        </div>
+        <nav class="header-tabs">
+          <div class="tab" :class="{ active: activePane === 'code' }" @click="showPane('code')">代码预览</div>
+          <div class="tab" :class="{ active: activePane === 'wave' }" @click="showPane('wave')">波形</div>
+          <div class="tab" :class="{ active: activePane === 'sch' }" @click="showPane('sch')">原理图</div>
+          <div class="tab" :class="{ active: activePane === 'synth' }" @click="showPane('synth')">综合报告</div>
+          <div class="tab" :class="{ active: activePane === 'netlist' }" @click="showPane('netlist')">门级网表</div>
+        </nav>
+        <div class="header-tools">
+          <select class="btn sm" @change="onSessionFilePick" @mousedown="loadSessionFiles" :disabled="!aiSessionId" title="加载当前会话文件">
+            <option value="">会话文件…</option>
+            <option :key="f.name" v-for="f in sessionFiles" :value="f.name">{{ f.name }}</option>
+          </select>
+          <select class="btn sm" @change="onExamplePick" title="加载示例">
+            <option value="">加载示例…</option>
+            <option value="counter">4-bit 计数器</option>
+            <option value="alu">8-bit ALU</option>
+            <option value="fsm">序列检测 FSM（1011）</option>
+            <option value="adder">4-bit 行波进位加法器（门级）</option>
+          </select>
+          <input class="btn sm top-input" v:value="topModule" placeholder="顶层模块" title="综合顶层模块名，留空自动推断" />
+          <button class="btn sm" @click="toggleAi">{{ aiOpen ? '收起 AI' : '打开 AI' }}</button>
+          <span class="dim run-status" :title="statusText">{{ statusText }}</span>
+        </div>
+      </header>
+
+      <main>
+        <div class="workbench">
+          <div class="result-bar" v-if="activePane !== 'code' && resultKey">
+            <span>当前结果组：{{ resultKey }}<span v-if="resultState"> · {{ resultState }}</span></span>
+          </div>
+
+          <div class="pane" :class="{ active: activePane === 'code' }">
+            <div class="code-pane">
+              <div class="code-wrap">
+                <pre class="code-lines" ref="codeLines">{{ lineNumbers }}</pre>
+                <textarea
+                  ref="codeArea"
+                  class="code-area"
+                  v:value="code"
+                  spellcheck="false"
+                  @input="onCodeInput"
+                  @scroll="syncCodeScroll"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="pane wave" :class="{ active: activePane === 'wave' }">
+            <div class="sig-panel">
+              <div class="sig-btns">
+                <button class="btn" :disabled="!waveData" @click="selectAllSignals">全选</button>
+                <button class="btn" :disabled="!waveData" @click="clearSignals">清空</button>
+              </div>
+              <div class="sig-list">
+                <label :key="sig.id" v-for="sig in signals">
+                  <input type="checkbox" :checked="selIds.includes(sig.id)" @change="toggleSignal(sig.id, $event.target.checked)" />
+                  <span>{{ sig.name }}</span>
+                  <span class="w">{{ sig.width > 1 ? '[' + (sig.width - 1) + ':0]' : '1b' }}</span>
+                </label>
+              </div>
+            </div>
+            <div class="wave-right">
+              <div class="wave-toolbar">
+                <button class="btn" :disabled="!waveData" @click="zoomOut">−</button>
+                <button class="btn" :disabled="!waveData" @click="zoomIn">＋</button>
+                <button class="btn" :disabled="!waveData" @click="zoomFit">适应</button>
+                <span>{{ curInfo }}</span>
+                <span class="spacer"></span>
+                <a class="dl" v-show="canDownloadVcd" :href="vcdUrl" download="dump.vcd">下载 VCD</a>
+                <span>{{ waveInfo }}</span>
+              </div>
+              <div class="wave-wrap" ref="waveWrap" @mousedown="waveStart" @wheel="waveWheel">
+                <div class="empty" v-if="!waveHasSelection">
+                  {{ waveEmptyText }}
+                </div>
+                <canvas class="wave-canvas" ref="waveCanvas" v-show="waveHasSelection"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="pane" :class="{ active: activePane === 'sch' }">
+            <div class="sch-wrap" ref="schWrap" @mousedown="schStart" @wheel="schWheel">
+              <div class="sch-tools">
+                <button class="btn sm" :disabled="!schNetlist" @click="schZoomOut">−</button>
+                <button class="btn sm" :disabled="!schNetlist" @click="schZoomIn">＋</button>
+                <button class="btn sm" :disabled="!schNetlist" @click="schReset">适应</button>
+              </div>
+              <div class="empty" v-if="!schReady">点击「综合」后，Yosys 网表将渲染为原理图。可用左上角按钮或滚轮缩放，拖动平移。</div>
+              <div class="sch-inner" ref="schInner" v-html="schSvg"></div>
+              <div class="sch-hint">滚轮缩放 · 拖动平移</div>
+            </div>
+          </div>
+
+          <div class="pane" :class="{ active: activePane === 'synth' }">
+            <div class="report" v-if="!synthOverview">
+              <div class="card">
+                <h3>综合报告</h3>
+                <div class="dim">点击「综合」运行真实 Yosys 流程：read_verilog → hierarchy → proc/opt/fsm/memory/techmap → stat。</div>
+              </div>
+            </div>
+            <div class="report" v-else>
+              <div class="card">
+                <h3>概览 — 顶层模块 {{ synthOverview.top }}</h3>
+                <div class="kpi">
+                  <div class="item"><b>{{ synthOverview.cells }}</b><span>单元数 cells</span></div>
+                  <div class="item"><b>{{ synthOverview.cellBits }}</b><span>单元位数</span></div>
+                  <div class="item"><b>{{ synthOverview.dff }}</b><span>触发器 DFF</span></div>
+                  <div class="item"><b>{{ synthOverview.wires }}</b><span>线网 wires</span></div>
+                  <div class="item"><b>{{ synthOverview.wireBits }}</b><span>线网位数</span></div>
+                </div>
+              </div>
+              <div class="card">
+                <h3>单元映射（techmap 后）</h3>
+                <table>
+                  <tr><th>单元类型</th><th class="num">数量</th></tr>
+                  <tr :key="row.name" v-for="row in synthCells">
+                    <td class="mono">{{ row.name }}</td>
+                    <td class="num">{{ row.count }}</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="card">
+                <h3>综合流程</h3>
+                <div class="dim" style="line-height: 1.8;">
+                  <code>read_verilog → hierarchy -top {{ synthOverview.top }} → proc; opt; fsm; opt; memory; opt; techmap; opt; stat</code><br />
+                  门级网表见「门级网表」标签页，结构原理图见「原理图」。
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pane" :class="{ active: activePane === 'netlist' }">
+            <pre class="netlist">{{ netlistText }}</pre>
+          </div>
+
+        </div>
+
+        <aside class="ai-side" :class="{ open: aiOpen }">
+          <button class="btn sm ai-close" @click="toggleAi">×</button>
+          <div class="ai-box-wrap">
+            <ai-box v:id="aiSessionId"></ai-box>
+          </div>
+        </aside>
+      </main>
+
+      <section class="console-section">
+        <div class="console-tools">
+          <button class="btn sm" :disabled="!consoleLines.length" @click="copyConsole">复制</button>
+          <button class="btn sm" :disabled="busy" @click="clearConsole">清空</button>
+        </div>
+        <div class="console" ref="consoleEl">
+          <div :key="idx" v-for="(line, idx) in consoleLines" :class="line.cls">{{ line.text }}</div>
+        </div>
+      </section>
+
+      <div class="overlay" v-if="overlayShow">
+        <div class="box">
+          <div style="font-size: var(--font-size-md);">{{ overlayTitle }}</div>
+          <div class="dim" style="font-size: var(--font-size-xs); margin-top: 6px;">{{ overlaySub }}</div>
+          <div class="bar"><i :style="{ width: overlayPercent + '%' }"></i></div>
+        </div>
+      </div>
+    </div>
+  </body>
+
+  <script setup>
+    const scopedKey = (($mod.scoped || 'root') + '').replace(/[^a-z0-9]+/gi, '_')
+    const lsKey = (name) => 'verisim:' + scopedKey + ':' + name
+    const lsGet = (name) => {
+      try { return localStorage.getItem(lsKey(name)) } catch (_) { return null }
+    }
+    const lsSet = (name, value) => {
+      try { localStorage.setItem(lsKey(name), value) } catch (_) {}
+    }
+    const lsDel = (name) => {
+      try { localStorage.removeItem(lsKey(name)) } catch (_) {}
+    }
+    const hashCode = (s) => {
+      let h = 0
+      s = String(s || '')
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0
+      return (h >>> 0).toString(16).padStart(8, '0')
+    }
+    const DEFAULT_CODE = `// VeriSim Pro 单文件示例：4-bit 计数器 + 测试台
+module counter(clk, rst_n, en, q);
+  input  clk, rst_n, en;
+  output reg [3:0] q;
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) q <= 4'd0;
+    else if (en) q <= q + 1'b1;
+  end
+endmodule
+
+\`timescale 1ns/1ps
+module tb;
+  reg clk, rst_n, en;
+  wire [3:0] q;
+  counter dut(.clk(clk), .rst_n(rst_n), .en(en), .q(q));
+
+  always #5 clk = ~clk;
+
+  initial begin
+    clk = 0; rst_n = 0; en = 0;
+    #12 rst_n = 1;
+    #10 en = 1;
+    repeat (16) @(posedge clk);
+    $display("t=%0t  q=%0d", $time, q);
+    #10 en = 0;
+    #20 $display("done, final q = %0d", q);
+    $finish;
+  end
+endmodule
+`
+
+    ready = false
+    busy = false
+    statusText = '正在初始化本地数据模块…'
+    sourceLabel = 'localStorage/手动编辑'
+    activePane = lsGet('active_pane') || 'code'
+    if (activePane === 'ai') activePane = 'code'
+    code = lsGet('code') || DEFAULT_CODE
+    codeHash = hashCode(code)
+    resultKey = ''
+    resultState = ''
+    lineNumbers = '1'
+    topModule = ''
+    consoleLines = []
+
+    waveData = null
+    signals = []
+    selIds = []
+    lastVCD = ''
+    vcdUrl = ''
+    canDownloadVcd = false
+    waveHasSelection = false
+    waveEmptyText = '点击「仿真」运行 Icarus Verilog，VCD 波形将显示在这里。'
+    waveInfo = ''
+    curInfo = '点击波形放置游标'
+    pxPerT = 6
+    view0 = 0
+    curT = null
+    NAME_W = 150
+    VAL_W = 76
+    ROW_H = 30
+    TOP = 24
+    waveDrag = null
+
+    synthOverview = null
+    synthCells = []
+    netlistText = '综合后在此显示门级网表（write_verilog 输出）。'
+    schNetlist = null
+    schSvg = ''
+    schReady = false
+    schScale = 1
+    schX = 20
+    schY = 20
+    schDrag = null
+
+    overlayShow = false
+    overlayTitle = ''
+    overlaySub = ''
+    overlayPercent = 0
+
+    aiSessionId = lsGet('ai_session_id') || ''
+    aiOpen = window.innerWidth >= 860
+    sessionFiles = []
+    uiRunUnsubs = []
+    lsDel('last_run_meta')
+    lsDel('last_vcd')
+
+    let codeSaveTimer = null
+
+    const $el = (name) => ($data.$refs && $data.$refs[name]) ? $data.$refs[name] : null
+    const tail = (s, n) => {
+      s = String(s || '')
+      return s.length > (n || 2000) ? s.slice(-(n || 2000)) : s
+    }
+    const sanitize = (s) => String(s || '').replace(/ /g, ' ').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    const theme = (name, fallback) => {
+      const el = $el('waveCanvas') || $el('root') || document.documentElement
+      const v = getComputedStyle(el).getPropertyValue(name).trim()
+      return v || fallback
+    }
+    const toast = (type, msg) => {
+      const m = $sys && $sys.$message
+      if (m && m[type]) m[type](msg)
+    }
+
+    refreshLineNumbers = () => {
+      const n = String(code || '').split('\n').length
+      let out = ''
+      for (let i = 1; i <= n; i++) out += (i === 1 ? '' : '\n') + i
+      lineNumbers = out
+    }
+    saveCode = () => lsSet('code', code || '')
+    saveAiSessionId = (sid) => lsSet('ai_session_id', sid || '')
+    onCodeInput = () => {
+      refreshLineNumbers()
+      sourceLabel = '手动编辑'
+      if (codeSaveTimer) clearTimeout(codeSaveTimer)
+      codeSaveTimer = setTimeout(() => saveCode(), 300)
+    }
+    syncCodeScroll = () => {
+      const lines = $el('codeLines')
+      const area = $el('codeArea')
+      if (lines && area) lines.scrollTop = area.scrollTop
+    }
+
+    log = (msg, cls) => {
+      if (msg === undefined || msg === null) return
+      consoleLines.push({ text: String(msg), cls: cls || 'info' })
+      if (consoleLines.length > 900) consoleLines.splice(0, consoleLines.length - 900)
+      requestAnimationFrame(() => {
+        const el = $el('consoleEl')
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    }
+    clearConsole = () => {
+      consoleLines = []
+      return { ok: true, text: 'console cleared' }
+    }
+    copyConsole = async () => {
+      const text = consoleLines.map(l => l.text).join('\n')
+      try {
+        await navigator.clipboard.writeText(text)
+        toast('success', '控制台已复制')
+      } catch (e) {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        document.body.appendChild(ta)
+        ta.select()
+        try {
+          document.execCommand('copy')
+          toast('success', '控制台已复制')
+        } catch (_) {
+          toast('error', '复制失败')
+        }
+        ta.remove()
+      }
+      return { ok: true, text: 'console copied', length: text.length }
+    }
+    setBusy = (b, label) => {
+      busy = b
+      statusText = label || (b ? '运行中…' : '就绪。')
+    }
+
+    showPane = (name) => {
+      if (name === 'ai') name = 'code'
+      if (name === 'console') {
+        requestAnimationFrame(() => {
+          const el = $el('consoleEl')
+          if (el) el.scrollTop = el.scrollHeight
+        })
+        return { ok: true, text: 'pane=console' }
+      }
+      activePane = name
+      lsSet('active_pane', name)
+      if (name === 'code') requestAnimationFrame(() => { refreshLineNumbers(); syncCodeScroll() })
+      if (name === 'wave') renderWaveSoon()
+      if (name === 'sch') requestAnimationFrame(() => applySch())
+      return { ok: true, text: 'pane=' + name }
+    }
+    clearResults = () => {
+      waveData = null
+      signals = []
+      selIds = []
+      lastVCD = ''
+      if (vcdUrl) {
+        URL.revokeObjectURL(vcdUrl)
+        vcdUrl = ''
+      }
+      canDownloadVcd = false
+      waveHasSelection = false
+      waveEmptyText = '点击「仿真」运行 Icarus Verilog，VCD 波形将显示在这里。'
+      waveInfo = ''
+      curInfo = '点击波形放置游标'
+      curT = null
+      view0 = 0
+      synthOverview = null
+      synthCells = []
+      netlistText = '综合后在此显示门级网表（write_verilog 输出）。'
+      schNetlist = null
+      schSvg = ''
+      schReady = false
+      schScale = 1
+      schX = 20
+      schY = 20
+      resultKey = ''
+      resultState = ''
+      renderWaveSoon()
+      requestAnimationFrame(() => applySch())
+    }
+    setCodeFromAction = (nextCode, label) => {
+      const h = hashCode(nextCode)
+      const changed = h !== codeHash
+      code = nextCode
+      codeHash = h
+      sourceLabel = label
+      refreshLineNumbers()
+      saveCode()
+      if (changed) {
+        clearResults()
+        resultKey = label + ' · ' + h
+        resultState = '代码已更新，波形/原理图/综合报告/门级网表已清空'
+      } else if (!resultKey) {
+        resultKey = label + ' · ' + h
+      }
+    }
+    loadExample = (name) => {
+      const ex = window.VeriSimExamples && window.VeriSimExamples[name]
+      if (!ex) return
+      setCodeFromAction(ex.code, '示例: ' + name)
+      topModule = ex.top || ''
+      showPane('code')
+      log('已加载示例：' + name + '，已清空波形/原理图/综合报告/门级网表。', 'ok')
+    }
+    onExamplePick = (e) => {
+      const v = e && e.target ? e.target.value : ''
+      if (v) loadExample(v)
+      if (e && e.target) e.target.value = ''
+    }
+
+    readUfsText = async (ufsPath) => {
+      const r = await $mod.fetch(($mod.fs_prefix || '') + '[' + ufsPath + ']')
+      if (!r.ok) throw new Error('读取 ufs 失败: HTTP ' + r.status)
+      return await r.text()
+    }
+    loadSessionFiles = async () => {
+      if (!aiSessionId) {
+        sessionFiles = []
+        return { ok: false, text: 'no ai session' }
+      }
+      try {
+        const r = await $mod.fetch(($mod.fs_prefix || '') + '/sessions/' + aiSessionId)
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        const d = await r.json()
+        const items = d && d.items ? d.items : []
+        sessionFiles = items.filter(x => x && !x.dir && /\.(v|sv|txt)$/i.test(x.name || ''))
+        return { ok: true, total: sessionFiles.length }
+      } catch (e) {
+        sessionFiles = []
+        log('读取会话文件列表失败：' + (e && e.message ? e.message : e), 'wrn')
+        return { ok: false, error: e && e.message ? e.message : String(e) }
+      }
+    }
+    loadSessionFile = async (name) => {
+      if (!aiSessionId || !name) return
+      const path = '/sessions/' + aiSessionId + '/' + name
+      const fileCode = await readUfsText(path)
+      setCodeFromAction(fileCode, '会话文件: ' + name)
+      if (window.VeriSimSynth) topModule = window.VeriSimSynth.stripForSynth(fileCode).top || topModule
+      showPane('code')
+      log('已加载当前会话文件：' + path, 'ok')
+    }
+    onSessionFilePick = (e) => {
+      const v = e && e.target ? e.target.value : ''
+      if (v) {
+        loadSessionFile(v).catch(err => {
+          const msg = err && err.message ? err.message : String(err)
+          log('加载会话文件失败：' + msg, 'err')
+          toast('error', '加载会话文件失败')
+        })
+      }
+      if (e && e.target) e.target.value = ''
+    }
+
+    runSimCode = async (opts) => {
+      const o = opts || {}
+      if (busy) return { ok: false, text: '仿真/综合进行中，请稍后', error: 'busy' }
+      if (!window.VeriSimEngines) return { ok: false, text: '仿真引擎未加载', error: 'engine not loaded' }
+      const simLabel = o.source === 'sim_file'
+        ? ('sim_file: ' + (o.file || ''))
+        : (o.source === 'sim_code' ? 'sim_code' : '手动运行')
+      if (typeof o.code === 'string') setCodeFromAction(o.code, simLabel)
+      else sourceLabel = simLabel
+      clearConsole()
+      const t0 = performance.now()
+      setBusy(true, '仿真中…（引擎加载与运行期间页面会短暂无响应）')
+      try {
+        let src = sanitize(code)
+        if (!/\$dumpfile/.test(src)) {
+          src += `\n// —— 由 VeriSim 自动注入：VCD 波形抓取 ——\nmodule __vcd_dump__;\n  initial begin\n    $dumpfile("dump.vcd");\n    $dumpvars(0);\n  end\nendmodule\n`
+          log('已自动注入 $dumpfile/$dumpvars 用于抓取波形。', 'sys')
+        }
+        log('Icarus Verilog (WASM) 启动：ivlpp → ivl → vvp', 'sys')
+        const r = await window.VeriSimEngines.simRun(src, '', s => log('  · ' + s, 'info'))
+        if (r.warn && r.warn.trim()) log('编译告警：\n' + r.warn.trim(), 'wrn')
+        const ms = performance.now() - t0
+        log('编译仿真完成（' + ms.toFixed(0) + ' ms）', 'ok')
+        if (r.out && r.out.trim()) log('—— $display 输出 ——\n' + r.out.trim(), 'info')
+
+        let signalCount = 0
+        let duration = 0
+        let timescale = ''
+        if (r.vcd) {
+          loadWave(r.vcd)
+          signalCount = waveData.order.length
+          duration = waveData.tmax
+          timescale = waveData.timescale || ''
+          canDownloadVcd = true
+          log('VCD 波形已加载：' + signalCount + ' 个信号，时长 ' + duration + (timescale ? ' ' + timescale : ''), 'ok')
+        } else {
+          waveData = null
+          signals = []
+          selIds = []
+          waveHasSelection = false
+          canDownloadVcd = false
+          log('未生成 VCD（可在代码中加入 $dumpfile/$dumpvars）', 'wrn')
+        }
+        if (o.pane) showPane(o.pane)
+        else if (r.vcd) showPane('wave')
+        const text = (r.vcd
+          ? '仿真成功：信号 ' + signalCount + ' 个，时长 ' + duration + (timescale ? ' ' + timescale : '')
+          : '仿真完成，但未生成 VCD') + (r.out && r.out.trim() ? '；$display 输出尾部：' + tail(r.out.trim(), 500) : '')
+        const result = {
+          ok: true,
+          text,
+          code_length: (code || '').length,
+          signals: signalCount,
+          duration,
+          timescale,
+          warnings: r.warn || '',
+          output_tail: tail(r.out || '', 2000),
+          file: o.file || '',
+          tb: o.tb || ''
+        }
+        resultState = '仿真完成 · ' + new Date().toLocaleTimeString()
+        setBusy(false, '仿真完成，耗时 ' + ms.toFixed(0) + ' ms')
+        return result
+      } catch (e) {
+        const msg = e && e.message ? e.message : String(e)
+        log('仿真失败：' + msg, 'err')
+        const result = { ok: false, text: '仿真失败：' + msg, error: msg, output_tail: tail(e && e.out ? e.out : '', 2000) }
+        resultState = '仿真失败 · ' + new Date().toLocaleTimeString()
+        setBusy(false, '仿真失败')
+        return result
+      }
+    }
+
+    simCode = (args) => runSimCode({
+      code: args && args.code !== undefined ? String(args.code) : code,
+      top: args && args.top,
+      pane: args && args.pane,
+      source: 'sim_code'
+    })
+
+    simFile = async (args) => {
+      if (!args || !args.file) return { ok: false, text: 'sim_file 缺少 --file', error: 'missing --file' }
+      const fileCode = await readUfsText(args.file)
+      const tbCode = args.tb ? await readUfsText(args.tb) : ''
+      const finalCode = tbCode
+        ? fileCode + '\n\n// ---- appended testbench: ' + args.tb + ' ----\n' + tbCode
+        : fileCode
+      return await runSimCode({
+        code: finalCode,
+        top: args.top,
+        pane: args.pane || 'wave',
+        source: 'sim_file',
+        file: args.file,
+        tb: args.tb || ''
+      })
+    }
+
+    runSynthCode = async (opts) => {
+      const o = opts || {}
+      if (busy) return { ok: false, text: '仿真/综合进行中，请稍后', error: 'busy' }
+      if (!window.VeriSimEngines || !window.VeriSimSynth) return { ok: false, text: '综合引擎未加载', error: 'engine not loaded' }
+      const synthLabel = o.source === 'synth_file'
+        ? ('synth_file: ' + (o.file || ''))
+        : '手动综合'
+      if (typeof o.code === 'string') setCodeFromAction(o.code, synthLabel)
+      else sourceLabel = synthLabel
+      clearConsole()
+      const t0 = performance.now()
+      setBusy(true, '综合中…')
+      overlayShow = true
+      overlayTitle = '正在加载 Yosys (WASM, ~52MB)…'
+      overlaySub = '首次加载需要下载，之后由浏览器缓存'
+      overlayPercent = 0
+      try {
+        const design = sanitize(code)
+        const synthInput = window.VeriSimSynth.stripForSynth(design)
+        if (synthInput.dropped && synthInput.dropped.length) {
+          log('综合前已移除非综合模块：' + synthInput.dropped.join(', '), 'sys')
+        }
+        const top = (o.top || topModule || '').trim() || synthInput.top || window.VeriSimSynth.guessTop(design)
+        if (!top) throw new Error('未找到顶层模块，请在代码中定义模块')
+        log('Yosys (YoWASP WASM) 综合：顶层模块 ' + top, 'sys')
+        const script = [
+          'read_verilog design.v',
+          'hierarchy -check -top ' + top,
+          'proc; opt; fsm; opt; memory; opt; techmap; opt',
+          'stat',
+          'write_json net.json',
+          'write_verilog netlist.v'
+        ].join('; ')
+        const r = await window.VeriSimEngines.synthRun(script, { 'design.v': synthInput.code }, p => {
+          if (p && p.total) {
+            overlayPercent = Math.round(100 * p.done / p.total)
+            overlaySub = '下载引擎 ' + (p.done / 1048576).toFixed(1) + ' / ' + (p.total / 1048576).toFixed(1) + ' MB'
+          } else if (typeof p === 'string') {
+            overlaySub = p
+          }
+        })
+        overlayShow = false
+        const ms = performance.now() - t0
+        log('综合完成（' + ms.toFixed(0) + ' ms）', 'ok')
+        const stat = window.VeriSimSynth.parseStat(r.out, top)
+        synthOverview = stat.overview
+        synthCells = stat.cellRows
+        netlistText = r.files && r.files['netlist.v'] ? r.files['netlist.v'] : '未生成门级网表。'
+        const statText = (r.out.match(/Printing statistics\.[\s\S]*$/) || [null])[0] || r.out.slice(-2000)
+        log('—— yosys stat ——\n' + statText.trim(), 'info')
+        if (r.files && r.files['net.json']) {
+          try {
+            schNetlist = JSON.parse(r.files['net.json'])
+            await renderSchematic()
+            log('原理图已生成（netlistsvg）', 'ok')
+          } catch (se) {
+            schReady = false
+            log('原理图渲染失败：' + se.message, 'wrn')
+          }
+        }
+        if (o.pane) showPane(o.pane)
+        else showPane('synth')
+        const text = '综合成功：顶层 ' + top + '，cells=' + synthOverview.cells + '，wires=' + synthOverview.wires + '，dff=' + synthOverview.dff
+        const result = {
+          ok: true,
+          text,
+          top,
+          cells: synthOverview.cells,
+          wires: synthOverview.wires,
+          dff: synthOverview.dff,
+          output_tail: tail(r.out || '', 2000),
+          file: o.file || ''
+        }
+        resultState = '综合完成 · ' + new Date().toLocaleTimeString()
+        setBusy(false, '综合完成，耗时 ' + ms.toFixed(0) + ' ms')
+        return result
+      } catch (e) {
+        overlayShow = false
+        const msg = e && e.message ? e.message : String(e)
+        const detail = e && e.out ? '\n—— yosys 输出 ——\n' + tail(e.out, 2500) : ''
+        log('综合失败：' + msg + detail, 'err')
+        const result = { ok: false, text: '综合失败：' + msg, error: msg, output_tail: tail(e && e.out ? e.out : '', 2000) }
+        resultState = '综合失败 · ' + new Date().toLocaleTimeString()
+        setBusy(false, '综合失败')
+        return result
+      }
+    }
+
+    synthFile = async (args) => {
+      if (!args || !args.file) return { ok: false, text: 'synth_file 缺少 --file', error: 'missing --file' }
+      const fileCode = await readUfsText(args.file)
+      return await runSynthCode({
+        code: fileCode,
+        top: args.top,
+        pane: args.pane || 'synth',
+        source: 'synth_file',
+        file: args.file
+      })
+    }
+
+    manualSim = () => runSimCode({ code, top: topModule, pane: 'wave', source: 'manual' })
+    manualSynth = () => runSynthCode({ code, top: topModule, pane: 'synth', source: 'manual' })
+    toggleAi = () => {
+      aiOpen = !aiOpen
+      return { ok: true, text: aiOpen ? 'ai open' : 'ai closed' }
+    }
+
+    loadWave = (vcd) => {
+      lastVCD = vcd
+      waveData = window.VeriSimVCD.parseVCD(vcd)
+      signals = waveData.order.map(id => ({ id, name: waveData.vars[id].name, short: waveData.vars[id].short, width: waveData.vars[id].width }))
+      selIds = waveData.order.slice(0, 30)
+      if (vcdUrl) URL.revokeObjectURL(vcdUrl)
+      vcdUrl = URL.createObjectURL(new Blob([lastVCD], { type: 'text/plain' }))
+      canDownloadVcd = true
+      view0 = 0
+      curT = null
+      requestAnimationFrame(() => {
+        zoomFit()
+        renderWave()
+      })
+    }
+    toggleSignal = (id, checked) => {
+      if (checked) {
+        if (!selIds.includes(id)) selIds = [...selIds, id]
+      } else {
+        selIds = selIds.filter(x => x !== id)
+      }
+      renderWaveSoon()
+    }
+    selectAllSignals = () => {
+      selIds = waveData ? waveData.order.slice() : []
+      renderWaveSoon()
+    }
+    clearSignals = () => {
+      selIds = []
+      renderWaveSoon()
+    }
+    valAt = (id, t) => {
+      const ch = waveData && waveData.changes[id]
+      if (!ch || !ch.length) return 'x'
+      if (t < ch[0][0]) return ch[0][1]
+      let lo = 0, hi = ch.length - 1, ans = 0
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        if (ch[mid][0] <= t) { ans = mid; lo = mid + 1 } else hi = mid - 1
+      }
+      return ch[ans][1]
+    }
+    renderWaveSoon = () => requestAnimationFrame(() => renderWave())
+    zoomIn = () => { pxPerT = Math.min(80, pxPerT * 1.4); renderWave() }
+    zoomOut = () => { pxPerT = Math.max(0.0005, pxPerT / 1.4); renderWave() }
+    zoomFit = () => {
+      const wrap = $el('waveWrap')
+      if (!waveData || !wrap) return
+      view0 = 0
+      pxPerT = Math.max(0.0005, (wrap.clientWidth - NAME_W - VAL_W - 60) / (waveData.tmax || 1))
+      renderWave()
+    }
+    renderWave = () => {
+      const cv = $el('waveCanvas')
+      const wrap = $el('waveWrap')
+      if (!cv || !wrap) return
+      waveHasSelection = !!(waveData && selIds.length)
+      if (!waveHasSelection) {
+        if (waveData) waveEmptyText = '在左侧选择要显示的信号。'
+        waveInfo = ''
+        return
+      }
+      const W = Math.max(wrap.clientWidth, NAME_W + VAL_W + waveData.tmax * pxPerT + 60)
+      const H = Math.max(wrap.clientHeight, TOP + selIds.length * ROW_H + 20)
+      cv.width = W
+      cv.height = H
+      cv.style.width = W + 'px'
+      cv.style.height = H + 'px'
+      const c = cv.getContext('2d')
+      const bg = theme('--bg-color-secondary', '#f7fcff')
+      const fg = theme('--text-color', '#111827')
+      const dim = theme('--text-color-tertiary', '#6b7280')
+      const grid = theme('--border-color', '#d1d5db')
+      const accent = theme('--color-primary', '#4361ee')
+      const ok = theme('--color-success', '#22c55e')
+      const warn = theme('--color-warning', '#fbbf24')
+      const bad = theme('--color-danger', '#ef4444')
+      c.fillStyle = bg
+      c.fillRect(0, 0, W, H)
+      const X = t => NAME_W + VAL_W + (t - view0) * pxPerT
+      c.font = '10px ui-monospace, monospace'
+      c.textBaseline = 'alphabetic'
+      const stepBase = Math.max(1, Math.pow(10, Math.floor(Math.log10(60 / pxPerT))))
+      const step = stepBase * (pxPerT * stepBase < 25 ? 2 : 1)
+      c.strokeStyle = grid
+      c.fillStyle = dim
+      const t0 = Math.floor(view0 / step) * step
+      for (let t = t0; t <= view0 + (W - NAME_W - VAL_W) / pxPerT; t += step) {
+        if (t < 0) continue
+        c.beginPath()
+        c.moveTo(X(t), TOP - 12)
+        c.lineTo(X(t), H)
+        c.stroke()
+        c.fillText(String(t), X(t) + 3, 12)
+      }
+      selIds.forEach((id, i) => {
+        const v = waveData.vars[id]
+        const y = TOP + i * ROW_H
+        const mid = y + ROW_H / 2
+        const hi = y + 5
+        const lo = y + ROW_H - 5
+        c.fillStyle = fg
+        c.font = '12px ui-monospace, monospace'
+        const nm = v.name.length > 22 ? '…' + v.name.slice(-21) : v.name
+        c.fillText(nm, 8, mid + 4)
+        c.fillStyle = dim
+        c.font = '10px ui-monospace, monospace'
+        c.fillText(v.width > 1 ? '[' + (v.width - 1) + ':0]' : 'bit', 8, mid + 14)
+        if (curT !== null) {
+          c.fillStyle = accent
+          c.font = '11px ui-monospace, monospace'
+          c.fillText(window.VeriSimVCD.fmtBits(valAt(id, curT), v.width), NAME_W + 6, mid + 4)
+        }
+        const ch = waveData.changes[id]
+        const bus = v.width > 1
+        c.lineWidth = 1.3
+        for (let k = 0; k < ch.length; k++) {
+          const t = ch[k][0]
+          const bits = ch[k][1]
+          const tn = k + 1 < ch.length ? ch[k + 1][0] : view0 + (W - NAME_W - VAL_W) / pxPerT
+          if (tn < view0 || t > view0 + (W - NAME_W - VAL_W) / pxPerT) continue
+          const x0 = X(t)
+          const x1 = X(tn)
+          const badBits = /[xXzZ]/.test(bits)
+          if (!bus) {
+            c.strokeStyle = badBits ? bad : ok
+            const yv = badBits ? mid : (bits === '1' ? hi : lo)
+            c.beginPath()
+            c.moveTo(x0, yv)
+            c.lineTo(x1, yv)
+            c.stroke()
+            if (k + 1 < ch.length) {
+              const nb = ch[k + 1][1]
+              const nbad = /[xXzZ]/.test(nb)
+              const yv1 = nbad ? mid : (nb === '1' ? hi : lo)
+              c.beginPath()
+              c.moveTo(x1, yv)
+              c.lineTo(x1, yv1)
+              c.stroke()
+            }
+          } else {
+            c.strokeStyle = badBits ? bad : warn
+            c.beginPath()
+            c.moveTo(x0 + 3, mid)
+            c.lineTo(x0 + 7, hi)
+            c.lineTo(x1 - 7, hi)
+            c.lineTo(x1 - 3, mid)
+            c.lineTo(x1 - 7, lo)
+            c.lineTo(x0 + 7, lo)
+            c.closePath()
+            c.stroke()
+            if (x1 - x0 > 24) {
+              c.fillStyle = bg
+              c.fillRect(x0 + 7, hi + 1, Math.max(0, x1 - x0 - 14), lo - hi - 2)
+              c.fillStyle = badBits ? bad : warn
+              c.font = '10px ui-monospace, monospace'
+              const txt = badBits
+                ? (/[zZ]/.test(bits) && !/[xX]/.test(bits) ? 'z' : 'x')
+                : '0x' + window.VeriSimVCD.bitsToVal(bits).toString(16).toUpperCase()
+              c.fillText(txt, x0 + 10, mid + 3)
+            }
+          }
+        }
+        c.strokeStyle = grid
+        c.lineWidth = 1
+        c.beginPath()
+        c.moveTo(0, y + ROW_H - 0.5)
+        c.lineTo(W, y + ROW_H - 0.5)
+        c.stroke()
+      })
+      c.strokeStyle = grid
+      c.beginPath()
+      c.moveTo(NAME_W, 0)
+      c.lineTo(NAME_W, H)
+      c.moveTo(NAME_W + VAL_W, 0)
+      c.lineTo(NAME_W + VAL_W, H)
+      c.stroke()
+      if (curT !== null) {
+        c.strokeStyle = accent
+        c.setLineDash([4, 3])
+        c.beginPath()
+        c.moveTo(X(curT), 0)
+        c.lineTo(X(curT), H)
+        c.stroke()
+        c.setLineDash([])
+        c.fillStyle = accent
+        c.font = '10px ui-monospace, monospace'
+        c.fillText('t=' + curT, X(curT) + 3, 12)
+      }
+      waveInfo = '时长 ' + waveData.tmax + (waveData.timescale ? ' ' + waveData.timescale : '') + ' · ' + selIds.length + '/' + waveData.order.length + ' 信号'
+      curInfo = curT !== null ? ('游标 t=' + curT) : '点击波形放置游标'
+    }
+    waveStart = (e) => {
+      if (!waveData) return
+      waveDrag = { x: e.clientX, v0: view0, moved: false }
+    }
+    waveMove = (e) => {
+      if (!waveDrag || !waveData) return
+      const dx = e.clientX - waveDrag.x
+      if (Math.abs(dx) > 3) waveDrag.moved = true
+      view0 = Math.max(0, waveDrag.v0 - dx / pxPerT)
+      if (waveDrag.moved) renderWave()
+    }
+    waveEnd = (e) => {
+      if (!waveDrag || !waveData) return
+      if (!waveDrag.moved) {
+        const cv = $el('waveCanvas')
+        if (cv) {
+          const r = cv.getBoundingClientRect()
+          const x = e.clientX - r.left
+          if (x > NAME_W + VAL_W) curT = Math.max(0, Math.min(waveData.tmax, Math.round(view0 + (x - NAME_W - VAL_W) / pxPerT)))
+        }
+      }
+      waveDrag = null
+      renderWave()
+    }
+    waveWheel = (e) => {
+      if (!waveData) return
+      if (e && e.preventDefault) e.preventDefault()
+      const cv = $el('waveCanvas')
+      if (!cv) return
+      const r = cv.getBoundingClientRect()
+      const tx = view0 + Math.max(0, e.clientX - r.left - NAME_W - VAL_W) / pxPerT
+      pxPerT = Math.min(80, Math.max(0.0005, pxPerT * (e.deltaY < 0 ? 1.25 : 0.8)))
+      view0 = Math.max(0, tx - Math.max(0, e.clientX - r.left - NAME_W - VAL_W) / pxPerT)
+      renderWave()
+    }
+
+    renderSchematic = async () => {
+      if (typeof netlistsvg === 'undefined') throw new Error('netlistsvg 未加载')
+      schSvg = await netlistsvg.render(netlistsvg.digitalSkin, schNetlist)
+      schReady = true
+      schScale = 1
+      schX = 20
+      schY = 20
+      requestAnimationFrame(() => applySch())
+    }
+    applySch = () => {
+      const el = $el('schInner')
+      if (el) el.style.transform = 'translate(' + schX + 'px,' + schY + 'px) scale(' + schScale + ')'
+    }
+    schStart = (e) => {
+      if (!schNetlist) return
+      if (e && e.target && e.target.closest && e.target.closest('.sch-tools')) return
+      schDrag = { x: e.clientX, y: e.clientY, sx: schX, sy: schY }
+    }
+    schMove = (e) => {
+      if (!schDrag) return
+      schX = schDrag.sx + e.clientX - schDrag.x
+      schY = schDrag.sy + e.clientY - schDrag.y
+      applySch()
+    }
+    schEnd = () => {
+      schDrag = null
+    }
+    schWheel = (e) => {
+      if (!schNetlist) return
+      if (e && e.preventDefault) e.preventDefault()
+      const wrap = $el('schWrap')
+      if (!wrap) return
+      const r = wrap.getBoundingClientRect()
+      const mx = e.clientX - r.left
+      const my = e.clientY - r.top
+      const f = e.deltaY < 0 ? 1.2 : 1 / 1.2
+      schScale = Math.min(8, Math.max(0.0005, schScale * f))
+      schX = mx - (mx - schX) * f
+      schY = my - (my - schY) * f
+      applySch()
+    }
+    schZoom = (f) => {
+      if (!schNetlist) return
+      const wrap = $el('schWrap')
+      if (!wrap) return
+      const r = wrap.getBoundingClientRect()
+      const mx = r.width / 2
+      const my = r.height / 2
+      schScale = Math.min(8, Math.max(0.0005, schScale * f))
+      schX = mx - (mx - schX) * f
+      schY = my - (my - schY) * f
+      applySch()
+    }
+    schZoomIn = () => schZoom(1.25)
+    schZoomOut = () => schZoom(1 / 1.25)
+    schReset = () => {
+      if (!schNetlist) return
+      schScale = 1
+      schX = 20
+      schY = 20
+      applySch()
+    }
+
+    bindUiRun = (sid) => {
+      uiRunUnsubs.forEach(u => {
+        try {
+          if (typeof u === 'function') u()
+          else if (u && u.unsub) u.unsub()
+        } catch (_) {}
+      })
+      uiRunUnsubs = []
+      if (!sid) return
+      if (!$mod.$nc || !$mod.$nc.sub) {
+        log('NATS 未就绪，无法订阅 ui_run。', 'wrn')
+        return
+      }
+      const on = (action, fn) => {
+        const sub = $mod.$nc.sub('s.' + sid + '.ui_run.' + action, (err, msg) => {
+          (async () => {
+            try {
+              const args = JSON.parse(msg.string() || '{}')
+              const result = await fn(args || {})
+              msg.respond(JSON.stringify(result))
+            } catch (e) {
+              const text = action + ' 失败: ' + (e && e.message ? e.message : String(e))
+              log(text, 'err')
+              msg.respond(JSON.stringify({ ok: false, text, error: e && e.message ? e.message : String(e) }))
+            }
+          })()
+        })
+        uiRunUnsubs.push(sub)
+      }
+      on('sim_code', simCode)
+      on('sim_file', simFile)
+      on('synth_file', synthFile)
+      on('show_pane', (args) => showPane(args.pane || args[0] || 'wave'))
+      on('clear_console', () => clearConsole())
+      log('已订阅 ui_run：sim_code / sim_file / synth_file / show_pane / clear_console', 'sys')
+    }
+  </script>
+
+  <script>
+    const loadScript = (src) => new Promise((resolve, reject) => {
+      const s = document.createElement('script')
+      s.src = src
+      s.onload = resolve
+      s.onerror = () => reject(new Error('加载失败 ' + src))
+      document.head.appendChild(s)
+    })
+    const scopedUrl = (p) => {
+      const base = (($mod.scoped || '').replace(/\/$/, '')) || '.'
+      return base + '/' + String(p).replace(/^\.\//, '')
+    }
+
+    ;(async () => {
+      try {
+        refreshLineNumbers()
+        window.VeriSimBase = (($mod.scoped || '').replace(/\/$/, '')) || ''
+        statusText = '正在加载本地数据模块…'
+        await loadScript(scopedUrl('js/vcd.js'))
+        await loadScript(scopedUrl('js/synth.js'))
+        await loadScript(scopedUrl('js/examples.js'))
+        await loadScript(scopedUrl('js/engines.js'))
+        try {
+          await loadScript(scopedUrl('vendor/elk.bundled.js'))
+          await loadScript(scopedUrl('vendor/netlistsvg.bundle.js'))
+        } catch (e) {
+          log('原理图渲染库加载失败，仿真/综合不受影响：' + e.message, 'wrn')
+        }
+        ready = true
+        statusText = '就绪。'
+        refreshLineNumbers()
+        loadSessionFiles()
+        log('欢迎使用 VeriSim Pro：可手动编辑代码仿真，也可由 ai-box 通过 ui_run 驱动。', 'ok')
+        log('提示：Yosys 引擎约 52MB，首次综合需下载；仿真引擎约 3MB，随用随载。', 'sys')
+      } catch (e) {
+        ready = false
+        const msg = e && e.message ? e.message : String(e)
+        statusText = '初始化失败：' + msg
+        log('初始化失败：' + msg, 'err')
+      }
+    })()
+
+    $watch(() => aiSessionId, (sid) => {
+      saveAiSessionId(sid)
+      bindUiRun(sid)
+      loadSessionFiles()
+    })
+
+    window.addEventListener('mousemove', (e) => {
+      waveMove(e)
+      schMove(e)
+    })
+    window.addEventListener('mouseup', (e) => {
+      waveEnd(e)
+      schEnd(e)
+    })
+    window.addEventListener('resize', () => {
+      if (activePane === 'wave') renderWaveSoon()
+      if (activePane === 'sch') applySch()
+    })
+  </script>
+</html>
