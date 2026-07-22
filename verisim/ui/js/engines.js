@@ -6,8 +6,8 @@
   const BASE = new URL('..', scriptUrl).href.replace(/\/$/, '');
 
   // 引擎源由 js/sources.js 统一配置（国内镜像 → 海外镜像 → 本地），见 window.VeriSimSources。
-  async function importEngine(name, localPath, onStage) {
-    if (window.VeriSimSources) return await window.VeriSimSources.loadModule(name, BASE, onStage);
+  async function importEngine(name, localPath) {
+    if (window.VeriSimSources) return await window.VeriSimSources.loadModule(name, BASE);
     return await import(BASE + localPath);
   }
 
@@ -28,12 +28,11 @@ flag:DLL=vvp.tgt
   let _vvp = null;
 
   async function simRun(design, tb, onStage) {
-    onStage && onStage('加载 ivlpp 引擎…');
-    if (!_ivlpp) _ivlpp = (await importEngine('ivlpp', '/iverilog/ivlpp.js', onStage)).default;
-    if (!_ivl) _ivl = (await importEngine('ivl', '/iverilog/ivl.js', onStage)).default;
-    if (!_vvp) _vvp = (await importEngine('vvp', '/iverilog/vvp.js', onStage)).default;
+    if (!_ivlpp) _ivlpp = (await importEngine('ivlpp', '/iverilog/ivlpp.js')).default;
+    if (!_ivl) _ivl = (await importEngine('ivl', '/iverilog/ivl.js')).default;
+    if (!_vvp) _vvp = (await importEngine('vvp', '/iverilog/vvp.js')).default;
 
-    onStage && onStage('预处理 ivlpp…');
+    onStage && onStage('preprocess');
     const ppOut = [];
     let m = await _ivlpp({ print: s => ppOut.push(s), printErr: () => {} });
     m.FS.writeFile('/design.v', design.endsWith('\n') ? design : design + '\n');
@@ -41,7 +40,7 @@ flag:DLL=vvp.tgt
     m.callMain(['-L', '/design.v', '/tb.v']);
     const pp = ppOut.join('\n') + '\n';
 
-    onStage && onStage('编译 ivl…');
+    onStage && onStage('compile');
     const err = [];
     m = await _ivl({ print: () => {}, printErr: s => err.push(s) });
     m.FS.writeFile('/ivl.conf', ivlConf('2012'));
@@ -52,9 +51,9 @@ flag:DLL=vvp.tgt
     const cleanErr = err.join('\n').split('\n')
       .filter(l => !/system\.vpi|dynamic linking not enabled/.test(l))
       .join('\n');
-    if (!vvp) throw new Error(cleanErr || 'ivl 编译失败');
+    if (!vvp) throw new Error(cleanErr || '编译失败 (compile failed)');
 
-    onStage && onStage('仿真 vvp 运行中…');
+    onStage && onStage('execute');
     const out = [];
     m = await _vvp({ print: s => out.push(s), printErr: s => out.push(s) });
     m.FS.writeFile('/sim.vvp', vvp);
@@ -66,7 +65,7 @@ flag:DLL=vvp.tgt
 
   let _yosys = null;
   async function synthRun(script, files, onProgress) {
-    if (!_yosys) _yosys = await importEngine('yosys', '/yosys/gen/bundle.js', p => onProgress && onProgress(p));
+    if (!_yosys) _yosys = await importEngine('yosys', '/yosys/gen/bundle.js');
     const dec = new TextDecoder();
     let out = '';
     const opt = {

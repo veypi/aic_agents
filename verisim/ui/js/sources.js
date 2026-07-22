@@ -63,21 +63,22 @@
   const localUrl = (localBase, rel) => String(localBase || '.').replace(/\/+$/, '') + '/' + rel;
   const errMsg = (e) => (e && e.message ? e.message : String(e));
 
-  // ESM 引擎：按源列表依次 import，返回模块对象
+  // ESM 引擎：按源列表依次 import，返回模块对象。
+  // onStage 收到结构化事件 {phase: 'ok'|'fail', key, from}，界面文案由调用方决定。
   const loadModule = async (key, localBase, onStage) => {
     let lastErr = null;
     for (const s of sourceList(key)) {
       const url = s.url || localUrl(localBase, s.local);
       try {
         const m = await import(url);
-        onStage && onStage('引擎 ' + key + '：来自 ' + s.label);
+        onStage && onStage({phase: 'ok', key, from: s.label});
         return m;
       } catch (e) {
         lastErr = e;
-        onStage && onStage('引擎 ' + key + '：' + s.label + ' 不可用，尝试下一源…');
+        onStage && onStage({phase: 'fail', key, from: s.label});
       }
     }
-    throw new Error('引擎 ' + key + ' 所有源加载失败：' + errMsg(lastErr));
+    throw new Error('resource ' + key + ' failed from all sources: ' + errMsg(lastErr));
   };
 
   // 全局脚本：按源列表依次创建 <script>，onload 成功即返回
@@ -88,10 +89,10 @@
       const s = list[i];
       const el = document.createElement('script');
       el.src = s.url || localUrl(localBase, s.local);
-      el.onload = () => { onStage && onStage('脚本 ' + key + '：来自 ' + s.label); resolve(s.label); };
+      el.onload = () => { onStage && onStage({phase: 'ok', key, from: s.label}); resolve(s.label); };
       el.onerror = () => {
         el.remove();
-        onStage && onStage('脚本 ' + key + '：' + s.label + ' 不可用，尝试下一源…');
+        onStage && onStage({phase: 'fail', key, from: s.label});
         tryNext(i + 1);
       };
       document.head.appendChild(el);
@@ -108,14 +109,14 @@
         const r = await fetch(url);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const text = await r.text();
-        onStage && onStage('资源 ' + key + '：来自 ' + s.label);
+        onStage && onStage({phase: 'ok', key, from: s.label});
         return text;
       } catch (e) {
         lastErr = e;
-        onStage && onStage('资源 ' + key + '：' + s.label + ' 不可用，尝试下一源…');
+        onStage && onStage({phase: 'fail', key, from: s.label});
       }
     }
-    throw new Error('资源 ' + key + ' 所有源加载失败：' + errMsg(lastErr));
+    throw new Error('resource ' + key + ' failed from all sources: ' + errMsg(lastErr));
   };
 
   window.VeriSimSources = { MIRRORS, RESOURCES, sourceList, loadModule, loadScript, loadText };

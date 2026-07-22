@@ -636,32 +636,34 @@
   <div class="verisim" ref="root">
     <header class="app-header">
       <div class="header-actions">
-        <button class="btn sm primary" :disabled="busy || !ready" @click="manualSim">仿真</button>
-        <button class="btn sm synth" :disabled="busy || !ready" @click="manualSynth">综合</button>
+        <button class="btn sm primary" :disabled="busy || !ready" @click="manualSim">{{ $t('act.sim') }}</button>
+        <button class="btn sm synth" :disabled="busy || !ready" @click="manualSynth">{{ $t('act.synth') }}</button>
       </div>
       <nav class="header-tabs">
-        <div class="tab" :class="{ active: activePane === 'code' }" @click="showPane('code')">代码预览</div>
-        <div class="tab" :class="{ active: activePane === 'wave' }" @click="showPane('wave')">波形</div>
-        <div class="tab" :class="{ active: activePane === 'sch' }" @click="showPane('sch')">原理图</div>
-        <div class="tab" :class="{ active: activePane === 'synth' }" @click="showPane('synth')">综合报告</div>
-        <div class="tab" :class="{ active: activePane === 'netlist' }" @click="showPane('netlist')">门级网表</div>
+        <div class="tab" :class="{ active: activePane === 'code' }" @click="showPane('code')">{{ $t('tab.code') }}</div>
+        <div class="tab" :class="{ active: activePane === 'wave' }" @click="showPane('wave')">{{ $t('tab.wave') }}</div>
+        <div class="tab" :class="{ active: activePane === 'sch' }" @click="showPane('sch')">{{ $t('tab.sch') }}</div>
+        <div class="tab" :class="{ active: activePane === 'synth' }" @click="showPane('synth')">{{ $t('tab.synth') }}
+        </div>
+        <div class="tab" :class="{ active: activePane === 'netlist' }" @click="showPane('netlist')">{{ $t('tab.netlist')
+          }}</div>
       </nav>
       <div class="header-tools">
         <select class="btn sm" @change="onSessionFilePick" @mousedown="loadSessionFiles" :disabled="!aiSessionId"
-          title="加载当前会话文件">
-          <option value="">会话文件…</option>
+          :title="$t('tip.sessionFiles')">
+          <option value="">{{ $t('opt.sessionFiles') }}</option>
           <option :key="f.name" v-for="f in sessionFiles" :value="f.name">{{ f.name }}</option>
         </select>
-        <select class="btn sm" @change="onExamplePick" title="加载示例">
-          <option value="">加载示例…</option>
-          <option value="counter">4-bit 计数器</option>
-          <option value="alu">8-bit ALU</option>
-          <option value="fsm">序列检测 FSM（1011）</option>
-          <option value="adder">4-bit 行波进位加法器（门级）</option>
+        <select class="btn sm" @change="onExamplePick" :title="$t('tip.examples')">
+          <option value="">{{ $t('opt.examples') }}</option>
+          <option value="counter">{{ $t('ex.counter') }}</option>
+          <option value="alu">{{ $t('ex.alu') }}</option>
+          <option value="fsm">{{ $t('ex.fsm') }}</option>
+          <option value="adder">{{ $t('ex.adder') }}</option>
         </select>
-        <select class="btn sm" ref="techSel" v:value="tech" @change="onTechChanged" title="选择综合目标工艺">
-          <option value="">工艺：通用 techmap</option>
-          <optgroup label="FPGA">
+        <select class="btn sm" ref="techSel" v:value="tech" @change="onTechChanged" :title="$t('tip.tech')">
+          <option value="">{{ $t('opt.techGeneric') }}</option>
+          <optgroup :label="$t('grp.fpga')">
             <option value="ice40">Lattice iCE40</option>
             <option value="ecp5">Lattice ECP5</option>
             <option value="nexus">Lattice Nexus</option>
@@ -675,16 +677,18 @@
             <option value="greenpak4">Renesas GreenPAK4</option>
             <option value="coolrunner2">Xilinx CoolRunner-II</option>
           </optgroup>
-          <optgroup label="ASIC · Liberty">
-            <option value="lib:builtin:nangate45">NanGate 45nm（内置）</option>
-            <option :key="u.name" v-for="u in userLibs" :value="'lib:user:' + u.name">{{ u.name }}（本机缓存）</option>
+          <optgroup :label="$t('grp.asic')">
+            <option value="lib:builtin:nangate45">{{ $t('opt.techNangate') }}</option>
+            <option :key="u.name" v-for="u in userLibs" :value="'lib:user:' + u.name">{{ u.name + $t('opt.cached') }}
+            </option>
           </optgroup>
         </select>
-        <button class="btn sm" @click="importLib" title="导入 Liberty (.lib) 文件，只存入浏览器缓存，不上传服务器">导入 .lib</button>
-        <button class="btn sm" v-if="tech.indexOf('lib:user:') === 0" @click="removeUserLib" title="从浏览器缓存删除该工艺文件">删工艺</button>
+        <button class="btn sm" @click="importLib" :title="$t('tip.importLib')">{{ $t('act.importLib') }}</button>
+        <button class="btn sm" v-if="tech.indexOf('lib:user:') === 0" @click="removeUserLib"
+          :title="$t('tip.delLib')">{{ $t('act.delLib') }}</button>
         <input type="file" accept=".lib,.txt" ref="libFile" style="display:none" @change="onLibFilePick" />
-        <input class="btn sm top-input" v:value="topModule" placeholder="顶层模块" title="综合顶层模块名，留空自动推断" />
-        <button class="btn sm" @click="toggleAi">{{ aiOpen ? '收起 AI' : '打开 AI' }}</button>
+        <input class="btn sm top-input" v:value="topModule" :placeholder="$t('ph.top')" :title="$t('tip.top')" />
+        <button class="btn sm" @click="toggleAi">{{ aiOpen ? $t('act.aiClose') : $t('act.aiOpen') }}</button>
         <span class="dim run-status" :title="statusText">{{ statusText }}</span>
       </div>
     </header>
@@ -692,7 +696,7 @@
     <main>
       <div class="workbench">
         <div class="result-bar" v-if="activePane !== 'code' && resultKey">
-          <span>当前结果组：{{ resultKey }}<span v-if="resultState"> · {{ resultState }}</span></span>
+          <span>{{ $t('res.group') }}：{{ resultKey }}<span v-if="resultState"> · {{ resultState }}</span></span>
         </div>
 
         <div class="pane" :class="{ active: activePane === 'code' }">
@@ -708,8 +712,8 @@
         <div class="pane wave" :class="{ active: activePane === 'wave' }">
           <div class="sig-panel">
             <div class="sig-btns">
-              <button class="btn" :disabled="!waveData" @click="selectAllSignals">全选</button>
-              <button class="btn" :disabled="!waveData" @click="clearSignals">清空</button>
+              <button class="btn" :disabled="!waveData" @click="selectAllSignals">{{ $t('act.selAll') }}</button>
+              <button class="btn" :disabled="!waveData" @click="clearSignals">{{ $t('act.clearSel') }}</button>
             </div>
             <div class="sig-list">
               <label :key="sig.id" v-for="sig in signals">
@@ -724,10 +728,10 @@
             <div class="wave-toolbar">
               <button class="btn" :disabled="!waveData" @click="zoomOut">−</button>
               <button class="btn" :disabled="!waveData" @click="zoomIn">＋</button>
-              <button class="btn" :disabled="!waveData" @click="zoomFit">适应</button>
+              <button class="btn" :disabled="!waveData" @click="zoomFit">{{ $t('act.fit') }}</button>
               <span>{{ curInfo }}</span>
               <span class="spacer"></span>
-              <a class="dl" v-show="canDownloadVcd" :href="vcdUrl" download="dump.vcd">下载 VCD</a>
+              <a class="dl" v-show="canDownloadVcd" :href="vcdUrl" download="dump.vcd">{{ $t('act.dlVcd') }}</a>
               <span>{{ waveInfo }}</span>
             </div>
             <div class="wave-wrap" ref="waveWrap" @mousedown="waveStart" @wheel="waveWheel">
@@ -744,38 +748,38 @@
             <div class="sch-tools">
               <button class="btn sm" :disabled="!schNetlist" @click="schZoomOut">−</button>
               <button class="btn sm" :disabled="!schNetlist" @click="schZoomIn">＋</button>
-              <button class="btn sm" :disabled="!schNetlist" @click="schReset">适应</button>
+              <button class="btn sm" :disabled="!schNetlist" @click="schReset">{{ $t('act.fit') }}</button>
             </div>
-            <div class="empty" v-if="!schReady">点击「综合」后，Yosys 网表将渲染为原理图。可用左上角按钮或滚轮缩放，拖动平移。</div>
+            <div class="empty" v-if="!schReady">{{ $t('sch.empty') }}</div>
             <div class="sch-inner" ref="schInner" v-html="schSvg"></div>
-            <div class="sch-hint">滚轮缩放 · 拖动平移</div>
+            <div class="sch-hint">{{ $t('hint.schNav') }}</div>
           </div>
         </div>
 
         <div class="pane" :class="{ active: activePane === 'synth' }">
           <div class="report" v-if="!synthOverview">
             <div class="card">
-              <h3>综合报告</h3>
-              <div class="dim">点击「综合」运行真实 Yosys 流程：read_verilog → hierarchy → proc/opt/fsm/memory/techmap → stat。</div>
+              <h3>{{ $t('rpt.title') }}</h3>
+              <div class="dim">{{ $t('rpt.placeholder') }}</div>
             </div>
           </div>
           <div class="report" v-else>
             <div class="card">
-              <h3>概览 — 顶层模块 {{ synthOverview.top }}</h3>
+              <h3>{{ $t('rpt.overview', { top: synthOverview.top }) }}</h3>
               <div class="kpi">
-                <div class="item"><b>{{ synthOverview.cells }}</b><span>单元数 cells</span></div>
-                <div class="item"><b>{{ synthOverview.cellBits }}</b><span>单元位数</span></div>
-                <div class="item"><b>{{ synthOverview.dff }}</b><span>触发器 DFF</span></div>
-                <div class="item"><b>{{ synthOverview.wires }}</b><span>线网 wires</span></div>
-                <div class="item"><b>{{ synthOverview.wireBits }}</b><span>线网位数</span></div>
+                <div class="item"><b>{{ synthOverview.cells }}</b><span>{{ $t('kpi.cells') }}</span></div>
+                <div class="item"><b>{{ synthOverview.cellBits }}</b><span>{{ $t('kpi.cellBits') }}</span></div>
+                <div class="item"><b>{{ synthOverview.dff }}</b><span>{{ $t('kpi.dff') }}</span></div>
+                <div class="item"><b>{{ synthOverview.wires }}</b><span>{{ $t('kpi.wires') }}</span></div>
+                <div class="item"><b>{{ synthOverview.wireBits }}</b><span>{{ $t('kpi.wireBits') }}</span></div>
               </div>
             </div>
             <div class="card">
-              <h3>单元映射（techmap 后）</h3>
+              <h3>{{ $t('rpt.cellMap') }}</h3>
               <table>
                 <tr>
-                  <th>单元类型</th>
-                  <th class="num">数量</th>
+                  <th>{{ $t('th.cell') }}</th>
+                  <th class="num">{{ $t('th.count') }}</th>
                 </tr>
                 <tr :key="row.name" v-for="row in synthCells">
                   <td class="mono">{{ row.name }}</td>
@@ -784,10 +788,10 @@
               </table>
             </div>
             <div class="card">
-              <h3>综合流程</h3>
+              <h3>{{ $t('rpt.flow') }}</h3>
               <div class="dim" style="line-height: 1.8;">
                 <code>{{ synthFlow }}</code><br />
-                门级网表见「门级网表」标签页，结构原理图见「原理图」。
+                {{ $t('rpt.flowNote') }}
               </div>
             </div>
           </div>
@@ -809,11 +813,11 @@
 
     <section class="console-section">
       <div class="console-tools">
-        <button class="btn sm" :disabled="!consoleLines.length" @click="copyConsole">复制</button>
-        <button class="btn sm" :disabled="busy" @click="clearConsole">清空</button>
+        <button class="btn sm" :disabled="!consoleLines.length" @click="copyConsole">{{ $t('act.copy') }}</button>
+        <button class="btn sm" :disabled="busy" @click="clearConsole">{{ $t('act.clear') }}</button>
       </div>
       <div class="console" ref="consoleEl">
-        <div :key="idx" v-for="(line, idx) in consoleLines" :class="line.cls">{{ line.text }}</div>
+        <div :key="line.id" v-for="line in consoleLines" :class="line.cls">{{ typeof line.text === 'function' ? line.text() : line.text }}</div>
       </div>
     </section>
 
@@ -878,8 +882,8 @@ endmodule
 
   ready = false
   busy = false
-  statusText = '正在初始化本地数据模块…'
-  sourceLabel = 'localStorage/手动编辑'
+  statusText = $t('status.init')
+  sourceLabel = $t('src.manual')
   // 刷新后统一回到「代码预览」：结果页（波形/原理图/报告/网表）不做缓存，恢复会落在空白页
   activePane = 'code'
   lsDel('active_pane')
@@ -892,7 +896,7 @@ endmodule
   consoleLines = []
   tech = lsGet('tech') || ''
   userLibs = []
-  synthFlow = 'read_verilog → hierarchy -top <top> → proc; opt; fsm; opt; memory; opt; techmap; opt → stat'
+  synthFlow = $t('flow.generic')
 
   waveData = null
   signals = []
@@ -901,9 +905,9 @@ endmodule
   vcdUrl = ''
   canDownloadVcd = false
   waveHasSelection = false
-  waveEmptyText = '点击「仿真」运行 Icarus Verilog，VCD 波形将显示在这里。'
+  waveEmptyText = $t('wave.empty1')
   waveInfo = ''
-  curInfo = '点击波形放置游标'
+  curInfo = $t('wave.cursorHint')
   pxPerT = 6
   view0 = 0
   curT = null
@@ -915,7 +919,7 @@ endmodule
 
   synthOverview = null
   synthCells = []
-  netlistText = '综合后在此显示门级网表（write_verilog 输出）。'
+  netlistText = $t('netlist.empty')
   schNetlist = null
   schSvg = ''
   schReady = false
@@ -937,6 +941,7 @@ endmodule
   lsDel('last_vcd')
 
   let codeSaveTimer = null
+  let logSeq = 0
 
   const $el = (name) => ($data.$refs && $data.$refs[name]) ? $data.$refs[name] : null
   const tail = (s, n) => {
@@ -964,7 +969,7 @@ endmodule
   saveAiSessionId = (sid) => lsSet('ai_session_id', sid || '')
   onCodeInput = () => {
     refreshLineNumbers()
-    sourceLabel = '手动编辑'
+    sourceLabel = $t('src.manual')
     if (codeSaveTimer) clearTimeout(codeSaveTimer)
     codeSaveTimer = setTimeout(() => saveCode(), 300)
   }
@@ -974,9 +979,12 @@ endmodule
     if (lines && area) lines.scrollTop = area.scrollTop
   }
 
+  // 日志文案统一用 thunk（() => $t(...)）保存：渲染时才翻译，切换语言自动更新。
+  // 注意必须用 = 声明（注册到 $data），初始化脚本才能访问；const 是 setup 私有的。
+  tt = (key, params) => () => $t(key, params)
   log = (msg, cls) => {
     if (msg === undefined || msg === null) return
-    consoleLines.push({text: String(msg), cls: cls || 'info'})
+    consoleLines.push({id: ++logSeq, text: typeof msg === 'function' ? msg : String(msg), cls: cls || 'info'})
     if (consoleLines.length > 900) consoleLines.splice(0, consoleLines.length - 900)
     requestAnimationFrame(() => {
       const el = $el('consoleEl')
@@ -988,10 +996,10 @@ endmodule
     return {ok: true, text: 'console cleared'}
   }
   copyConsole = async () => {
-    const text = consoleLines.map(l => l.text).join('\n')
+    const text = consoleLines.map(l => typeof l.text === 'function' ? l.text() : l.text).join('\n')
     try {
       await navigator.clipboard.writeText(text)
-      toast('success', '控制台已复制')
+      toast('success', $t('toast.copied'))
     } catch (e) {
       const ta = document.createElement('textarea')
       ta.value = text
@@ -999,9 +1007,9 @@ endmodule
       ta.select()
       try {
         document.execCommand('copy')
-        toast('success', '控制台已复制')
+        toast('success', $t('toast.copied'))
       } catch (_) {
-        toast('error', '复制失败')
+        toast('error', $t('toast.copyFail'))
       }
       ta.remove()
     }
@@ -1009,7 +1017,7 @@ endmodule
   }
   setBusy = (b, label) => {
     busy = b
-    statusText = label || (b ? '运行中…' : '就绪。')
+    statusText = label || (b ? $t('status.running') : $t('status.ready'))
   }
 
   showPane = (name) => {
@@ -1038,14 +1046,14 @@ endmodule
     }
     canDownloadVcd = false
     waveHasSelection = false
-    waveEmptyText = '点击「仿真」运行 Icarus Verilog，VCD 波形将显示在这里。'
+    waveEmptyText = $t('wave.empty1')
     waveInfo = ''
-    curInfo = '点击波形放置游标'
+    curInfo = $t('wave.cursorHint')
     curT = null
     view0 = 0
     synthOverview = null
     synthCells = []
-    netlistText = '综合后在此显示门级网表（write_verilog 输出）。'
+    netlistText = $t('netlist.empty')
     schNetlist = null
     schSvg = ''
     schReady = false
@@ -1068,7 +1076,7 @@ endmodule
     if (changed) {
       clearResults()
       resultKey = label + ' · ' + h
-      resultState = '代码已更新，波形/原理图/综合报告/门级网表已清空'
+      resultState = $t('res.codeUpdated')
     } else if (!resultKey) {
       resultKey = label + ' · ' + h
     }
@@ -1076,10 +1084,10 @@ endmodule
   loadExample = (name) => {
     const ex = window.VeriSimExamples && window.VeriSimExamples[name]
     if (!ex) return
-    setCodeFromAction(ex.code, '示例: ' + name)
+    setCodeFromAction(ex.code, $t('src.example') + ': ' + ($t('ex.' + name) || name))
     topModule = ex.top || ''
     showPane('code')
-    log('已加载示例：' + name + '，已清空波形/原理图/综合报告/门级网表。', 'ok')
+    log(() => $t('log.exampleLoaded', {name: $t('ex.' + name) || name}), 'ok')
   }
   onExamplePick = (e) => {
     const v = e && e.target ? e.target.value : ''
@@ -1106,7 +1114,7 @@ endmodule
       return {ok: true, total: sessionFiles.length}
     } catch (e) {
       sessionFiles = []
-      log('读取会话文件列表失败：' + (e && e.message ? e.message : e), 'wrn')
+      log(() => $t('log.sessionFilesFail', {msg: e && e.message ? e.message : e}), 'wrn')
       return {ok: false, error: e && e.message ? e.message : String(e)}
     }
   }
@@ -1114,18 +1122,18 @@ endmodule
     if (!aiSessionId || !name) return
     const path = '/sessions/' + aiSessionId + '/' + name
     const fileCode = await readUfsText(path)
-    setCodeFromAction(fileCode, '会话文件: ' + name)
+    setCodeFromAction(fileCode, $t('src.sessionFile') + ': ' + name)
     if (window.VeriSimSynth) topModule = window.VeriSimSynth.stripForSynth(fileCode).top || topModule
     showPane('code')
-    log('已加载当前会话文件：' + path, 'ok')
+    log(() => $t('log.sessionFileLoaded', {name}), 'ok')
   }
   onSessionFilePick = (e) => {
     const v = e && e.target ? e.target.value : ''
     if (v) {
       loadSessionFile(v).catch(err => {
         const msg = err && err.message ? err.message : String(err)
-        log('加载会话文件失败：' + msg, 'err')
-        toast('error', '加载会话文件失败')
+        log(() => $t('log.loadSessionFileFail', {msg}), 'err')
+        toast('error', $t('log.loadSessionFileFail', {msg}))
       })
     }
     if (e && e.target) e.target.value = ''
@@ -1149,13 +1157,13 @@ endmodule
   // 任一来源成功后缓存到浏览器 IndexedDB（builtin: 前缀），之后零网络。
   // key 对应 js/sources.js 中 RESOURCES 的资源名（镜像源在那里统一配置）
   const BUILTIN_LIBS = {
-    nangate45: { label: 'NanGate 45nm（内置）', key: 'lib_nangate45' }
+    nangate45: {label: 'NanGate 45nm（内置）', key: 'lib_nangate45'}
   }
   const libContentCache = {}
 
   const openLibDb = () => new Promise((res, rej) => {
     const rq = indexedDB.open('verisim-libs', 1)
-    rq.onupgradeneeded = () => { try { rq.result.createObjectStore('libs', {keyPath: 'name'}) } catch (_) { } }
+    rq.onupgradeneeded = () => {try {rq.result.createObjectStore('libs', {keyPath: 'name'})} catch (_) { } }
     rq.onsuccess = () => res(rq.result)
     rq.onerror = () => rej(rq.error || new Error('IndexedDB open failed'))
   })
@@ -1177,11 +1185,11 @@ endmodule
       if (tech.indexOf('lib:user:') === 0 && !userLibs.some(u => 'lib:user:' + u.name === tech)) {
         tech = ''
         lsSet('tech', '')
-        log('已缓存的工艺文件不存在，已切回通用 techmap。', 'wrn')
+        log(tt('log.libMissing'), 'wrn')
       }
     } catch (e) {
       userLibs = []
-      log('浏览器工艺缓存读取失败：' + (e && e.message ? e.message : e), 'wrn')
+      log(() => $t('log.idbFail', {msg: e && e.message ? e.message : e}), 'wrn')
     }
     // 选项是异步补齐的（IndexedDB），需手动把 select 的 DOM 值同步回 tech
     requestAnimationFrame(() => {
@@ -1192,27 +1200,27 @@ endmodule
   }
   resolveTech = async (sel) => {
     sel = sel || ''
-    if (!sel) return {kind: 'generic', label: '通用 techmap'}
+    if (!sel) return {kind: 'generic', label: $t('tech.generic')}
     if (TECHS[sel]) return {kind: 'fpga', label: TECHS[sel].label, cmd: TECHS[sel].cmd}
     if (sel.indexOf('lib:builtin:') === 0) {
       const key = sel.slice(12)
       const b = BUILTIN_LIBS[key]
-      if (!b) throw new Error('未知内置工艺：' + key)
+      if (!b) throw new Error($t('err.unknownBuiltin', {key}))
       if (libContentCache[sel] === undefined) {
         let content = null
-        // 1) 浏览器缓存（之前任一来源加载过）
+        // 1) 本机缓存（之前任一来源加载过）
         try {
           const rec = await libDbGet('builtin:' + key)
-          if (rec && rec.content) { content = rec.content; log('内置工艺库 ' + key + ' 命中浏览器缓存（零网络）。', 'sys') }
+          if (rec && rec.content) {content = rec.content; log(tt('log.libCachedLocal'), 'sys')}
         } catch (_) { }
-        // 2) 按镜像源列表加载（国内 → 海外 → 本地 libs/，配置见 js/sources.js）
+        // 2) 按镜像源列表加载（国内 → 海外 → 本地，配置见 js/sources.js）
         if (content === null) {
           const base = (($mod.scoped || '').replace(/\/$/, '')) || '.'
           if (window.VeriSimSources) {
             try {
-              content = await window.VeriSimSources.loadText(b.key, base, m => log('  · ' + m, 'info'))
+              content = await window.VeriSimSources.loadText(b.key, base, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
             } catch (e) {
-              throw new Error('内置工艺库加载失败（所有源不可用）：' + (e && e.message ? e.message : e) + '。可将 .lib 放入 $AGENT/ui/libs/ 离线使用。')
+              throw new Error($t('err.builtinMissing'))
             }
           } else {
             try {
@@ -1222,29 +1230,36 @@ endmodule
           }
         }
         if (content === null || content.length < 1024 || !/library\s*\(/.test(content.slice(0, 4096))) {
-          throw new Error('内置工艺库内容无效或所有源不可用。可将 .lib 放入 $AGENT/ui/libs/ 离线使用。')
+          throw new Error($t('err.builtinMissing'))
         }
         libContentCache[sel] = content
-        try { await libDbPut({name: 'builtin:' + key, content, size: content.length, addedAt: Date.now()}) } catch (_) { }
-        log('内置工艺库就绪（' + (content.length / 1048576).toFixed(1) + ' MB），已写入浏览器缓存。', 'sys')
+        try {await libDbPut({name: 'builtin:' + key, content, size: content.length, addedAt: Date.now()})} catch (_) { }
+        log(() => $t('log.libReady', {size: (content.length / 1048576).toFixed(1)}), 'sys')
       }
-      return {kind: 'asic', label: b.label, libName: key + '.lib', libContent: libContentCache[sel]}
+      return {kind: 'asic', label: $t('opt.techNangate'), libName: key + '.lib', libContent: libContentCache[sel]}
     }
     if (sel.indexOf('lib:user:') === 0) {
       const name = sel.slice(9)
       if (libContentCache[sel] === undefined) {
         const rec = await libDbGet(name)
-        if (!rec || !rec.content) throw new Error('浏览器缓存中找不到工艺文件：' + name + '，请重新导入')
+        if (!rec || !rec.content) throw new Error($t('err.libNotCached', {name}))
         libContentCache[sel] = rec.content
       }
-      return {kind: 'asic', label: name + '（本机缓存）', libName: 'user.lib', libContent: libContentCache[sel]}
+      return {kind: 'asic', label: name + $t('opt.cached'), libName: 'user.lib', libContent: libContentCache[sel]}
     }
-    return {kind: 'generic', label: '通用 techmap'}
+    return {kind: 'generic', label: $t('tech.generic')}
   }
   onTechChanged = () => {
     lsSet('tech', tech || '')
-    const label = (tech === '' ? '通用 techmap' : (TECHS[tech] && TECHS[tech].label) || tech)
-    log('综合工艺已切换：' + label + '（下次「综合」生效）', 'sys')
+    log(() => $t('log.techSwitched', {label: techDisplayLabel(tech)}), 'sys')
+  }
+  techDisplayLabel = (sel) => {
+    sel = sel || ''
+    if (!sel) return $t('tech.generic')
+    if (TECHS[sel]) return TECHS[sel].label
+    if (sel.indexOf('lib:builtin:') === 0) return $t('opt.techNangate')
+    if (sel.indexOf('lib:user:') === 0) return sel.slice(9) + $t('opt.cached')
+    return sel
   }
   importLib = () => {
     const el = $el('libFile')
@@ -1255,18 +1270,18 @@ endmodule
     const f = input && input.files && input.files[0]
     if (!f) return
     try {
-      if (f.size > 40 * 1048576) throw new Error('文件过大（> 40MB）')
+      if (f.size > 40 * 1048576) throw new Error($t('err.tooBig'))
       const content = await f.text()
-      if (!/library\s*\(/.test(content)) throw new Error('不像 Liberty 文件（缺少 library ( 声明）')
+      if (!/library\s*\(/.test(content)) throw new Error($t('err.notLiberty'))
       await libDbPut({name: f.name, content, size: f.size, addedAt: Date.now()})
       delete libContentCache['lib:user:' + f.name]
       await loadUserLibs()
       tech = 'lib:user:' + f.name
       lsSet('tech', tech)
-      log('工艺库 ' + f.name + '（' + (f.size / 1048576).toFixed(2) + ' MB）已存入浏览器缓存（不上传服务器），综合时选择该工艺即可。', 'ok')
-      toast('success', '已缓存工艺库 ' + f.name)
+      log(() => $t('log.libImported', {name: f.name, size: (f.size / 1048576).toFixed(2)}), 'ok')
+      toast('success', $t('toast.libCached', {name: f.name}))
     } catch (err) {
-      log('导入工艺库失败：' + (err && err.message ? err.message : err), 'err')
+      log(err && err.message ? err.message : String(err), 'err')
       toast('error', err && err.message ? err.message : String(err))
     }
     if (input) input.value = ''
@@ -1277,9 +1292,9 @@ endmodule
     const msg = $sys && $sys.$message
     let ok = false
     try {
-      if (msg && msg.confirm) await msg.confirm('从浏览器缓存删除工艺文件 ' + name + '？').then(() => { ok = true }).catch(() => { ok = false })
-      else ok = window.confirm('从浏览器缓存删除工艺文件 ' + name + '？')
-    } catch (_) { ok = false }
+      if (msg && msg.confirm) await msg.confirm($t('confirm.delLib', {name})).then(() => {ok = true}).catch(() => {ok = false})
+      else ok = window.confirm($t('confirm.delLib', {name}))
+    } catch (_) {ok = false}
     if (!ok) return
     try {
       await libDbDel(name)
@@ -1287,9 +1302,9 @@ endmodule
       tech = ''
       lsSet('tech', '')
       await loadUserLibs()
-      log('已删除缓存的工艺库 ' + name, 'ok')
+      log(() => $t('log.libDeleted', {name}), 'ok')
     } catch (err) {
-      log('删除失败：' + (err && err.message ? err.message : err), 'err')
+      log(() => $t('log.libDeleteFail', {msg: err && err.message ? err.message : err}), 'err')
     }
   }
 
@@ -1298,25 +1313,25 @@ endmodule
     if (busy) return {ok: false, text: '仿真/综合进行中，请稍后', error: 'busy'}
     if (!window.VeriSimEngines) return {ok: false, text: '仿真引擎未加载', error: 'engine not loaded'}
     const simLabel = o.source === 'sim_file'
-      ? ('sim_file: ' + (o.file || ''))
-      : (o.source === 'sim_code' ? 'sim_code' : '手动运行')
+      ? ($t('src.aiFile') + ': ' + (o.file || ''))
+      : (o.source === 'sim_code' ? $t('src.aiCode') : $t('src.manual'))
     if (typeof o.code === 'string') setCodeFromAction(o.code, simLabel)
     else sourceLabel = simLabel
     clearConsole()
     const t0 = performance.now()
-    setBusy(true, '仿真中…（引擎加载与运行期间页面会短暂无响应）')
+    setBusy(true, $t('status.simBusy'))
     try {
       let src = sanitize(code)
       if (!/\$dumpfile/.test(src)) {
-        src += `\n// —— 由 VeriSim 自动注入：VCD 波形抓取 ——\nmodule __vcd_dump__;\n  initial begin\n    $dumpfile("dump.vcd");\n    $dumpvars(0);\n  end\nendmodule\n`
-        log('已自动注入 $dumpfile/$dumpvars 用于抓取波形。', 'sys')
+        src += `\n// —— 自动注入：波形记录 ——\nmodule __vcd_dump__;\n  initial begin\n    $dumpfile("dump.vcd");\n    $dumpvars(0);\n  end\nendmodule\n`
+        log(tt('log.dumpInjected'), 'sys')
       }
-      log('Icarus Verilog (WASM) 启动：ivlpp → ivl → vvp', 'sys')
-      const r = await window.VeriSimEngines.simRun(src, '', s => log('  · ' + s, 'info'))
-      if (r.warn && r.warn.trim()) log('编译告警：\n' + r.warn.trim(), 'wrn')
+      log(tt('log.simStart'), 'sys')
+      const r = await window.VeriSimEngines.simRun(src, '', s => log(() => '  · ' + $t('sim.stage.' + s), 'info'))
+      if (r.warn && r.warn.trim()) log(() => $t('log.compileWarn') + '\n' + r.warn.trim(), 'wrn')
       const ms = performance.now() - t0
-      log('编译仿真完成（' + ms.toFixed(0) + ' ms）', 'ok')
-      if (r.out && r.out.trim()) log('—— $display 输出 ——\n' + r.out.trim(), 'info')
+      log(() => $t('log.simDone', {ms: ms.toFixed(0)}), 'ok')
+      if (r.out && r.out.trim()) log(() => $t('log.displayOut') + '\n' + r.out.trim(), 'info')
 
       let signalCount = 0
       let duration = 0
@@ -1327,14 +1342,14 @@ endmodule
         duration = waveData.tmax
         timescale = waveData.timescale || ''
         canDownloadVcd = true
-        log('VCD 波形已加载：' + signalCount + ' 个信号，时长 ' + duration + (timescale ? ' ' + timescale : ''), 'ok')
+        log(() => $t('log.vcdLoaded', {n: signalCount, dur: duration, ts: timescale ? ' ' + timescale : ''}), 'ok')
       } else {
         waveData = null
         signals = []
         selIds = []
         waveHasSelection = false
         canDownloadVcd = false
-        log('未生成 VCD（可在代码中加入 $dumpfile/$dumpvars）', 'wrn')
+        log(tt('log.noVcd'), 'wrn')
       }
       if (o.pane) showPane(o.pane)
       else if (r.vcd) showPane('wave')
@@ -1353,15 +1368,15 @@ endmodule
         file: o.file || '',
         tb: o.tb || ''
       }
-      resultState = '仿真完成 · ' + new Date().toLocaleTimeString()
-      setBusy(false, '仿真完成，耗时 ' + ms.toFixed(0) + ' ms')
+      resultState = $t('res.simOk') + ' · ' + new Date().toLocaleTimeString()
+      setBusy(false, $t('status.simDone', {ms: ms.toFixed(0)}))
       return result
     } catch (e) {
       const msg = e && e.message ? e.message : String(e)
-      log('仿真失败：' + msg, 'err')
+      log(() => $t('log.simFail', {msg}), 'err')
       const result = {ok: false, text: '仿真失败：' + msg, error: msg, output_tail: tail(e && e.out ? e.out : '', 2000)}
-      resultState = '仿真失败 · ' + new Date().toLocaleTimeString()
-      setBusy(false, '仿真失败')
+      resultState = $t('res.simFail') + ' · ' + new Date().toLocaleTimeString()
+      setBusy(false, $t('status.simFail'))
       return result
     }
   }
@@ -1395,27 +1410,27 @@ endmodule
     if (busy) return {ok: false, text: '仿真/综合进行中，请稍后', error: 'busy'}
     if (!window.VeriSimEngines || !window.VeriSimSynth) return {ok: false, text: '综合引擎未加载', error: 'engine not loaded'}
     const synthLabel = o.source === 'synth_file'
-      ? ('synth_file: ' + (o.file || ''))
-      : '手动综合'
+      ? ($t('src.aiFile') + ': ' + (o.file || ''))
+      : $t('src.manualSynth')
     if (typeof o.code === 'string') setCodeFromAction(o.code, synthLabel)
     else sourceLabel = synthLabel
     clearConsole()
     const t0 = performance.now()
-    setBusy(true, '综合中…')
+    setBusy(true, $t('status.synthBusy'))
     overlayShow = true
-    overlayTitle = '正在加载 Yosys (WASM, ~52MB)…'
-    overlaySub = '首次加载需要下载，之后由浏览器缓存'
+    overlayTitle = $t('synth.overlayTitle')
+    overlaySub = $t('synth.overlaySub')
     overlayPercent = 0
     try {
       const design = sanitize(code)
       const synthInput = window.VeriSimSynth.stripForSynth(design)
       if (synthInput.dropped && synthInput.dropped.length) {
-        log('综合前已移除非综合模块：' + synthInput.dropped.join(', '), 'sys')
+        log(() => $t('log.tbDropped', {list: synthInput.dropped.join(', ')}), 'sys')
       }
       const top = (o.top || topModule || '').trim() || synthInput.top || window.VeriSimSynth.guessTop(design)
-      if (!top) throw new Error('未找到顶层模块，请在代码中定义模块')
+      if (!top) throw new Error($t('err.noTop'))
       const ti = await resolveTech(o.tech !== undefined ? o.tech : tech)
-      log('Yosys (YoWASP WASM) 综合：顶层模块 ' + top + ' · 工艺 ' + ti.label, 'sys')
+      log(() => $t('log.synthStart', {top, tech: ti.label}), 'sys')
       const files = {'design.v': synthInput.code}
       let script
       if (ti.kind === 'fpga') {
@@ -1426,7 +1441,7 @@ endmodule
           'write_json net.json',
           'write_verilog netlist.v'
         ].join('; ')
-        synthFlow = 'read_verilog → ' + ti.cmd + ' -top ' + top + ' → stat → write_json / write_verilog'
+        synthFlow = $t('flow.fpga', {tech: ti.label})
       } else if (ti.kind === 'asic') {
         files[ti.libName] = ti.libContent
         script = [
@@ -1439,7 +1454,7 @@ endmodule
           'write_json net.json',
           'write_verilog netlist.v'
         ].join('; ')
-        synthFlow = 'read_verilog → read_liberty -lib ' + ti.libName + ' → synth -top ' + top + ' → dfflibmap → abc -liberty → stat'
+        synthFlow = $t('flow.asic', {lib: ti.label})
       } else {
         script = [
           'read_verilog design.v',
@@ -1449,33 +1464,31 @@ endmodule
           'write_json net.json',
           'write_verilog netlist.v'
         ].join('; ')
-        synthFlow = 'read_verilog → hierarchy -top ' + top + ' → proc; opt; fsm; opt; memory; opt; techmap; opt → stat'
+        synthFlow = $t('flow.generic')
       }
       const r = await window.VeriSimEngines.synthRun(script, files, p => {
         if (p && p.total) {
           overlayPercent = Math.round(100 * p.done / p.total)
-          overlaySub = '下载引擎 ' + (p.done / 1048576).toFixed(1) + ' / ' + (p.total / 1048576).toFixed(1) + ' MB'
-        } else if (typeof p === 'string') {
-          overlaySub = p
+          overlaySub = $t('synth.overlayDl', {done: (p.done / 1048576).toFixed(1), total: (p.total / 1048576).toFixed(1)})
         }
       })
       overlayShow = false
       const ms = performance.now() - t0
-      log('综合完成（' + ms.toFixed(0) + ' ms）', 'ok')
+      log(() => $t('log.synthDone', {ms: ms.toFixed(0)}), 'ok')
       const stat = window.VeriSimSynth.parseStat(r.out, top)
       synthOverview = stat.overview
       synthCells = stat.cellRows
-      netlistText = r.files && r.files['netlist.v'] ? r.files['netlist.v'] : '未生成门级网表。'
+      netlistText = r.files && r.files['netlist.v'] ? r.files['netlist.v'] : $t('netlist.missing')
       const statText = (r.out.match(/Printing statistics\.[\s\S]*$/) || [null])[0] || r.out.slice(-2000)
-      log('—— yosys stat ——\n' + statText.trim(), 'info')
+      log(() => $t('log.statTitle') + '\n' + statText.trim(), 'info')
       if (r.files && r.files['net.json']) {
         try {
           schNetlist = JSON.parse(r.files['net.json'])
           await renderSchematic()
-          log('原理图已生成（netlistsvg）', 'ok')
+          log(tt('log.schReady'), 'ok')
         } catch (se) {
           schReady = false
-          log('原理图渲染失败：' + se.message, 'wrn')
+          log(() => $t('log.schFail', {msg: se.message}), 'wrn')
         }
       }
       if (o.pane) showPane(o.pane)
@@ -1491,17 +1504,17 @@ endmodule
         output_tail: tail(r.out || '', 2000),
         file: o.file || ''
       }
-      resultState = '综合完成 · ' + new Date().toLocaleTimeString()
-      setBusy(false, '综合完成，耗时 ' + ms.toFixed(0) + ' ms')
+      resultState = $t('res.synthOk') + ' · ' + new Date().toLocaleTimeString()
+      setBusy(false, $t('status.synthDone', {ms: ms.toFixed(0)}))
       return result
     } catch (e) {
       overlayShow = false
       const msg = e && e.message ? e.message : String(e)
-      const detail = e && e.out ? '\n—— yosys 输出 ——\n' + tail(e.out, 2500) : ''
-      log('综合失败：' + msg + detail, 'err')
+      const detailThunk = e && e.out ? (() => '\n—— ' + $t('log.engineOut') + ' ——\n' + tail(e.out, 2500)) : (() => '')
+      log(() => $t('log.synthFail', {msg}) + detailThunk(), 'err')
       const result = {ok: false, text: '综合失败：' + msg, error: msg, output_tail: tail(e && e.out ? e.out : '', 2000)}
-      resultState = '综合失败 · ' + new Date().toLocaleTimeString()
-      setBusy(false, '综合失败')
+      resultState = $t('res.synthFail') + ' · ' + new Date().toLocaleTimeString()
+      setBusy(false, $t('status.synthFail'))
       return result
     }
   }
@@ -1584,7 +1597,7 @@ endmodule
     if (!cv || !wrap) return
     waveHasSelection = !!(waveData && selIds.length)
     if (!waveHasSelection) {
-      if (waveData) waveEmptyText = '在左侧选择要显示的信号。'
+      if (waveData) waveEmptyText = $t('wave.empty2')
       waveInfo = ''
       return
     }
@@ -1715,8 +1728,8 @@ endmodule
       c.font = '10px ui-monospace, monospace'
       c.fillText('t=' + curT, X(curT) + 3, 12)
     }
-    waveInfo = '时长 ' + waveData.tmax + (waveData.timescale ? ' ' + waveData.timescale : '') + ' · ' + selIds.length + '/' + waveData.order.length + ' 信号'
-    curInfo = curT !== null ? ('游标 t=' + curT) : '点击波形放置游标'
+    waveInfo = $t('wave.info', {dur: waveData.tmax + (waveData.timescale ? ' ' + waveData.timescale : ''), sel: selIds.length, total: waveData.order.length})
+    curInfo = curT !== null ? $t('wave.cursor', {t: curT}) : $t('wave.cursorHint')
   }
   waveStart = (e) => {
     if (!waveData) return
@@ -1755,7 +1768,7 @@ endmodule
   }
 
   renderSchematic = async () => {
-    if (typeof netlistsvg === 'undefined') throw new Error('netlistsvg 未加载')
+    if (typeof netlistsvg === 'undefined') throw new Error('schematic component not ready')
     schSvg = await netlistsvg.render(netlistsvg.digitalSkin, schNetlist)
     schReady = true
     schScale = 1
@@ -1827,7 +1840,7 @@ endmodule
     uiRunUnsubs = []
     if (!sid) return
     if (!$mod.$nc || !$mod.$nc.sub) {
-      log('NATS 未就绪，无法订阅 ui_run。', 'wrn')
+      log(tt('log.aiNoChannel'), 'wrn')
       return
     }
     const on = (action, fn) => {
@@ -1851,7 +1864,7 @@ endmodule
     on('synth_file', synthFile)
     on('show_pane', (args) => showPane(args.pane || args[0] || 'wave'))
     on('clear_console', () => clearConsole())
-    log('已订阅：sim_code / sim_file / synth_file / show_pane / clear_console', 'sys')
+    log(tt('log.aiLinked'), 'sys')
   }
 </script>
 
@@ -1872,8 +1885,8 @@ endmodule
       try {
         refreshLineNumbers()
         window.VeriSimBase = (($mod.scoped || '').replace(/\/$/, '')) || ''
-        statusText = '正在加载本地数据模块…'
-        try { await loadScript(scopedUrl('js/sources.js')) } catch (e) { log('镜像源配置加载失败，将使用本地引擎：' + e.message, 'wrn') }
+        statusText = $t('status.init')
+        try {await loadScript(scopedUrl('js/sources.js'))} catch (e) {log(tt('log.srcFallback'), 'wrn')}
         await loadScript(scopedUrl('js/vcd.js'))
         await loadScript(scopedUrl('js/synth.js'))
         await loadScript(scopedUrl('js/examples.js'))
@@ -1881,26 +1894,27 @@ endmodule
         // 原理图库按镜像源列表加载（国内 → 海外 → 本地 vendor/），配置见 js/sources.js
         try {
           if (window.VeriSimSources) {
-            await window.VeriSimSources.loadScript('elk', window.VeriSimBase, m => log('  · ' + m, 'info'))
-            await window.VeriSimSources.loadScript('netlistsvg', window.VeriSimBase, m => log('  · ' + m, 'info'))
+            await window.VeriSimSources.loadScript('elk', window.VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
+            await window.VeriSimSources.loadScript('netlistsvg', window.VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
           } else {
             await loadScript(scopedUrl('vendor/elk.bundled.js'))
             await loadScript(scopedUrl('vendor/netlistsvg.bundle.js'))
           }
         } catch (e) {
-          log('原理图渲染库加载失败，仿真/综合不受影响：' + e.message, 'wrn')
+          log(tt('log.vendorFail'), 'wrn')
         }
         ready = true
-        statusText = '就绪。'
+        statusText = $t('status.ready')
         refreshLineNumbers()
         loadSessionFiles()
         loadUserLibs()
-        log('提示： 引擎共 55MB，首次综合需下载.', 'sys')
+        log(() => $t('init.hint'), 'sys')
+        log(tt('log.engineReady'), 'ok')
       } catch (e) {
         ready = false
         const msg = e && e.message ? e.message : String(e)
-        statusText = '初始化失败：' + msg
-        log('初始化失败：' + msg, 'err')
+        statusText = $t('status.initFail') + '：' + msg
+        log(() => $t('status.initFail') + '：' + msg, 'err')
       }
     })()
 

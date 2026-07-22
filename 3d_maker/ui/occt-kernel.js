@@ -1,14 +1,60 @@
-/** occt-kernel.js — OpenCascade WASM adapter v1.1.1（CDN 加载 + 进度回调）
+/** occt-kernel.js — OpenCascade WASM adapter v1.1.2（CDN 加载 + Worker 编译 + IndexedDB 缓存 + 进度回调）
  *
  * 加载策略：
- *   - 胶水 JS 与 WASM 二进制默认全部走 CDN（unpkg），不消耗服务器流量；
- *   - WASM 下载失败时回退服务器本地文件（仅兜底）；
+ *   - IndexedDB 两级缓存：支持 Module 序列化的浏览器（Firefox 等）存编译产物，二次访问免下载免编译；
+ *     不支持的（Chrome）存 WASM 二进制，二次访问免下载、Worker 内编译，主线程仍无感；
+ *   - 首次访问：胶水 JS 与 WASM 二进制走 CDN（unpkg，浏览器 HTTP 缓存兜底），下载失败回退服务器本地文件；
+ *   - WASM 编译在 Web Worker 中进行，主线程不卡顿；环境不支持时回退主线程实例化；
  *   - onProgress(pct, text) 汇报 0~100 进度与阶段说明；
  *   - 加载完成后 createOCCTKernel() 返回与内置内核 API 兼容的内核对象。
  */
 const CDN_BASE = 'https://unpkg.com/opencascade.js@1.1.1/dist/';
 const LOCAL_WASM = '/aic/fs/agents/3e292cd175f649f6b7fa632327bec7b3/ui/opencascade.wasm.wasm';
+/** 本地缓存键（绑定内核版本，升级内核时改这里即可使旧缓存失效） */
+const WASM_CACHE_KEY = 'opencascade.js@1.1.1';
 let oc = null, _p = null;
+
+/** IndexedDB 缓存：持久化已编译的 WebAssembly.Module，二次访问跳过下载与编译。
+ *  WebAssembly.Module 支持结构化克隆（Chrome 74+ / Firefox 79+ / Safari 15+）；
+ *  不支持的环境读写会静默失败，自动回退完整加载流程。 */
+function _idbStore(mode, fn) {
+  return new Promise((resolve, reject) => {
+    const rq = indexedDB.open('brepview-cache', 1);
+    rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('wasm')) rq.result.createObjectStore('wasm'); };
+    rq.onsuccess = () => {
+      const db = rq.result;
+      try {
+        const tx = db.transaction('wasm', mode);
+        // 注意：put() 可能同步抛错（如 Chrome 拒绝序列化 WebAssembly.Module），必须捕获
+        fn(tx.objectStore('wasm'));
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+        tx.onabort = () => { db.close(); reject(tx.error || new Error('transaction aborted')); };
+      } catch (e) {
+        try { db.close(); } catch (_) {}
+        reject(e);
+      }
+    };
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function _cacheGet(key) {
+  try {
+    let out = null;
+    await _idbStore('readonly', (st) => { const g = st.get(key); g.onsuccess = () => { out = g.result; }; });
+    return out || null;
+  } catch (_) { return null; }
+}
+async function _cachePut(key, val) {
+  try { await _idbStore('readwrite', (st) => st.put(val, key)); return true; }
+  catch (e) {
+    // DataCloneError 是预期分支（Chrome 无法序列化 WebAssembly.Module），由调用方降级存二进制，不打警告
+    if (!(e && e.name === 'DataCloneError')) {
+      console.warn('[OCCT] 写入本地缓存失败:', (e && e.message) || e);
+    }
+    return false;
+  }
+}
 
 /** 带进度汇报的 fetch（按字节流统计） */
 async function _fetchWithProgress(url, onBytes) {
@@ -36,44 +82,144 @@ async function _fetchWithProgress(url, onBytes) {
   return buf.buffer;
 }
 
+/** 在 Web Worker 中编译 WASM：大模块（~15MB）的编译耗时数秒，直接在主线程会卡死页面。
+ *  编译完成后将 WebAssembly.Module 传回主线程，主线程只做毫秒级的实例化。
+ *  环境不支持（无 Worker / Module 不可传输 / 超时）时 reject，由调用方回退主线程实例化。 */
+function _compileInWorker(buf) {
+  return new Promise((resolve, reject) => {
+    if (typeof Worker === 'undefined' || typeof WebAssembly === 'undefined') {
+      return reject(new Error('Worker/WebAssembly 不可用'));
+    }
+    const src = 'self.onmessage=async(e)=>{' +
+      'try{const m=await WebAssembly.compile(e.data);' +
+      'try{self.postMessage({ok:1,mod:m});}' +
+      'catch(e2){self.postMessage({ok:0,err:"WebAssembly.Module 不可跨线程传输"});}}' +
+      'catch(err){try{self.postMessage({ok:0,err:String(err&&err.message||err)});}catch(_){}}}';
+    let w;
+    try {
+      w = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+    } catch (e) {
+      return reject(e);
+    }
+    const timer = setTimeout(() => { try { w.terminate(); } catch (_) {} reject(new Error('编译超时')); }, 90000);
+    w.onmessage = (e) => {
+      clearTimeout(timer);
+      try { w.terminate(); } catch (_) {}
+      if (e.data && e.data.ok) resolve(e.data.mod);
+      else reject(new Error((e.data && e.data.err) || '编译失败'));
+    };
+    w.onerror = (e) => {
+      clearTimeout(timer);
+      try { w.terminate(); } catch (_) {}
+      reject(new Error('worker 错误: ' + ((e && e.message) || 'unknown')));
+    };
+    w.postMessage(buf, [buf]); // 转移所有权（调用方传入的是副本，主线程保留原始 buffer 供回退）
+  });
+}
+
 async function _initOCCT(cdnBase, onProgress) {
   if (oc) { onProgress?.(100, '高性能解析器就绪'); return oc; }
   if (_p) return _p;
   cdnBase = cdnBase || CDN_BASE;
   const ratio = (loaded, total) => (total > 0 ? Math.min(1, loaded / total) : 0.5);
   _p = (async () => {
-    // 1. 下载胶水脚本（进度 0~10%）
-    onProgress?.(0, '正在加载高性能解析器…');
+    // 0. 检查 IndexedDB 两级缓存：
+    //    L1 编译产物（WebAssembly.Module）→ 跳过下载 + 编译（Firefox 等支持序列化的浏览器）
+    //    L2 WASM 二进制（ArrayBuffer）      → 跳过下载，仅 Worker 内编译（Chrome：Module 不可入库）
+    let compiledModule = null;
+    let cachedBinary = null;
+    if (typeof indexedDB !== 'undefined') {
+      onProgress?.(0, '正在检查本地缓存…');
+      const cached = await _cacheGet(WASM_CACHE_KEY);
+      if (cached && cached.version === WASM_CACHE_KEY) {
+        if (cached.module instanceof WebAssembly.Module) {
+          compiledModule = cached.module;
+          console.log('[OCCT] 命中 L1 缓存（编译产物），跳过下载与编译');
+        } else if (cached.binary instanceof ArrayBuffer && cached.binary.byteLength) {
+          cachedBinary = cached.binary;
+          console.log('[OCCT] 命中 L2 缓存（二进制），跳过下载');
+        }
+      }
+    }
+
+    // 1. 下载胶水脚本（OCCT 类绑定层，每次都需要；浏览器 HTTP 缓存兜底，刷新一般不走真实网络）
+    const glueBase = compiledModule ? 90 : 0;
+    onProgress?.(glueBase, '正在加载高性能解析器…');
     const glueBuf = await _fetchWithProgress(cdnBase + 'opencascade.wasm.js', (loaded, total) => {
-      onProgress?.(Math.round(ratio(loaded, total) * 10), '正在加载高性能解析器…');
+      onProgress?.(glueBase + Math.round(ratio(loaded, total) * 5), '正在加载高性能解析器…');
     });
     let text = new TextDecoder().decode(glueBuf);
 
-    // 2. 下载 WASM 二进制（进度 10~95%，CDN 优先，失败回退本地）
-    let wasmBuf = null;
-    try {
-      wasmBuf = await _fetchWithProgress(cdnBase + 'opencascade.wasm.wasm', (loaded, total) => {
-        onProgress?.(10 + Math.round(ratio(loaded, total) * 85), '正在加载高性能解析器…');
-      });
-    } catch (e) {
-      console.warn('[OCCT] CDN WASM 下载失败，回退服务器本地文件:', e.message);
-      onProgress?.(60, '正在从服务器加载高性能解析器…');
-      wasmBuf = await _fetchWithProgress(LOCAL_WASM, (loaded, total) => {
-        onProgress?.(60 + Math.round(ratio(loaded, total) * 35), '正在从服务器加载高性能解析器…');
-      });
+    // 2. 未命中 L1 缓存：获取 WASM 二进制（L2 缓存 → CDN → 服务器本地）并在 Worker 中编译
+    let wasmUrl = null;
+    if (!compiledModule) {
+      let wasmBuf = null;
+      if (cachedBinary) {
+        wasmBuf = cachedBinary;
+        onProgress?.(90, '已从本地缓存读取高性能解析器…');
+      } else {
+        try {
+          wasmBuf = await _fetchWithProgress(cdnBase + 'opencascade.wasm.wasm', (loaded, total) => {
+            onProgress?.(5 + Math.round(ratio(loaded, total) * 85), '正在加载高性能解析器…');
+          });
+        } catch (e) {
+          console.warn('[OCCT] CDN WASM 下载失败，回退服务器本地文件:', e.message);
+          onProgress?.(60, '正在从服务器加载高性能解析器…');
+          wasmBuf = await _fetchWithProgress(LOCAL_WASM, (loaded, total) => {
+            onProgress?.(60 + Math.round(ratio(loaded, total) * 30), '正在从服务器加载高性能解析器…');
+          });
+        }
+      }
+      // 3. 在 Web Worker 中编译 WASM：大模块直接在主线程编译会卡死页面数秒，
+      //    改由 Worker 离线编译后传回 WebAssembly.Module，主线程只做毫秒级实例化。
+      //    不支持时（旧浏览器 / 传输受限）回退胶水自带的主线程流程。
+      try {
+        onProgress?.(92, '正在后台编译高性能解析器…');
+        compiledModule = await _compileInWorker(wasmBuf.slice(0)); // 传副本，保留原 buffer 供回退
+        // 写缓存（仅首次下载时）：优先存编译产物；浏览器拒绝序列化 Module（Chrome）时退存二进制
+        if (!cachedBinary) {
+          const okFull = await _cachePut(WASM_CACHE_KEY, { version: WASM_CACHE_KEY, module: compiledModule, binary: wasmBuf.slice(0) });
+          if (!okFull) await _cachePut(WASM_CACHE_KEY, { version: WASM_CACHE_KEY, binary: wasmBuf.slice(0) });
+          console.log('[OCCT] 已写入本地缓存:', okFull ? 'L1 编译产物 + L2 二进制' : 'L2 二进制（浏览器不支持 Module 入库）');
+        }
+      } catch (e) {
+        console.warn('[OCCT] 后台编译不可用，将使用主线程实例化:', (e && e.message) || e);
+      }
+      // 转本地 Blob 地址（仅主线程回退实例化时需要）
+      wasmUrl = URL.createObjectURL(new Blob([wasmBuf], { type: 'application/wasm' }));
     }
-    // 转本地 Blob 地址，供 Emscripten 实例化（避免二次下载）
-    const wasmUrl = URL.createObjectURL(new Blob([wasmBuf], { type: 'application/wasm' }));
+    const instantiateWasm = compiledModule
+      ? (imports, receive) => {
+          // Chrome 主线程禁止同步实例化 >8MB 的模块（RangeError），而 OCCT 二进制高达 ~65MB，必中此限。
+          // 先试同步快路径；被拒则回退异步 WebAssembly.instantiate：立即返回 {} + 完成后调 receive，
+          // 语义与胶水自带的默认异步实例化路径等价——胶水所有 wasm 函数封装均为惰性 thunk，
+          // 首次调用才经 Module["asm"] 解析（receiveInstance 已先行赋值），不会有时序问题。
+          try {
+            const inst = new WebAssembly.Instance(compiledModule, imports);
+            receive(inst, compiledModule);
+            return inst.exports;
+          } catch (e) {
+            WebAssembly.instantiate(compiledModule, imports).then(
+              (inst) => receive(inst, compiledModule),
+              (e2) => console.error('[OCCT] WASM 实例化失败:', e2)
+            );
+            return {};
+          }
+        }
+      : undefined;
 
-    // 3. 改写胶水脚本：去掉 export、绑定 WASM 地址
+    // 4. 改写胶水脚本：去掉 export、绑定 WASM 地址
     text = text.replace(/export\s*\{[^}]*\}/g, '').replace(/export\s+default\s+\w+\s*;?/g, '');
     text = text.replace(/var _scriptDir = .+;/, 'var _scriptDir = "' + cdnBase + '";');
     text = text.replace(
       /var Module=typeof opencascade!=="undefined"\?opencascade:\{\};/,
-      'var Module=typeof opencascade!=="undefined"?opencascade:{wasmBinaryFile:"' + wasmUrl + '"};',
+      'var Module=typeof opencascade!=="undefined"?opencascade:{wasmBinaryFile:"' + (wasmUrl || '') + '"};',
     );
 
-    // 4. 注入执行胶水脚本
+    // 5. 注入执行胶水脚本（预置 Module，兼容非 MODULARIZE 构建，让钩子在脚本执行前生效）
+    window.opencascade = window.opencascade || {};
+    if (wasmUrl) window.opencascade.wasmBinaryFile = wasmUrl;
+    if (instantiateWasm) window.opencascade.instantiateWasm = instantiateWasm;
     const blob = new Blob([text], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     await new Promise((resolve, reject) => {
@@ -85,9 +231,10 @@ async function _initOCCT(cdnBase, onProgress) {
     });
     URL.revokeObjectURL(url);
 
-    // 5. 编译 / 实例化 WASM
-    onProgress?.(95, '正在初始化高性能解析器…');
-    oc = typeof window.opencascade === 'function' ? await window.opencascade() : await window.opencascade;
+    // 6. 实例化（有编译产物时主线程不再编译 WASM，无卡顿）
+    onProgress?.(98, '正在初始化高性能解析器…');
+    const overrides = Object.assign(wasmUrl ? { wasmBinaryFile: wasmUrl } : {}, instantiateWasm ? { instantiateWasm } : {});
+    oc = typeof window.opencascade === 'function' ? await window.opencascade(overrides) : await window.opencascade;
     onProgress?.(100, '高性能解析器就绪');
     return oc;
   })();
@@ -153,7 +300,7 @@ class OCCTShape {
 
   _xform(trsf) { try { const b = new oc.BRepBuilderAPI_Transform_2(this._oc, trsf, true); this._oc = b.Shape(); this._mesh = null; } catch(_) {} return this; }
   translate(x,y,z) { x=x||0;y=y||0;z=z||0; const t=new oc.gp_Trsf_1(); t.SetTranslation_1(new oc.gp_Vec_4(x,y,z)); return this._xform(t); }
-  scale(x,y,z) { if(y===undefined)y=z=x; if(x!==y||y!==z){const g=new oc.gp_GTrsf_2();g.SetValue(1,1,x);g.SetValue(2,2,y);g.SetValue(3,3,z); const b=new oc.BRepBuilderAPI_GTransform_2(this._oc,g,true);this._oc=b.Shape();this._mesh=null;return this;} const t=new oc.gp_Trsf_1();t.SetScale(new oc.gp_Pnt_3(0,0,0),x);return this._xform(t); }
+  scale(x,y,z) { if(y===undefined)y=z=x; if(x!==y||y!==z){const g=new oc.gp_GTrsf_1();g.SetValue(1,1,x);g.SetValue(2,2,y);g.SetValue(3,3,z); const b=new oc.BRepBuilderAPI_GTransform_2(this._oc,g,true);this._oc=b.Shape();this._mesh=null;return this;} const t=new oc.gp_Trsf_1();t.SetScale(new oc.gp_Pnt_3(0,0,0),x);return this._xform(t); }
   rotate(axis,deg) { const rad=deg*Math.PI/180; const ax=new oc.gp_Ax1_2(new oc.gp_Pnt_3(0,0,0),new oc.gp_Dir_4(axis[0],axis[1],axis[2])); const t=new oc.gp_Trsf_1();t.SetRotation_1(ax,rad);return this._xform(t); }
   rotateX(d){return this.rotate([1,0,0],d)} rotateY(d){return this.rotate([0,1,0],d)} rotateZ(d){return this.rotate([0,0,1],d)}
 
@@ -168,7 +315,12 @@ class OCCTShape {
 
 class OCCTSketch {
   constructor(points){ this.points=points; const pg=new oc.BRepBuilderAPI_MakePolygon_1(); for(const[x,y]of points)pg.Add_1(new oc.gp_Pnt_3(x,y,0)); pg.Close(); this._face=new oc.BRepBuilderAPI_MakeFace_15(pg.Wire(),false).Face(); }
-  extrude(h){ const prism=new oc.BRepPrimAPI_MakePrism_1(this._face,new oc.gp_Vec_4(0,0,h),false,true); return new OCCTShape(_positive(prism.Shape()),{kind:'extrude',params:{profile:this.points,height:h}}); }
+  extrude(h){ const prism=new oc.BRepPrimAPI_MakePrism_1(this._face,new oc.gp_Vec_4(0,0,h),false,true);
+    // 与内置内核语义对齐：内置 extrudeProfile 沿 Z 居中拉伸（-h/2 ~ +h/2），
+    // 而 MakePrism 从轮廓面向 +Z 拉伸 0~h，须补平移 -h/2，否则切换内核后模型整体错位。
+    const t=new oc.gp_Trsf_1(); t.SetTranslation_1(new oc.gp_Vec_4(0,0,-h/2));
+    const moved=new oc.BRepBuilderAPI_Transform_2(prism.Shape(),t,true).Shape();
+    return new OCCTShape(_positive(moved),{kind:'extrude',params:{profile:this.points,height:h}}); }
 }
 
 /** 方向校正：B-Rep 实体体积为负时翻转面法线（保证体积为正、渲染法线朝外） */

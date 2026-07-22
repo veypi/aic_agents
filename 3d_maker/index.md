@@ -206,8 +206,10 @@ return filletR > 0 ? shape.fillet(filletR) : shape;
 1. **分段数够用就好**：cylinder/sphere 的 segments 每翻倍，三角面约翻 2~4 倍；
    超过 `maxTriangles`（默认 100 万）会产生警告。
 2. **布尔宁少勿多**：内置内核 BSP 布尔随面数平方增长；连续多次 fuse 建议先合并小件。
-3. **OCCT 内核**（推荐正式使用）：体积精确、三角面少约 96%、支持任意圆角；
-   代价是首次需加载 62.8MB WASM（本地约 2~5 秒）。
+3. **OCCT 内核**：体积精确、三角面少约 96%、支持任意圆角。
+   页面默认内置内核，由用户通过工具栏「🧮 内置 / ⚡ OCCT」按钮手动切换，可来回切；
+   首次加载需下载 ~65MB WASM（后台 Worker 编译，页面不卡顿），
+   编译产物写入浏览器本地缓存，之后切换秒级完成。
 4. **网格体积与精确体积**：内置内核基于三角网格求体积（球 −1.6%、圆环 −3.2% 属正常逼近）；
    需要精确体积/表面积时用 OCCT 内核。
 
@@ -270,3 +272,198 @@ return revolve([
 - **多部件输出**：9 个带 name/color 的部件，便于面板选择与导出
 - **细节结构**：阶梯轴（多段 fuse）、抽壳箱体、轴承沉孔、加强筋、吊环
 - 约 25 次布尔运算，191k 三角面，内置内核 820ms 完成
+
+## 13. 内核语义与兼容性（重要）
+
+页面有两个几何内核（内置 JS 内核与 OCCT WASM 内核），用户可随时手动切换，**同一段代码必须在两个内核下产生相同几何**。两内核语义已完全对齐：
+
+| 语义 | 统一约定 |
+|---|---|
+| 所有图元 | 中心在原点 |
+| `extrude(h)` | 沿 Z 居中拉伸（−h/2 ~ +h/2） |
+| `rotateX/Y/Z(deg)` | 右手定则：从轴正向看原点，正角度为逆时针 |
+| `scale(x,y,z)` | 以原点为基准缩放 |
+| `revolve` | 绕 Z 轴 |
+
+**因此写代码时不要做任何内核特定的适配**（比如手动补居中平移）——如果某个内核下模型错位，那是内核的 bug，不是代码问题。
+
+内核差异注意事项：
+
+- `segments` 参数只影响内置内核网格密度，OCCT 忽略（B-Rep 精确曲面）
+- **OCCT 对带凹口的复杂实体倒圆角可能失败**（如带轮拱凹口的车身 `body.fillet()`）——此类形状不要整体 fillet；需要圆角效果时拆成简单部件分别倒角，或接受直边
+- 内置内核体积基于网格近似（球 −1.6%、圆环 −3.2% 属正常）；精确体积/表面积用 OCCT
+- 内置内核 fillet 仅支持 box 与未布尔的 extrude（且 extrude 圆角有过量切削缺陷）
+
+## 14. 高级装配技法库
+
+以下模式从保时捷 911 等复杂模型中提炼，设计大型模型时优先套用：
+
+### 14.1 部件数组 + 镜像装配助手
+
+```js
+const parts = [];
+function add(n, s, c) { parts.push({ name: n, shape: s, color: c }); }
+// 左右对称件只写一次逻辑，自动镜像成两个命名部件（用户可在面板单独隔离/隐藏）
+function both(n, fn, c) { for (const s of [-1, 1]) add(n + (s < 0 ? '(左)' : '(右)'), fn(s), c); }
+
+both('后视镜壳', s => box(11, 4, 8).translate(-95, s * 88, 92), '#191b1e');
+return parts;
+```
+
+### 14.2 轮廓拉伸车身（侧面剪影法）
+
+车辆/船体等“拉伸体”的通用做法：在 XY 平面画**侧视轮廓**（x = 纵向长度，y = 高度），沿 Z 拉出宽度，再 `rotateX(90)` 立正：
+
+```js
+let p = [[-225, 22], [-228, 38], /* …侧面剪影点… */ [224, 22]];
+const body = sketchPolygon(p).extrude(176).rotateX(90);
+```
+
+> 注意 rotateX(90) 后原轮廓的 y（高度）变为 Z，拉伸宽度变为 Y。布局坐标要在旋转后的空间里想。
+
+### 14.3 凹多边形：圆弧采样挖轮拱
+
+`sketchPolygon` 支持**凹多边形**。轮拱凹口 = 在轮廓线上插入一段圆弧采样点（圆心在轮心）：
+
+```js
+const archR = 40, wheelCZ = 34, rocker = 22;
+const dx = Math.sqrt(archR * archR - (wheelCZ - rocker) * (wheelCZ - rocker));
+const a0 = Math.atan2(rocker - wheelCZ, dx), a1 = Math.PI - a0;
+for (let i = 0; i <= 16; i++) {                 // 16 段采样，圆心 (cx, wheelCZ)
+  const a = a0 + (a1 - a0) * i / 16;
+  p.push([cx + archR * Math.cos(a), wheelCZ + archR * Math.sin(a)]);
+}
+```
+
+### 14.4 intersect 裁剪取半（轮拱包边）
+
+要“半个环形”（如只露出上半部的轮拱包边）：做完整环形，与一个 clip 盒子求交：
+
+```js
+const ring = pipe(41, 35, 26, 56).rotateX(90).translate(wx, s * 90, 34);
+const clip = box(120, 60, 100).translate(wx, s * 90, 72);  // 盒子盖住上半部
+const archLip = ring.intersect(clip);
+```
+
+### 14.5 椭球体（非均匀缩放）
+
+```js
+sphere(11, 40, 28).scale(1, 0.7, 0.9)   // 扁椭球大灯透镜
+```
+
+### 14.6 车轮总成（函数化复用）
+
+轮胎 `pipe` + 轮辋边 `pipe` + 辐条（N 根 box 绕 Y 阵列 fuse）+ 螺栓（5 颗 cylinder 圆周阵列）+ 刹车盘 + 卡钳 + 轮毂盖，封成 `wheel(cx, cy)` 返回子部件字典，四轮复用，每个子部件单独 add（不同材质颜色）。
+
+### 14.7 其他实用模式
+
+- **实体玻璃与遮挡**：座舱玻璃是实心块，放在内部的件会被遮住——A 柱/纵梁等要贴在玻璃表面或外侧
+- **格栅/百叶**：多片薄 box 等距排布，或先 fuse 成一个部件再挂面板
+- **缝线细节**：1.5mm 宽的深色薄 box 贴在表面（车门缝、引擎盖中缝）
+- **配色系统**：顶部定义调色板常量（车身/黑件/玻璃/镀铬/警示色），`add(name, shape, color)` 统一挂色
+
+## 15. 高级完整样例：保时捷 911（115 部件）
+
+> 完整源码：`$AGENT/examples/porsche-911.js`，可直接加载：
+> `ui_run action=run_file argv=["--path", "agents/{agent_id}/examples/porsche-911.js"]`
+> 页面工具栏「📦 案例… → 保时捷 911」亦可一键载入。
+
+```js
+// 保时捷 911 精致模型 v5 - 高级配色 + 圆角精细化
+const BODY    = '#2f4d75';    // 深金属蓝
+const ROOFBLK = '#191b1e';    // 钢琴黑(车顶/后视镜/尾翼/柱)
+const GLASS   = '#15202b';    // 深色玻璃
+const TIRE    = '#15161a';
+const SPOKE   = '#4a4e54';    // 枪灰辐条
+const LIPL    = '#c2c7cc';    // 银轮辋边
+const CHROME  = '#d8dde2';
+const RED     = '#d61f2c';
+const DARK    = '#1b1d21';    // 哑光黑空力件
+const EXH     = '#6f757c';
+const PLATE   = '#e8e8e8';
+const DISC    = '#8f959b';
+const GOLD    = '#c8a24a';
+const AMBER   = '#e8a33d';
+
+const wheelR = 34, wheelCZ = 34, archR = 40, rocker = 22;
+const fwx = -145, rwk = 145, bodyW = 176;
+
+const parts = [];
+function add(n, s, c) { parts.push({ name: n, shape: s, color: c }); }
+function both(n, fn, c) { for (const s of [-1, 1]) add(n + (s < 0 ? '(左)' : '(右)'), fn(s), c); }
+
+// ===== 车身主体：侧视轮廓（含轮拱凹口圆弧采样）→ 拉伸车宽 → rotateX(90) 立正 =====
+let p = [];
+p.push([-225, rocker]); p.push([-228, 38]); p.push([-220, 52]); p.push([-200, 60]);
+p.push([-170, 66]); p.push([-130, 70]); p.push([-95, 72]); p.push([-40, 73]);
+p.push([40, 74]); p.push([95, 76]); p.push([140, 78]); p.push([185, 76]);
+p.push([215, 68]); p.push([226, 52]); p.push([228, 36]); p.push([224, rocker]);
+const dxA = Math.sqrt(archR * archR - (wheelCZ - rocker) * (wheelCZ - rocker));
+const a0 = Math.atan2(rocker - wheelCZ, dxA), a1 = Math.PI - a0;
+function arch(cx) {
+  const n = 16;
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + (a1 - a0) * i / n;
+    p.push([cx + archR * Math.cos(a), wheelCZ + archR * Math.sin(a)]);
+  }
+}
+arch(rwk); arch(fwx);                    // 后轮拱 → 前轮拱（沿轮廓走向依次嵌入）
+add('车身主体', sketchPolygon(p).extrude(bodyW).rotateX(90), BODY);
+
+// ===== 轮拱包边：完整环形 intersect 上半部 clip 盒 =====
+function fender(wx, s) {
+  const ring = pipe(41, 35, 26, 56).rotateX(90).translate(wx, s * 90, wheelCZ);
+  const clip = box(120, 60, 100).translate(wx, s * 90, 72);
+  return ring.intersect(clip);
+}
+both('前轮拱包边', s => fender(fwx, s), BODY);
+both('后轮拱包边', s => fender(rwk, s), BODY);
+
+// ===== 座舱：实心深色玻璃块 + 悬浮黑车顶 =====
+let c = [[-112, 70], [-70, 128], [24, 138], [68, 132], [116, 88], [116, 70], [-112, 70]];
+add('座舱玻璃', sketchPolygon(c).extrude(140).rotateX(90), GLASS);
+add('车顶', box(128, 108, 10).translate(-4, 0, 135), ROOFBLK);
+both('A柱', s => box(7, 7, 74).rotateY(37).translate(-86, s * 71, 100), ROOFBLK);
+
+// ===== 车轮总成：轮胎/轮辋边/10 辐条+5 螺栓/刹车盘/卡钳/轮毂盖 =====
+function wheel(cx, cy) {
+  const tire = pipe(34, 25, 30, 64).rotateX(90);
+  const lip = pipe(26, 22, 24, 48).rotateX(90);
+  let sp = null;
+  for (let i = 0; i < 10; i++) { const s = box(34, 7, 6).rotateY(i * 36); sp = sp ? sp.fuse(s) : s; }
+  let spoke = sp.fuse(cylinder(8, 22, 32).rotateX(90));
+  for (let i = 0; i < 5; i++) {
+    const a = i * 72 * Math.PI / 180;
+    spoke = spoke.fuse(cylinder(1.6, 7, 12).rotateX(90)
+      .translate(13 * Math.cos(a), 12, 13 * Math.sin(a)));
+  }
+  const disc = cylinder(21, 5, 40).rotateX(90).translate(0, -7, 0)
+    .fuse(cylinder(9, 9, 24).rotateX(90).translate(0, -7, 0));
+  return {
+    tire: tire.translate(cx, cy, wheelCZ), spoke: spoke.translate(cx, cy, wheelCZ),
+    lip: lip.translate(cx, cy, wheelCZ), disc: disc.translate(cx, cy, wheelCZ),
+    caliper: box(15, 9, 11).translate(0, -3, -16).translate(cx, cy, wheelCZ),
+    cap: cylinder(4, 4, 20).rotateX(90).translate(0, 14, 0).translate(cx, cy, wheelCZ),
+  };
+}
+for (const [cx, cy] of [[fwx, -82], [fwx, 82], [rwk, -82], [rwk, 82]]) {
+  const w = wheel(cx, cy);
+  const fb = cx < 0 ? '前' : '后', sd = cy < 0 ? '左' : '右';
+  add(fb + sd + '轮胎', w.tire, TIRE);  add(fb + sd + '辐条', w.spoke, SPOKE);
+  add(fb + sd + '轮辋边', w.lip, LIPL); add(fb + sd + '刹车盘', w.disc, DISC);
+  add(fb + sd + '卡钳', w.caliper, RED); add(fb + sd + '轮毂盖', w.cap, GOLD);
+}
+
+// …其余约 90 个部件（引擎盖/前后脸/灯具/尾翼/侧裙/格栅/排气…）见完整文件…
+return parts;
+```
+
+**该样例展示的能力点**：凹多边形车身轮廓、圆弧采样轮拱、intersect 裁剪、椭球大灯（scale）、10 辐条+5 螺栓阵列车轮、14 色调色板、115 个中文命名部件（含左右标注）。OCCT 内核下约 525ms / 7 万三角面完成全部布尔与网格化。
+
+## 16. 大模型协作工作流
+
+1. **你无法直接看到渲染结果**——调优依赖用户截图反馈。每轮只做小改动（`ufs edit` 改几处 → `run_file` 重跑 → 请用户截图确认），不要一次重写整个模型后盲猜效果。
+2. **复杂模型必须走文件流**：`ufs write $SESSION/models/xxx.js` → `run_file` 执行；迭代用 `ufs edit` 增量修改。代码落盘可复用、可追溯，用户也能从页面「📂 文件」面板自行重载。
+3. **部件命名规范**：中文名 + 左右标注（如 `前左轮胎`、`后视镜壳(右)`），用户在属性面板可按部件隔离/隐藏，命名清晰是可用性的一部分。
+4. **ui_run sync 结果可疑时**（如返回的统计与修改不符）：可能是页面断连后回放了上一帧缓存——先请用户刷新页面再重跑。
+5. **规模参考**：精致展示模型 60~120 个部件为宜；布尔运算集中的部件（如 10 辐条 fuse）建议封进函数复用；整体三角面超过 100 万会触发警告，切 OCCT 内核通常可降 96%。
