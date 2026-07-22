@@ -43,8 +43,11 @@
   }
 
   function parseStat(out, top) {
-    const sm = out.match(/Printing statistics\.([\s\S]*?)(?:\n\d+\. Executing|$)/);
-    const block = sm ? sm[1] : out;
+    // 取最后一段 stat（映射完成后的最终统计），避免取到综合中间步骤的数据
+    const parts = String(out || '').split('Printing statistics.');
+    let block = parts[parts.length - 1];
+    const cut = block.search(/\n\d+\. Executing/);
+    if (cut >= 0) block = block.slice(0, cut);
     const num = (re) => {
       const mm = block.match(re);
       return mm ? mm[1] : '—';
@@ -67,13 +70,22 @@
       processes: num(/^\s*(\d+)\s+processes\s*$/m)
     };
 
+    // 单元行形如 "        2   SB_CARRY" 或 "        5   $_MUX_"；
+    // 跳过 stat 概览关键字行（wires/cells/ports 等）与分节行。
+    const STAT_KEYS = new Set(['wires', 'cells', 'memories', 'processes', 'ports', 'bits', 'submodules', 'functions', 'signals', 'chip', 'area']);
     const rows = [];
     let cm;
-    const cre1 = /^\s*(\d+)\s+(\$\S+)\s*$/gm;
-    while ((cm = cre1.exec(block))) rows.push([cm[2], cm[1]]);
+    const cre1 = /^\s*(\d+)\s+([A-Za-z_$][\w$.]*)\s*$/gm;
+    while ((cm = cre1.exec(block))) {
+      if (STAT_KEYS.has(cm[2])) continue;
+      rows.push([cm[2], cm[1]]);
+    }
     if (!rows.length) {
-      const cre2 = /^\s{2,}(\$\S+)\s+(\d+)\s*$/gm;
-      while ((cm = cre2.exec(block))) rows.push([cm[1], cm[2]]);
+      const cre2 = /^\s{2,}([A-Za-z_$][\w$.]*)\s+(\d+)\s*$/gm;
+      while ((cm = cre2.exec(block))) {
+        if (STAT_KEYS.has(cm[1])) continue;
+        rows.push([cm[1], cm[2]]);
+      }
     }
 
     const merged = {};
@@ -82,7 +94,7 @@
       .map(name => ({ name, count: merged[name] }))
       .sort((a, b) => b.count - a.count);
     overview.dff = cellRows
-      .filter(r => /DFF/i.test(r.name))
+      .filter(r => /(dff|dfxtp|dfstp|efscn)/i.test(r.name))
       .reduce((sum, r) => sum + r.count, 0);
 
     return { overview, cellRows };

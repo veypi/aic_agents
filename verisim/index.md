@@ -82,7 +82,10 @@
 |---|---|
 | `--file <ufs_path>` | 设计文件绝对 ufs 路径 |
 | `--top <name>` | 可选，顶层模块名，留空由前端推断 |
+| `--tech <name>` | 可选，目标工艺，缺省用页面当前选择。FPGA：`ice40`/`ecp5`/`nexus`/`gowin`/`xilinx`/`gatemate`/`intel_alm`/`anlogic`/`efinix`/`sf2`/`greenpak4`/`coolrunner2`；ASIC：`lib:builtin:nangate45`（内置 NanGate 45nm）或 `lib:user:<文件名>`（用户在页面导入并缓存于浏览器的 Liberty）。不传或传空 = 通用 techmap。 |
 | `--pane synth` | 可选，综合后切换到综合报告页 |
+
+FPGA 工艺的单元库已内置在引擎中；ASIC Liberty 流程为 `read_liberty -lib → synth → dfflibmap → abc -liberty`，报告的 cells/dff 为真实工艺单元（如 `DFFR_X1`、`SB_LUT4`）。
 
 ### show_pane — 切换前端结果页
 
