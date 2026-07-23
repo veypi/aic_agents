@@ -1,0 +1,61 @@
+{
+  "title": "NPC 人物",
+  "description": "每个 NPC 一条记录，包含姓名、身份、装扮、台词、人设、初始坐标等。游戏启动时逐行加载并各生成一个 NPC。",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "姓名",
+      "description": "NPC 的姓名",
+      "required": true
+    },
+    {
+      "name": "role",
+      "type": "string",
+      "title": "身份",
+      "description": "身份标签，如 商贩/书生/船夫/妇人/孩童/老者",
+      "required": true
+    },
+    {
+      "name": "hat",
+      "type": "string",
+      "title": "帽型",
+      "description": "futou/douli/bun/scarf/monk"
+    },
+    {
+      "name": "female",
+      "type": "bool",
+      "title": "女性"
+    },
+    {
+      "name": "persona",
+      "type": "text",
+      "title": "人设",
+      "description": "用于大模型对话的角色设定"
+    },
+    {
+      "name": "loc",
+      "type": "string",
+      "title": "初始坐标",
+      "description": "格式 x,z，如 6,7。留空则在 region 区域内随机生成"
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "title": "所属区域",
+      "description": "street/market/north/riverside，loc 为空时在此区域内随机落点"
+    },
+    {
+      "name": "portrait",
+      "type": "text",
+      "title": "立绘参数",
+      "description": "JSON 格式的立绘风格参数"
+    },
+    {
+      "name": "fixed",
+      "type": "bool",
+      "title": "固定位置",
+      "description": "固定 NPC 不会移动，始终停在初始坐标"
+    }
+  ]
+}
