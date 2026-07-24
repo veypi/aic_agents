@@ -1,0 +1,71 @@
+{
+  "title": "城市 / 地区",
+  "description": "一个城市（地区）一条记录，包含整城地形：边界、地面、河道、桥梁、路面、玩家出生点、氛围、NPC 活动区、散布植被。切换城市时只加载当前城市的地形、建筑与 NPC。",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "城市键",
+      "description": "稳定键，如 bianjing / luoyang，被 NPC.city 与 Building.city 引用",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "title": "名称",
+      "description": "显示名，如 汴京"
+    },
+    {
+      "name": "subtitle",
+      "type": "string",
+      "title": "副题",
+      "description": "标题印章/纪年，如 北宋 · 东京梦华"
+    },
+    {
+      "name": "is_default",
+      "type": "bool",
+      "title": "默认城市",
+      "description": "首次访问时加载该城市"
+    },
+    {
+      "name": "terrain",
+      "type": "text",
+      "title": "地形",
+      "description": "整城地形 JSON：boundary/ground/river/bridge/roads/spawn/ambient/zones/scatter",
+      "required": true
+    },
+    {
+      "name": "enabled",
+      "type": "bool",
+      "title": "启用",
+      "description": "是否出现在舆图中可供前往"
+    },
+    {
+      "name": "sort",
+      "type": "int",
+      "title": "排序",
+      "description": "舆图列表排序"
+    },
+    {
+      "name": "lng",
+      "type": "number",
+      "title": "经度",
+      "description": "城市中心经度（东经为正），用于天下舆图地球仪定位"
+    },
+    {
+      "name": "lat",
+      "type": "number",
+      "title": "纬度",
+      "description": "城市中心纬度（北纬为正），用于天下舆图地球仪定位"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "uniq_city_name",
+      "fields": [
+        "name"
+      ],
+      "unique": true
+    }
+  ]
+}

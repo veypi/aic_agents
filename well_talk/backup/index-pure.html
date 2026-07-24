@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Videx3D · 纯 JS 移植版</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #000; color: #dfe6ee;
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: 18px; padding: 5px 14px;
+    background: #181c22; border-bottom: 1px solid #2a313c; flex: 0 0 auto; }
+  header h1 { font-size: 15px; font-weight: 600; color: #e8c25a; white-space: nowrap; letter-spacing: .02em; }
+  #toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  #toolbar label { display: flex; align-items: center; gap: 4px; cursor: pointer;
+    color: #93a1b3; font-size: 12px; white-space: nowrap; }
+  #toolbar label:hover { color: #d5dde8; }
+  #toolbar input { accent-color: #e8c25a; cursor: pointer; }
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  #side { flex: 0 0 250px; display: flex; flex-direction: column; border-right: 1px solid #222a35; background: #0a0d12; }
+  #side h2 { font-size: 11px; padding: 8px 12px 2px; color: #6d7d90; text-transform: uppercase; letter-spacing: .1em; }
+  #wellmap { flex: 1 1 auto; min-height: 0; }
+  #viewer { flex: 1 1 auto; position: relative; min-width: 0; background: #000; }
+  .panel { position: absolute; right: 12px; z-index: 6; pointer-events: none; width: 300px;
+    background: rgba(8, 10, 14, .78); border-radius: 3px; padding: 6px 10px 8px; font-size: 11px; }
+  .panel h3 { color: #e8912d; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .panel table { width: 100%; border-collapse: collapse; }
+  .panel td { padding: 1px 0; color: #b9c4d2; font-family: Consolas, monospace; font-size: 11px; }
+  .panel td:last-child { text-align: right; color: #e3e9f0; }
+  .panel .name { color: #fff; font-weight: 600; font-family: Consolas, monospace; }
+  #readout { bottom: 210px; }
+  #selected { bottom: 12px; }
+  #hint { position: absolute; left: 12px; bottom: 12px; z-index: 6; pointer-events: none;
+    color: #55657a; font-size: 11px; }
+  #tooltip { position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: rgba(8, 12, 18, .92); border: 1px solid #3a4d63; border-radius: 3px;
+    padding: 4px 8px; font-size: 11px; color: #cfe0f0; max-width: 280px; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./lib/vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Videx3D</h1>
+    <div id="toolbar">
+      <label><input type="checkbox" data-layer="colorRamp" checked> 色带</label>
+      <label><input type="checkbox" data-layer="contours" checked> 等值线</label>
+      <label><input type="checkbox" data-layer="wireframe"> 线框</label>
+      <label><input type="checkbox" data-layer="casingCompletion"> 套管/完井</label>
+      <label><input type="checkbox" data-layer="shoes"> 套管鞋</label>
+      <label><input type="checkbox" data-layer="picks"> 地层标记</label>
+      <label><input type="checkbox" data-layer="formationColumn"> 地层柱</label>
+      <label><input type="checkbox" data-layer="perforations"> 射孔</label>
+      <label><input type="checkbox" data-layer="depthMarkers"> 深度标注</label>
+      <label><input type="checkbox" data-layer="labels" checked> 井名标签</label>
+    </div>
+  </header>
+  <div id="main">
+    <div id="side">
+      <h2>Well Map</h2>
+      <div id="wellmap"></div>
+    </div>
+    <div id="viewer">
+      <div id="readout" class="panel" style="display:none">
+        <h3>Readout</h3>
+        <div id="readout-body"></div>
+      </div>
+      <div id="selected" class="panel" style="display:none">
+        <h3>Selected</h3>
+        <div id="selected-body"></div>
+      </div>
+      <div id="hint">左键旋转 · 右键平移 · 滚轮缩放 · 悬停查看数据 · 点击选中井</div>
+    </div>
+  </div>
+</div>
+<div id="tooltip"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { VidexViewer, DataStore, WellMap, colorRamps, clamp } from './lib/videx3d.js';
+
+/* ================= 合成示例数据：井丛 + 大构造面 ================= */
+
+const DEG = Math.PI / 180;
+
+/** 生成轨迹测斜数据：垂直段 -> 造斜段 -> 稳斜段 */
+function makePoslog({ easting, northing, kop, incl, azimuth, td, step = 25, prefix = null }) {
+  const pts = prefix ? prefix.slice() : [];
+  let md = pts.length ? pts[pts.length - 1][3] : 0;
+  let e = pts.length ? pts[pts.length - 1][0] : easting;
+  let n = pts.length ? pts[pts.length - 1][2] : northing;
+  let tvd = pts.length ? pts[pts.length - 1][1] : 0;
+  let curIncl = 0;
+  if (!pts.length) pts.push([easting, 0, northing, 0]);
+
+  const buildRate = 3 / 30; // 3° / 30m
+  while (md < td) {
+    md = Math.min(td, md + step);
+    if (tvd < kop) {
+      tvd += step;
+    } else {
+      curIncl = Math.min(incl, curIncl + buildRate * step);
+      const di = curIncl * DEG;
+      tvd += step * Math.cos(di);
+      e += step * Math.sin(di) * Math.sin(azimuth * DEG);
+      n += step * Math.sin(di) * Math.cos(azimuth * DEG);
+    }
+    pts.push([e, tvd, n, md]);
+  }
+  const arr = new Float32Array(pts.length * 4);
+  pts.forEach((p, i) => arr.set(p, i * 4));
+  return { arr, pts, td };
+}
+
+// 确定性伪随机
+let seed = 42;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+const store = new DataStore();
+const wellIds = [];
+const wellColors = {};
+const palette = ['#e8c25a', '#4fc3f7', '#81c784', '#f48fb1', '#ce93d8', '#ffab91', '#a5d6a7', '#90caf9', '#fff59d', '#b39ddb', '#80cbc4', '#ef9a9a'];
+
+// 井丛：12 口井从同一平台扇形展开
+const wellSpecs = [];
+for (let i = 0; i < 12; i++) {
+  const az = i * 30 + rand() * 14 - 7;
+  wellSpecs.push({
+    id: `F-${String(i + 1).padStart(2, '0')}`,
+    easting: (rand() - 0.5) * 120,
+    northing: (rand() - 0.5) * 120,
+    kop: 850 + rand() * 550,
+    incl: 30 + rand() * 45,
+    azimuth: az,
+    td: 3000 + rand() * 1300,
+    parent: null,
+    kickoff: null,
+  });
+}
+// 两口侧钻井
+const sidetracks = [
+  { from: 2, kickoff: 1950, azimuth: wellSpecs[2].azimuth + 55, incl: 62, td: 4400, id: 'F-03 T2' },
+  { from: 6, kickoff: 2250, azimuth: wellSpecs[6].azimuth - 60, incl: 55, td: 4150, id: 'F-07 T2' },
+];
+
+const logs = {};
+wellSpecs.forEach((w) => {
+  logs[w.id] = makePoslog(w);
+});
+sidetracks.forEach((st) => {
+  const parent = wellSpecs[st.from];
+  const prefix = [];
+  for (const p of logs[parent.id].pts) {
+    if (p[3] <= st.kickoff) prefix.push(p.slice());
+    else break;
+  }
+  logs[st.id] = makePoslog({ kop: st.kickoff, incl: st.incl, azimuth: st.azimuth, td: st.td, prefix });
+  wellSpecs.push({
+    id: st.id, parent: parent.id, kickoff: st.kickoff,
+    easting: parent.easting, northing: parent.northing, td: st.td,
+  });
+});
+
+wellSpecs.forEach((w, i) => {
+  wellIds.push(w.id);
+  wellColors[w.id] = palette[i % palette.length];
+  store.set('position-logs', w.id, logs[w.id].arr);
+  store.set('wellbore-headers', w.id, {
+    id: w.id, name: w.id, well: w.id.split(' ')[0], depthReferenceElevation: 26 + rand() * 6,
+    kickoffDepthMsl: w.kickoff, parent: w.parent, drilled: null,
+    easting: w.easting, northing: w.northing, depthMdMsl: Math.round(w.td),
+    waterDepth: 100 + rand() * 30, status: w.parent ? 'P&A' : 'Oil producer',
+  });
+});
+
+// 套管程序（径向夸张 15 倍，默认隐藏，按需开启）
+const RADIAL = 15;
+wellSpecs.forEach((w) => {
+  store.set('casings', w.id, [
+    { mdTopMsl: -26, mdBottomMsl: 95, outerDiameter: 0.914 * RADIAL, innerDiameter: 0.84 * RADIAL, type: 'conductor', isShoe: false, properties: { Diameter: '36"', Type: 'Conductor' } },
+    { mdTopMsl: -26, mdBottomMsl: Math.round(w.kop * 0.7) || 700, outerDiameter: 0.508 * RADIAL, innerDiameter: 0.47 * RADIAL, type: 'surface', isShoe: true, properties: { Diameter: '20"', Type: 'Surface casing' } },
+    { mdTopMsl: -26, mdBottomMsl: Math.round((w.kop || 1000) + 750), outerDiameter: 0.34 * RADIAL, innerDiameter: 0.315 * RADIAL, type: 'intermediate', isShoe: true, properties: { Diameter: '13 3/8"', Type: 'Intermediate casing' } },
+    { mdTopMsl: -26, mdBottomMsl: Math.round(w.td * 0.92), outerDiameter: 0.244 * RADIAL, innerDiameter: 0.22 * RADIAL, type: 'production', isShoe: true, properties: { Diameter: '9 5/8"', Type: 'Production casing' } },
+  ]);
+});
+
+// 完井工具（两口井）
+const completionWell = (id, kop, td) => store.set('completion-tools', id, [
+  { name: 'Tubing', mdTopMsl: 100, mdBottomMsl: td - 250, length: td - 350, diameterTop: 0.28, diameterBottom: 0.28, diameterMax: 0.28, diameterDrift: 0.24, category: 'tube' },
+  { name: 'TRSV', mdTopMsl: 480, mdBottomMsl: 487, length: 7, diameterTop: 0.3, diameterBottom: 0.3, diameterMax: 0.42, diameterDrift: 0.2, category: 'safety valve' },
+  { name: 'Packer A', mdTopMsl: td - 600, mdBottomMsl: td - 596, length: 4, diameterTop: 0.3, diameterBottom: 0.3, diameterMax: 0.5, diameterDrift: 0.2, category: 'packer' },
+  { name: 'Gauge carrier', mdTopMsl: td - 670, mdBottomMsl: td - 664, length: 6, diameterTop: 0.3, diameterBottom: 0.3, diameterMax: 0.4, diameterDrift: 0.2, category: 'gauge' },
+  { name: 'Screen', mdTopMsl: td - 590, mdBottomMsl: td - 270, length: 320, diameterTop: 0.34, diameterBottom: 0.34, diameterMax: 0.34, diameterDrift: 0.3, category: 'screen' },
+  { name: 'Bridge plug', mdTopMsl: td - 260, mdBottomMsl: td - 257, length: 3, diameterTop: 0.35, diameterBottom: 0.35, diameterMax: 0.48, diameterDrift: 0.3, category: 'plug' },
+]);
+completionWell('F-03 T2', 1950, 4400);
+completionWell('F-05', wellSpecs[4].kop, wellSpecs[4].td);
+
+// 地层
+const stratColumn = [
+  { name: 'Nordland Gr.', color: '#e8d44f', level: 1 },
+  { name: 'Hordaland Gr.', color: '#74c476', level: 1 },
+  { name: 'Rogaland Gr.', color: '#9e7bb5', level: 1 },
+  { name: 'Hugin Fm.', color: '#5dade2', level: 1 },
+  { name: 'Cromer Knoll Gr.', color: '#dc7633', level: 1 },
+  { name: 'Viking Gr.', color: '#c0392b', level: 1 },
+];
+wellSpecs.forEach((w) => {
+  const shift = Math.round((rand() - 0.5) * 120);
+  const tops = [0, 980, 1600, 2200, 2650, 3100].map((v) => v + shift);
+  store.set('formations', w.id, stratColumn.map((f, i) => ({
+    ...f,
+    mdTopMsl: Math.min(tops[i], w.td - 50),
+    mdBottomMsl: i < stratColumn.length - 1 ? Math.min(tops[i + 1], w.td) : w.td,
+    type: 'surface',
+  })).filter((f) => f.mdBottomMsl > f.mdTopMsl));
+});
+
+// 射孔（两口长斜井）
+store.set('perforations', 'F-03 T2', [
+  { mdTopMsl: 3400, mdBottomMsl: 3680, status: 'Open', density: 0.5, phase: 60, innerDiameter: 0.3, outerDiameter: 0.62 },
+  { mdTopMsl: 3900, mdBottomMsl: 4250, status: 'Open', density: 0.5, phase: 90, innerDiameter: 0.3, outerDiameter: 0.62 },
+]);
+store.set('perforations', 'F-09', [
+  { mdTopMsl: wellSpecs[8].td - 900, mdBottomMsl: wellSpecs[8].td - 300, status: 'Open', density: 0.5, phase: 45, innerDiameter: 0.3, outerDiameter: 0.62 },
+]);
+
+// 大构造面：多穹窿 + 断层 + 河道状起伏
+(function makeSurface() {
+  const nx = 130, ny = 130, xinc = 50, yinc = 50;
+  const xori = -3200, yori = -3200;
+  const values = new Float32Array(nx * ny);
+  const dome = (x, y, cx, cy, amp, s) => amp * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * s * s));
+  for (let iy = 0; iy < ny; iy++) {
+    for (let ix = 0; ix < nx; ix++) {
+      const x = xori + ix * xinc;
+      const y = yori + iy * yinc;
+      let v = 2850
+        - dome(x, y, 900, 600, 520, 800)
+        - dome(x, y, -1400, -300, 430, 700)
+        - dome(x, y, 300, -1500, 380, 620)
+        - dome(x, y, -900, 1700, 330, 550)
+        + 0.00009 * (x * x + y * y * 0.7)
+        + 90 * Math.sin(x / 420) * Math.cos(y / 360)
+        + 40 * Math.sin((x + y) / 260);
+      // 断层（约 200m 带宽的渐变过渡，避免硬台阶锯齿）
+      const fd = x - (600 + 0.3 * (y + 400));
+      const fs = clamp((fd + 100) / 200, 0, 1);
+      v += 170 * fs * fs * (3 - 2 * fs);
+      values[iy * nx + ix] = v;
+    }
+  }
+  let min = Infinity, max = -Infinity;
+  values.forEach((v) => { min = Math.min(min, v); max = Math.max(max, v); });
+  store.set('surface-meta', 'hugin-base', {
+    id: 'hugin-base', name: 'Hugin Fm. Base', projection: 'ED50 / UTM 31N',
+    min, max, displayMin: min, displayMax: max, color: '#5dade2', visualization: 'surface',
+    header: { nx, ny, xinc, yinc, xori, yori, rot: 0 },
+  });
+  store.set('surface-values', 'hugin-base', values);
+})();
+
+/* ================= 查看器 ================= */
+
+const viewer = new VidexViewer(document.getElementById('viewer'), {
+  store,
+  background: 0x000000,
+  cameraPosition: [2700, 1700, 7100],
+  target: [0, -2300, -200],
+  ambientIntensity: 0.35,
+  hemisphereIntensity: 0.7,
+  directionalIntensity: 1.3,
+});
+window.viewer = viewer;
+
+const tooltip = document.getElementById('tooltip');
+const readoutEl = document.getElementById('readout');
+const readoutBody = document.getElementById('readout-body');
+const selectedEl = document.getElementById('selected');
+const selectedBody = document.getElementById('selected-body');
+
+const fmt = (v, d = 1) => (Math.round(v * 10 ** d) / 10 ** d).toFixed(d);
+function rows(obj) {
+  return `<table>${Object.entries(obj).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
+}
+function showTooltip(html, x, y) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.style.left = x + 14 + 'px';
+  tooltip.style.top = y + 12 + 'px';
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+/* ---- 轨迹（细线，官方默认样式） ---- */
+const trajectoryLines = new Map(); // id -> { object, defaultColor }
+let selectedId = null;
+
+function setSelected(id) {
+  if (selectedId && trajectoryLines.has(selectedId)) {
+    trajectoryLines.get(selectedId).object.children[0].material.color.set(trajectoryLines.get(selectedId).defaultColor);
+  }
+  selectedId = id;
+  if (id && trajectoryLines.has(id)) {
+    trajectoryLines.get(id).object.children[0].material.color.set('#ffd75e');
+  }
+  if (id) {
+    const h = store.get('wellbore-headers', id);
+    selectedEl.style.display = 'block';
+    selectedBody.innerHTML = `<div class="name">${h.name}</div>` + rows({
+      'Status': h.status,
+      'Total Depth (MD Msl)': fmt(h.depthMdMsl),
+      'Kickoff (MD Msl)': h.kickoffDepthMsl ?? '—',
+      'Easting (wellhead)': fmt(h.easting),
+      'Northing (wellhead)': fmt(h.northing),
+      'Depth ref. (Msl)': fmt(h.depthReferenceElevation),
+    });
+  } else {
+    selectedEl.style.display = 'none';
+  }
+  wellMap.select(id);
+}
+
+function updateReadout(id, point, md) {
+  const h = store.get('wellbore-headers', id);
+  readoutEl.style.display = 'block';
+  readoutBody.innerHTML = `<div class="name">${h.name}</div>` + rows({
+    'Easting': fmt(point[0]),
+    'Northing': fmt(-point[2]),
+    'TVD (Msl)': fmt(-point[1]),
+    'MD (Msl)': fmt(md),
+  });
+}
+
+wellIds.forEach((id) => {
+  const obj = viewer.addTrajectory(id, {
+    color: '#b9c4d0',
+    radius: 0, // 细线
+    segmentsPerMeter: 0.15,
+    events: {
+      cursor: 'pointer',
+      onPointerEnter: () => { wellHover = true; },
+      onPointerMove: (e) => {
+        wellHover = true;
+        const t = viewer.getTrajectory(id);
+        const near = t.curve.nearest([e.point.x, e.point.y, e.point.z]);
+        const md = t.measuredTop + near.position * t.measuredLength;
+        updateReadout(id, [e.point.x, e.point.y, e.point.z], md);
+        showTooltip(`<b>${id}</b> · MD ${fmt(md)}m`, e.originalEvent.clientX, e.originalEvent.clientY);
+      },
+      onPointerExit: () => {
+        wellHover = false;
+        readoutEl.style.display = 'none';
+        hideTooltip();
+      },
+      onClick: () => setSelected(id),
+    },
+  });
+  trajectoryLines.set(id, { object: obj, defaultColor: '#b9c4d0' });
+});
+
+/* ---- 构造面（彩虹色带 + 等值线，官方默认样式） ---- */
+let wellHover = false; // 悬停在井上时曲面让位
+const surfaceMesh = viewer.addSurface('hugin-base', {
+  ramp: colorRamps.rainbow, // 浅部红、深部蓝
+  opacity: 0.98,
+  contours: { interval: 30, color: '#000000', opacity: 0.22, offset: 0.8 },
+  events: {
+    passthrough: true,
+    onPointerMove: (e) => {
+      if (wellHover) return;
+      showTooltip(`Hugin Fm. Base<br>深度 ${fmt(-e.point.y)}m MSL`, e.originalEvent.clientX, e.originalEvent.clientY);
+    },
+    onPointerExit: hideTooltip,
+  },
+});
+
+/* ---- 井名标签 ---- */
+wellIds.forEach((id) => {
+  const head = viewer.getPointAtDepth(id, -26, true);
+  if (!head) return;
+  viewer.labels.add({
+    id: `wellhead_${id}`,
+    position: [head[0], head[1] + 40, head[2]],
+    name: id, priority: 10, distance: 0, dot: false, leaderLine: false,
+    className: 'vx-label--plain',
+    onClick: () => setSelected(id),
+  });
+});
+
+/* ---- 按需图层（默认关闭，对应官方 Controls） ---- */
+const optionalLayers = { casingCompletion: [], shoes: [], picks: [], formationColumn: [], perforations: [], depthMarkers: [] };
+
+wellIds.forEach((id) => {
+  const casings = viewer.addCasings(id, {
+    events: {
+      cursor: 'pointer',
+      onPointerMove: (e) => {
+        const c = e.object.userData.casing;
+        if (c) showTooltip(`<b>${id}</b> ${c.type}<br>顶 ${fmt(c.mdTopMsl, 0)}m · 底 ${fmt(c.mdBottomMsl, 0)}m`, e.originalEvent.clientX, e.originalEvent.clientY);
+      },
+      onPointerExit: hideTooltip,
+      onClick: (e) => {
+        const c = e.object.userData.casing;
+        if (c) {
+          readoutEl.style.display = 'block';
+          readoutBody.innerHTML = `<div class="name">套管 · ${id}</div>` + rows({
+            'Type': c.type, 'MD top': fmt(c.mdTopMsl, 0) + ' m', 'MD bottom': fmt(c.mdBottomMsl, 0) + ' m',
+            'Outer Ø': fmt(c.outerDiameter / RADIAL * 39.37, 2) + '"', 'Shoe': c.isShoe ? 'yes' : 'no',
+          });
+        }
+      },
+    },
+  });
+  const completion = viewer.addCompletionTools(id, {
+    sizeMultiplier: 25,
+    events: {
+      cursor: 'pointer',
+      onPointerMove: (e) => {
+        const u = e.object.userData;
+        if (u.category) showTooltip(`<b>${id}</b> ${u.category}<br>${u.tools.length} 件工具`, e.originalEvent.clientX, e.originalEvent.clientY);
+      },
+      onPointerExit: hideTooltip,
+    },
+  });
+  if (casings) { casings.visible = false; optionalLayers.casingCompletion.push(casings); }
+  if (completion) { completion.visible = false; optionalLayers.casingCompletion.push(completion); }
+
+  const shoes = viewer.addShoes(id, { sizeMultiplier: 2.5, color: '#ba68c8', addLabels: false });
+  if (shoes) { shoes.visible = false; optionalLayers.shoes.push(shoes); }
+
+  const picks = viewer.addFormationMarkers(id, {
+    baseRadius: 45, opacity: 0.45, addLabels: false,
+    events: {
+      cursor: 'pointer',
+      onPointerMove: (e) => {
+        const u = e.object.userData;
+        if (u.name) showTooltip(`<b>${u.name}</b><br>顶深 ${fmt(u.depth, 0)}m MSL`, e.originalEvent.clientX, e.originalEvent.clientY);
+      },
+      onPointerExit: hideTooltip,
+    },
+  });
+  if (picks) { picks.visible = false; optionalLayers.picks.push(picks); }
+
+  const column = viewer.addFormationColumn(id, { radius: 12, opacity: 0.92 });
+  if (column) { column.visible = false; optionalLayers.formationColumn.push(column); }
+
+  const perfs = viewer.addPerforations(id, { sizeMultiplier: 25, spikeLength: 1.2, spikeRadius: 0.4 });
+  if (perfs) { perfs.visible = false; optionalLayers.perforations.push(perfs); }
+
+  const dm = viewer.addDepthMarkers(id, { interval: 250, addLabels: false });
+  if (dm) optionalLayers.depthMarkers.push({ id, markers: dm, shown: false });
+});
+
+/* ---- 井位图 ---- */
+const probeMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(18, 20, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff5252 })
+);
+probeMesh.visible = false;
+viewer.scene.add(probeMesh);
+
+const wellMap = new WellMap(document.getElementById('wellmap'), {
+  interactive: true,
+  depthCursor: true,
+  colorMap: wellColors,
+  styles: { cursorColor: '#ff5252', trackWidth: 40, depthAxisWidth: 40 },
+  onSelect: (id) => setSelected(id),
+  onDepthChange: (depth) => updateProbe(depth),
+  onWellboreOver: (header, depth) => {
+    if (!header) { probeMesh.visible = false; return; }
+    updateProbe(depth, header.id);
+    const p = viewer.getPointAtDepth(header.id, depth, true);
+    if (p) updateReadout(header.id, p, depth);
+  },
+});
+wellMap.setWellbores(wellIds.map((id) => store.get('wellbore-headers', id)));
+
+let lastProbeId = wellIds[0];
+function updateProbe(depth, id) {
+  lastProbeId = id || lastProbeId;
+  const p = viewer.getPointAtDepth(lastProbeId, depth, true);
+  if (p) {
+    probeMesh.position.set(p[0], p[1], p[2]);
+    probeMesh.visible = true;
+  }
+}
+
+/* ---- 图层开关 ---- */
+let surfaceVersion = 0;
+document.querySelectorAll('#toolbar input').forEach((input) => {
+  input.addEventListener('change', () => {
+    const layer = input.dataset.layer;
+    const on = input.checked;
+    if (layer === 'labels') { viewer.labels.enabled = on; return; }
+    if (layer === 'colorRamp') {
+      surfaceMesh.material.vertexColors = on;
+      if (!on) surfaceMesh.material.color.set('#9db4c8');
+      surfaceMesh.material.needsUpdate = true;
+      return;
+    }
+    if (layer === 'contours') {
+      if (surfaceMesh.contourLines) surfaceMesh.contourLines.visible = on;
+      return;
+    }
+    if (layer === 'wireframe') { surfaceMesh.material.wireframe = on; return; }
+    if (layer === 'depthMarkers') {
+      optionalLayers.depthMarkers.forEach((entry) => {
+        entry.markers.forEach((m) => {
+          if (on && !entry.shown) {
+            viewer.labels.add({
+              id: `depth_${m.id}`, position: m.position, direction: m.direction,
+              name: m.name, priority: 1, className: 'vx-label--depth', color: '#9fb4c8',
+              dot: false, leaderLine: false, distance: 10,
+            });
+          } else if (!on) {
+            viewer.labels.remove(`depth_${m.id}`);
+          }
+        });
+        entry.shown = on;
+      });
+      return;
+    }
+    (optionalLayers[layer] || []).forEach((obj) => { obj.visible = on; });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+{
+  "title": "建筑 / 物件",
+  "description": "每个离散物件一条记录：店铺、摊位、道具、地标、树、竹林、农田、船等。按 city 关联城市，启动时只加载当前城市的物件。model 为模型 JSON：生成器参数对象，或 kind=custom 时的 {parts:[...]}。",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "名称",
+      "description": "如 樊楼 / 老井 / 炊饼摊",
+      "required": true
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "title": "类型",
+      "description": "生成器键：building/stall/umbrella/tree/willow/bamboo/field/pagoda/well/oxcart/sedan/scarecrow/lantern/boat/custom",
+      "required": true
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "title": "所属城市",
+      "description": "引用 City.name，如 bianjing",
+      "required": true
+    },
+    {
+      "name": "loc",
+      "type": "string",
+      "title": "坐标",
+      "description": "坐标 x,z；留空则在所属城市 zone/boundary 内随机"
+    },
+    {
+      "name": "rot",
+      "type": "number",
+      "title": "旋转",
+      "description": "Y 轴旋转（弧度）",
+      "default": 0
+    },
+    {
+      "name": "scale",
+      "type": "number",
+      "title": "缩放",
+      "description": "整体缩放",
+      "default": 1
+    },
+    {
+      "name": "model",
+      "type": "text",
+      "title": "模型",
+      "description": "模型 JSON：生成器参数对象，或 kind=custom 时的 {parts:[...]}",
+      "required": true
+    },
+    {
+      "name": "interactable",
+      "type": "bool",
+      "title": "可交互",
+      "description": "是否可按 F 交互查看",
+      "default": false
+    },
+    {
+      "name": "lines",
+      "type": "text",
+      "title": "交互台词",
+      "description": "交互台词 JSON 字符串数组"
+    },
+    {
+      "name": "collider",
+      "type": "bool",
+      "title": "碰撞体",
+      "description": "是否生成碰撞体",
+      "default": true
+    },
+    {
+      "name": "sort",
+      "type": "int",
+      "title": "排序",
+      "description": "加载/渲染排序",
+      "default": 0
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_building_city",
+      "fields": [
+        "city"
+      ]
+    },
+    {
+      "name": "idx_building_kind",
+      "fields": [
+        "kind"
+      ]
+    }
+  ],
+  "max_records_per_user": 5000
+}

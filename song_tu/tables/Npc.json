@@ -1,6 +1,6 @@
 {
   "title": "NPC 人物",
-  "description": "每个 NPC 一条记录，包含姓名、身份、装扮、台词、人设、初始坐标等。游戏启动时逐行加载并各生成一个 NPC。",
+  "description": "每个 NPC 一条记录，包含姓名、身份、装扮、人设、初始坐标、所属城市与活动区等。按 city 关联城市，游戏启动时只加载当前城市的 NPC，逐行生成。",
   "fields": [
     {
       "name": "name",
@@ -25,7 +25,8 @@
     {
       "name": "female",
       "type": "bool",
-      "title": "女性"
+      "title": "女性",
+      "description": "是否为女性"
     },
     {
       "name": "persona",
@@ -37,13 +38,20 @@
       "name": "loc",
       "type": "string",
       "title": "初始坐标",
-      "description": "格式 x,z，如 6,7。留空则在 region 区域内随机生成"
+      "description": "格式 x,z，如 6,7。留空则在 zone/boundary 内随机生成"
     },
     {
-      "name": "region",
+      "name": "zone",
       "type": "string",
-      "title": "所属区域",
-      "description": "street/market/north/riverside，loc 为空时在此区域内随机落点"
+      "title": "活动区",
+      "description": "城内活动区键，引用所属城市 terrain.zones，如 street/market。loc 为空时在此区域内随机落点"
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "title": "所属城市",
+      "description": "引用 City.name，如 bianjing",
+      "required": true
     },
     {
       "name": "portrait",
@@ -56,6 +64,20 @@
       "type": "bool",
       "title": "固定位置",
       "description": "固定 NPC 不会移动，始终停在初始坐标"
+    },
+    {
+      "name": "say",
+      "type": "text",
+      "title": "随机冒话",
+      "description": "随机冒话列表 JSON：[{\"t\":\"文本\",\"w\":权重,\"f\":频次秒}]。权重与频次共同决定头顶弹出内容，弹出保持1秒，两次间隔至少5秒"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_npc_city",
+      "fields": [
+        "city"
+      ]
     }
   ]
 }
