@@ -1,14 +1,13 @@
 /**
- * videx3d.js — a dependency-light, pure JavaScript port of the core features of
- * Equinor's `@equinor/videx-3d` (React Three Fiber) library.
+ * well3d.js — 纯 JavaScript 三维井筒可视化引擎（ES Module）
  *
- * No React, no build step. Load as an ES module together with three.js:
+ * 零依赖构建，可直接在 HTML 页面中引用的纯 JavaScript 库，仅依赖 three.js。
  *
  *   <script type="importmap">
  *     { "imports": { "three": "./lib/vendor/three.module.js" } }
  *   </script>
  *   <script type="module">
- *     import { VidexViewer, DataStore } from './lib/videx3d.js'
+ *     import { Well3DViewer, DataStore } from './lib/well3d.js'
  *     ...
  *   </script>
  *
@@ -21,7 +20,7 @@
  *  - Flexible HTML point-feature label system
  *  - HTML well map schematic (SVG)
  *
- * Data model (DataStore keys) — same semantics as the original library:
+ * Data model (DataStore keys):
  *  'position-logs'    : Float32Array stride 4 [east, tvdMsl, north, mdMsl, ...]
  *  'wellbore-headers' : WellboreHeader object
  *  'casings'          : CasingItem[] { mdTopMsl, mdBottomMsl, outerDiameter, innerDiameter, type, isShoe, properties }
@@ -31,7 +30,7 @@
  *  'surface-meta'     : SurfaceMeta { header: {nx, ny, xinc, yinc, xori, yori, rot}, min, max, color, name }
  *  'surface-values'   : Float32Array (row-major, nx * ny, nullValue = NaN or <= -999)
  *
- * Coordinate system (same as the original):
+ * Coordinate system:
  *   x = easting offset, y = -tvdMsl (depth goes down, negative y), z = -northing offset
  */
 
@@ -78,7 +77,7 @@ export function titleCase(str) {
 }
 
 /* ========================================================================== */
-/* Curve3D — spline interpolation (ported from sdk/geometries/curve)          */
+/* Curve3D — spline interpolation */
 /* ========================================================================== */
 
 export function getSplineCurve(points, closed = false) {
@@ -107,7 +106,7 @@ export function getSplineCurve(points, closed = false) {
 
 /**
  * Calculate a stable set of (parallel transport) frames for a curve at the
- * specified normalized positions. Ported from the original implementation.
+ * specified normalized positions.
  */
 export function calculateFrenetFrames(curve, curvePositions) {
   const count = curvePositions.length;
@@ -153,7 +152,7 @@ export function calculateFrenetFrames(curve, curvePositions) {
 
 /**
  * Positions along a curve at a given segment density, optionally simplified by
- * a tangent-deviation threshold. Ported from the original implementation.
+ * a tangent-deviation threshold.
  */
 export function getCurvePositions(curve, from = 0, to = 1, segmentsPerMeter = 0.1, simplificationThreshold = 0) {
   const segments = [];
@@ -195,7 +194,6 @@ export function getCurvePositions(curve, from = 0, to = 1, segmentsPerMeter = 0.
 
 /**
  * Creates a Trajectory from a position log (stride 4: east, tvdMsl, north, mdMsl).
- * Ported from sdk/utils/trajectory.ts
  */
 export function getTrajectory(id, poslogMsl) {
   if (!poslogMsl || poslogMsl.length < 2 * 4) return null;
@@ -452,7 +450,7 @@ export function mergeTubes(tubes) {
 }
 
 /* ========================================================================== */
-/* DataStore — simple in-memory replacement for the original Store interface  */
+/* DataStore — simple in-memory key-value store */
 /* ========================================================================== */
 
 export class DataStore {
@@ -491,7 +489,7 @@ function trajectoryFromStore(store, id) {
   return getTrajectory(id, poslog);
 }
 
-/** Default completion-tool category colors (original uses a texture atlas) */
+/** Default completion-tool category colors */
 export const completionToolCategoryColors = {
   'blank pipe': '#5d646e',
   tube: '#9aa2ad',
@@ -509,7 +507,6 @@ export const completionToolCategoryColors = {
 /**
  * Casings — one tube per casing item. Items flagged `isShoe` get a
  * flared bottom (shoeFactor), others get beveled ends.
- * Ported from generators/casings-generator.ts
  */
 export function buildCasings(store, id, options = {}) {
   const { fromMsl, shoeFactor = 2, segmentsPerMeter = 0.1, simplificationThreshold = 0, radialSegments = 16 } = options;
@@ -571,7 +568,6 @@ export function buildCasings(store, id, options = {}) {
 
 /**
  * Completion tools — merged geometry grouped by category.
- * Ported from generators/completion-tools-generator.ts
  */
 export function buildCompletionTools(store, id, options = {}) {
   const { fromMsl, radialSegments = 16, sizeMultiplier = 1, segmentsPerMeter = 0.1, simplificationThreshold = 0 } = options;
@@ -647,7 +643,6 @@ export function buildCompletionTools(store, id, options = {}) {
 
 /**
  * Shoes — symbols at the bottom of casing items flagged `isShoe`.
- * Ported from generators/shoes-generator.ts
  */
 export function buildShoes(store, id, options = {}) {
   const { fromMsl } = options;
@@ -748,7 +743,6 @@ export function buildFormationColumn(store, id, options = {}) {
 
 /**
  * Perforations — spikes around the wellbore over open perforation intervals.
- * Ported from generators/perforations-generator.ts
  */
 export function buildPerforations(store, id, options = {}) {
   const { fromMsl, density = 0.5, directions = 9 } = options;
@@ -806,7 +800,6 @@ export function buildPerforations(store, id, options = {}) {
 
 /**
  * Depth markers — label points at regular MD intervals along a trajectory.
- * Ported from generators/depth-markers-generator.ts
  */
 export function buildDepthMarkers(store, id, options = {}) {
   const { interval = 500, depthReferencePoint = 'MSL', fromMsl } = options;
@@ -915,7 +908,7 @@ export const colorRamps = {
     [0.5, [241, 196, 83]],
     [1.0, [203, 67, 53]],
   ],
-  /** rainbow: red -> yellow -> green -> cyan -> blue (shallow to deep, matches the original lib) */
+  /** rainbow: red -> yellow -> green -> cyan -> blue (shallow to deep) */
   rainbow: [
     [0.0, [215, 35, 40]],
     [0.18, [245, 130, 20]],
@@ -1333,7 +1326,7 @@ export function createDepthMarkersComponent(viewer, id, options = {}) {
         name: m.name,
         priority,
         color,
-        className: 'vx-label--depth',
+        className: 'w3-label--depth',
         ...labelOptions,
       });
     });
@@ -1565,17 +1558,17 @@ function injectLabelStyles() {
   if (labelStylesInjected) return;
   labelStylesInjected = true;
   const css = `
-.vx-label-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
-.vx-label-layer svg.vx-leader-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.vx-label { position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+.w3-label-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+.w3-label-layer svg.w3-leader-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.w3-label { position: absolute; transform: translate(-50%, -50%); pointer-events: none;
   font: 11px/1.3 "Segoe UI", system-ui, sans-serif; color: #dfe6ee; white-space: nowrap;
   background: rgba(13, 20, 28, 0.75); border: 1px solid rgba(255,255,255,0.18);
   border-radius: 3px; padding: 2px 6px; user-select: none; }
-.vx-label--clickable { pointer-events: auto; cursor: pointer; }
-.vx-label--clickable:hover { background: rgba(40, 55, 70, 0.9); }
-.vx-label--depth { background: transparent; border: none; color: #9fb4c8; font-size: 10px; padding: 0 2px; }
-.vx-label--plain { background: transparent; border: none; padding: 0 2px; }
-.vx-label-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%;
+.w3-label--clickable { pointer-events: auto; cursor: pointer; }
+.w3-label--clickable:hover { background: rgba(40, 55, 70, 0.9); }
+.w3-label--depth { background: transparent; border: none; color: #9fb4c8; font-size: 10px; padding: 0 2px; }
+.w3-label--plain { background: transparent; border: none; padding: 0 2px; }
+.w3-label-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%;
   transform: translate(-50%, -50%); background: #fff; box-shadow: 0 0 3px rgba(0,0,0,0.8); }
 `;
   const style = document.createElement('style');
@@ -1597,9 +1590,9 @@ export class LabelLayer {
     this.collisionDetection = true;
 
     this.layer = document.createElement('div');
-    this.layer.className = 'vx-label-layer';
+    this.layer.className = 'w3-label-layer';
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    this.svg.setAttribute('class', 'vx-leader-lines');
+    this.svg.setAttribute('class', 'w3-leader-lines');
     this.layer.appendChild(this.svg);
     container.appendChild(this.layer);
 
@@ -1620,19 +1613,19 @@ export class LabelLayer {
   add(data) {
     if (!data.id) data.id = `label_${this.labels.size}`;
     const el = document.createElement('div');
-    el.className = 'vx-label' + (data.className ? ' ' + data.className : '');
+    el.className = 'w3-label' + (data.className ? ' ' + data.className : '');
     if (data.html !== undefined) el.innerHTML = data.html;
     else el.textContent = data.name ?? '';
     if (data.color) el.style.borderLeft = `3px solid ${data.color}`;
     if (data.onClick) {
-      el.classList.add('vx-label--clickable');
+      el.classList.add('w3-label--clickable');
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         data.onClick(data, e);
       });
     }
     const dot = document.createElement('div');
-    dot.className = 'vx-label-dot';
+    dot.className = 'w3-label-dot';
     if (data.color) dot.style.background = data.color;
 
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -1779,11 +1772,11 @@ function injectWellMapStyles() {
   if (wellMapStylesInjected) return;
   wellMapStylesInjected = true;
   const css = `
-.vx-wellmap { position: relative; width: 100%; height: 100%; overflow: hidden; user-select: none; }
-.vx-wellmap svg { display: block; width: 100%; height: 100%; }
-.vx-wellmap .track { pointer-events: painted; }
-.vx-wellmap .track.interactive { cursor: pointer; }
-.vx-wellmap text { font-family: monospace; }
+.w3-wellmap { position: relative; width: 100%; height: 100%; overflow: hidden; user-select: none; }
+.w3-wellmap svg { display: block; width: 100%; height: 100%; }
+.w3-wellmap .track { pointer-events: painted; }
+.w3-wellmap .track.interactive { cursor: pointer; }
+.w3-wellmap text { font-family: monospace; }
 `;
   const style = document.createElement('style');
   style.textContent = css;
@@ -1798,8 +1791,7 @@ const svgEl = (tag, attrs = {}) => {
 };
 
 /**
- * A 2D schematic of wellbores (tracks) against depth — a vanilla port of the
- * original Html/WellMap component.
+ * A 2D SVG schematic of wellbores (tracks) against depth.
  *
  * const wm = new WellMap(container, {
  *   interactive: true, depthCursor: true, colorMap: { id: '#f00' },
@@ -1837,7 +1829,7 @@ export class WellMap {
     this.depthCursor = options.depthCursor !== false;
 
     this.root = document.createElement('div');
-    this.root.className = 'vx-wellmap';
+    this.root.className = 'w3-wellmap';
     this.svg = svgEl('svg');
     this.root.appendChild(this.svg);
     container.appendChild(this.root);
@@ -2148,12 +2140,12 @@ export class WellMap {
 }
 
 /* ========================================================================== */
-/* VidexViewer — renderer / scene / camera / integration                      */
+/* Well3DViewer — renderer / scene / camera / integration                      */
 /* ========================================================================== */
 
-export class VidexViewer {
+export class Well3DViewer {
   /**
-   * const viewer = new VidexViewer(container, {
+   * const viewer = new Well3DViewer(container, {
    *   store, background: 0x0d1420, cameraPosition: [800, -1200, 800],
    *   target: [0, -1500, 0], grid: 0 (or grid size), antialias: true
    * })
@@ -2347,7 +2339,7 @@ export class VidexViewer {
 }
 
 export default {
-  VidexViewer,
+  Well3DViewer,
   DataStore,
   WellMap,
   LabelLayer,

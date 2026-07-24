@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="description" content="Videx3D AI 分析助手面板" />
+<meta name="description" content="Well3D AI 分析助手面板" />
 </head>
 <style>
   body { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0;
@@ -15,14 +15,14 @@
 <script setup>
   /* 会话 ID 缓存 key：按 agent 隔离，避免同平台多 agent 串号 */
   const agentId = (location.pathname.match(/\/a\/([^/]+)\/i/) || [])[1] || 'default'
-  lsKey = `vx_ai_session_${agentId}`
+  lsKey = `w3_ai_session_${agentId}`
 
   /* ai-box 双向绑定的会话 ID：从浏览器缓存恢复，实现刷新后会话保持 */
   sessionId = localStorage.getItem(lsKey) || ''
 
   /* 取消全部 ui_run 事件订阅（订阅句柄存放在 $mod 上，避免被响应式代理） */
   clearUiSubs = () => {
-    const arr = $mod._vxUiSubs || []
+    const arr = $mod._w3UiSubs || []
     arr.forEach((u) => {
       try {
         if (typeof u === 'function') u()
@@ -30,9 +30,9 @@
         else if (u && typeof u.unsubscribe === 'function') u.unsubscribe()
       } catch (e) {}
     })
-    $mod._vxUiSubs = []
+    $mod._w3UiSubs = []
   }
-  $mod._vxUiSubs = []
+  $mod._w3UiSubs = []
 </script>
 
 <script>
@@ -41,8 +41,8 @@
    * （position-logs / surface-values 在本层消化成统计值后再返回）
    * ===================================================================== */
 
-  const vx = () => {
-    const v = $mod._vx
+  const w3 = () => {
+    const v = $mod._w3
     if (!v || !v.store || !v.viewer) throw new Error('3D 场景尚未加载完成，请稍后重试')
     return v
   }
@@ -239,26 +239,26 @@
   const handlers = {
     /* ---- 数据查询 ---- */
     well_list: () => {
-      const v = vx()
+      const v = w3()
       return v.wellIds.map((id) => {
         const h = v.store.get('wellbore-headers', id)
         return { id, status: h.status, tdMsl: h.depthMdMsl, parent: h.parent || null }
       })
     },
-    well_info: (a) => { const v = vx(); return headerOf(v.store, reqId(a)) },
-    well_trajectory_stats: (a) => { const v = vx(); return trajectoryStats(v.store, reqId(a)) },
-    well_casings: (a) => { const v = vx(); headerOf(v.store, reqId(a)); return v.store.get('casings', a.id) || [] },
-    well_completion: (a) => { const v = vx(); headerOf(v.store, reqId(a)); return v.store.get('completion-tools', a.id) || [] },
-    well_perforations: (a) => { const v = vx(); headerOf(v.store, reqId(a)); return v.store.get('perforations', a.id) || [] },
-    well_formations: (a) => { const v = vx(); headerOf(v.store, reqId(a)); return v.store.get('formations', a.id) || [] },
-    well_at_depth: (a) => { const v = vx(); return whatIsAt(v.store, v.viewer, reqId(a), num(a.md, '--md')) },
+    well_info: (a) => { const v = w3(); return headerOf(v.store, reqId(a)) },
+    well_trajectory_stats: (a) => { const v = w3(); return trajectoryStats(v.store, reqId(a)) },
+    well_casings: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('casings', a.id) || [] },
+    well_completion: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('completion-tools', a.id) || [] },
+    well_perforations: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('perforations', a.id) || [] },
+    well_formations: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('formations', a.id) || [] },
+    well_at_depth: (a) => { const v = w3(); return whatIsAt(v.store, v.viewer, reqId(a), num(a.md, '--md')) },
     well_formation_at: (a) => {
-      const v = vx(); const md = num(a.md, '--md')
+      const v = w3(); const md = num(a.md, '--md')
       const fm = (v.store.get('formations', reqId(a)) || []).find((f) => md >= f.mdTopMsl && md < f.mdBottomMsl)
       return fm || { message: '该深度不在任何地层区间内' }
     },
     well_distance: (a) => {
-      const v = vx()
+      const v = w3()
       const idA = String(a['id-a'] || ''), idB = String(a['id-b'] || '')
       headerOf(v.store, idA); headerOf(v.store, idB)
       const mdA = num(a['md-a'], '--md-a'), mdB = num(a['md-b'], '--md-b')
@@ -272,29 +272,29 @@
       }
     },
     well_closest_approach: (a) => {
-      const v = vx()
+      const v = w3()
       const step = a.step ? Math.max(5, num(a.step, '--step')) : 50
       return closestApproach(v.store, v.viewer, String(a['id-a'] || ''), String(a['id-b'] || ''), step)
     },
     surface_list: () => {
-      const v = vx()
+      const v = w3()
       return v.surfaceIds.map((id) => {
         const m = v.store.get('surface-meta', id)
         return { id, name: m.name, minDepth: r1(m.min), maxDepth: r1(m.max), nx: m.header.nx, ny: m.header.ny, projection: m.projection }
       })
     },
-    well_qc: (a) => { const v = vx(); return qcCheck(v.store, reqId(a)) },
+    well_qc: (a) => { const v = w3(); return qcCheck(v.store, reqId(a)) },
 
     /* ---- 视图联动 ---- */
     well_select: (a) => {
-      const v = vx(); const id = reqId(a)
+      const v = w3(); const id = reqId(a)
       headerOf(v.store, id)
       if (v.setSelected) v.setSelected(id)
       if (v.viewer.focusWellbore) v.viewer.focusWellbore(id)
       return { selected: id }
     },
     well_locate: (a) => {
-      const v = vx(); const id = reqId(a); const md = num(a.md, '--md')
+      const v = w3(); const id = reqId(a); const md = num(a.md, '--md')
       headerOf(v.store, id)
       const p = v.locateDepth ? v.locateDepth(id, md) : null
       if (!p) throw new Error('深度超出轨迹范围')
@@ -302,13 +302,13 @@
       return { id, md, position: ap ? { easting: r1(ap.e), northing: r1(ap.n), tvdMsl: r1(ap.tvd) } : null }
     },
     well_selected: () => {
-      const v = vx()
+      const v = w3()
       return { id: v.getSelectedId ? v.getSelectedId() : null }
     },
   }
 
-  /* 暴露到 window 便于调试（控制台可直接调用 window._vxAi.well_list({}) 等） */
-  window._vxAi = handlers
+  /* 暴露到 window 便于调试（控制台可直接调用 window._w3Ai.well_list({}) 等） */
+  window._w3Ai = handlers
 
   /* =====================================================================
    * ui_run 事件订阅：s.{session_id}.ui_run.{action}
@@ -336,7 +336,7 @@
         console.error('[ai-panel] 订阅失败:', action, e)
       }
     })
-    $mod._vxUiSubs = arr
+    $mod._w3UiSubs = arr
     console.log(`[ai-panel] 已订阅 ${arr.length} 个 ui_run 事件，session=${sid}`)
   }
 
@@ -356,7 +356,7 @@
 
 <script dispose>
   clearUiSubs()
-  window._vxAi = null
+  window._w3Ai = null
 </script>
 </body>
 </html>
