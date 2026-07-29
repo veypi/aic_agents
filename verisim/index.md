@@ -54,7 +54,7 @@
 
 ## 3. 可用 ui_run 事件
 
-当用户在本 Agent 的 VeriSim Pro 页面中进行数字 IC 仿真/综合时，优先通过 `ui_run` 调用前端已注册事件。AI 侧仍使用 `ufs` 工具读写代码文件；调用事件后，前端会同步显示代码、控制台、波形/综合结果，并返回文本摘要。
+当用户在本 Agent 的 VeriSim Pro 页面中进行数字 IC 仿真/综合时，优先通过 `ui_run` 同步调用前端已注册事件。AI 侧仍使用 `ufs` 工具读写代码文件；调用事件后，前端会同步显示代码、控制台、波形/综合结果，并返回文本摘要，不要并行调用ui_run,一轮只能处理一个ui_run事件。
 
 调用策略：简单代码用 `sim_code`；已写入 ufs 的文件用 `sim_file`；需要硬件实现评估时用 `synth_file`。事件返回 JSON，重点读取 `ok`、`text`、`error`、`output_tail`、`signals/duration` 或 `cells/wires/dff`。
 备注：如果ui_run事件调用错误，比如超时等，可能用户再用其他消息通道给你发送请求，并没有在平台界面使用，需要提示用户访问[](url:$AGENT/i)
@@ -71,8 +71,8 @@
 
 | argv | 说明 |
 |---|---|
-| `--file <ufs_path>` | 设计文件绝对 ufs 路径，例如 `/sessions/{session_id}/main.v` |
-| `--tb <ufs_path>` | 可选，测试台绝对 ufs 路径；会追加到最终源码后仿真 |
+| `--file <ufs_path>` | 设计文件 ufs 路径，支持绝对路径（如 `/sessions/xxx/main.v`）或 `$SESSION`/`$AGENT` 前缀（如 `$SESSION/main.v`） |
+| `--tb <ufs_path>` | 可选，测试台 ufs 路径，同样支持 `$SESSION`/`$AGENT` 前缀 |
 | `--top <name>` | 可选，顶层模块名 |
 | `--pane wave` | 可选，仿真后切换到波形页 |
 
@@ -80,7 +80,7 @@
 
 | argv | 说明 |
 |---|---|
-| `--file <ufs_path>` | 设计文件绝对 ufs 路径 |
+| `--file <ufs_path>` | 设计文件 ufs 路径，支持绝对路径或 `$SESSION`/`$AGENT` 前缀 |
 | `--top <name>` | 可选，顶层模块名，留空由前端推断 |
 | `--tech <name>` | 可选，目标工艺，缺省用页面当前选择。FPGA：`ice40`/`ecp5`/`nexus`/`gowin`/`xilinx`/`gatemate`/`intel_alm`/`anlogic`/`efinix`/`sf2`/`greenpak4`/`coolrunner2`；ASIC：`lib:builtin:nangate45`（内置 NanGate 45nm）或 `lib:user:<文件名>`（用户在页面导入并缓存于浏览器的 Liberty）。不传或传空 = 通用 techmap。 |
 | `--pane synth` | 可选，综合后切换到综合报告页 |
@@ -96,3 +96,4 @@ FPGA 工艺的单元库已内置在引擎中；ASIC Liberty 流程为 `read_libe
 ### clear_console — 清空前端控制台
 
 无参数。
+

@@ -63,30 +63,51 @@ flag:DLL=vvp.tgt
     return { out: out.join('\n'), vcd, warn: cleanErr };
   }
 
-  let _yosys = null;
-  async function synthRun(script, files, onProgress) {
-    if (!_yosys) _yosys = await importEngine('yosys', '/yosys/gen/bundle.js');
-    const dec = new TextDecoder();
-    let out = '';
-    const opt = {
-      stdout: b => { if (b) out += dec.decode(b); },
-      stderr: b => { if (b) out += dec.decode(b); },
-      fetchProgress: ev => onProgress && onProgress({ total: ev.totalLength, done: ev.doneLength })
-    };
-    try {
-      const res = await _yosys.runYosys(['-p', script], files, opt);
-      const text = {};
-      for (const k of Object.keys(res)) {
-        const v = res[k];
-        if (typeof v === 'string') text[k] = v;
-        else if (v instanceof Uint8Array) {
-          try { text[k] = dec.decode(v); } catch (_) {}
-        }
-      }
-      return { out, files: text };
-    } catch (err) {
-      throw Object.assign(new Error(err.message), { out });
+  // ---- Yosys Web Worker (off-main-thread synthesis) ----
+  let _synthWorker = null;
+  let _synthReqId = 0;
+
+  function _getSynthWorker() {
+    if (!_synthWorker) {
+      _synthWorker = new Worker(BASE + '/js/yosys-worker.js');
     }
+    return _synthWorker;
+  }
+
+  function _getYosysUrls() {
+    const urls = [];
+    if (window.VeriSimSources) {
+      for (const s of window.VeriSimSources.sourceList('yosys')) {
+        urls.push(s.url || (BASE + '/' + (s.local || '').replace(/^\//, '')));
+      }
+    } else {
+      urls.push(BASE + '/yosys/gen/bundle.js');
+    }
+    return urls;
+  }
+
+  async function synthRun(script, files, onProgress) {
+    const urls = _getYosysUrls();
+    const worker = _getSynthWorker();
+    const id = ++_synthReqId;
+
+    return new Promise((resolve, reject) => {
+      worker.onmessage = (e) => {
+        const d = e.data;
+        if (d.id !== id) return;
+        if (d.type === 'ok') {
+          resolve({ out: d.out, files: d.files });
+        } else if (d.type === 'err') {
+          const err = new Error(d.error);
+          if (d.out) err.out = d.out;
+          reject(err);
+        }
+      };
+      worker.onerror = (e) => {
+        reject(new Error('Yosys worker error: ' + (e.message || 'unknown')));
+      };
+      worker.postMessage({ id, type: 'synth', urls, script, files });
+    });
   }
 
   window.VeriSimEngines = { simRun, synthRun };

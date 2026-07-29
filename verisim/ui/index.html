@@ -1095,8 +1095,23 @@ endmodule
     if (e && e.target) e.target.value = ''
   }
 
+  resolvePath = (p) => {
+    if (!p) return p
+    let s = String(p)
+    // $SESSION → /sessions/{当前 AI 会话 ID}
+    if (s.startsWith('$SESSION') && aiSessionId) {
+      s = '/sessions/' + aiSessionId + s.slice(8)
+    }
+    // $AGENT → /agents/{当前 agent ID}（从 $mod.scoped 提取）
+    if (s.startsWith('$AGENT')) {
+      const m = ($mod.scoped || '').match(/\/a\/([a-f0-9]+)/i)
+      if (m) s = '/agents/' + m[1] + s.slice(6)
+    }
+    // $USER → /home/{user_id}：暂不支持（前端无直接 user_id 来源），保持原样交给后端
+    return s
+  }
   readUfsText = async (ufsPath) => {
-    const r = await $mod.fs_get(ufsPath);
+    const r = await $mod.fs_get(resolvePath(ufsPath));
     if (!r.ok) throw new Error("read ufs failed: HTTP " + r.status);
     return await r.text();
   }
@@ -1107,7 +1122,10 @@ endmodule
     }
     try {
       const r = await $mod.fs_get('/sessions/' + aiSessionId)
-      if (!r.ok) throw new Error('HTTP ' + r.status)
+      if (!r.ok) {
+        if (r.status === 404) { sessionFiles = []; return {ok: true, total: 0} }
+        throw new Error('HTTP ' + r.status)
+      }
       const d = await r.json()
       const items = d && d.items ? d.items : []
       sessionFiles = items.filter(x => x && !x.dir && /\.(v|sv|txt)$/i.test(x.name || ''))
@@ -1310,7 +1328,6 @@ endmodule
 
   runSimCode = async (opts) => {
     const o = opts || {}
-    if (busy) return {ok: false, text: '仿真/综合进行中，请稍后', error: 'busy'}
     if (!window.VeriSimEngines) return {ok: false, text: '仿真引擎未加载', error: 'engine not loaded'}
     const simLabel = o.source === 'sim_file'
       ? ($t('src.aiFile') + ': ' + (o.file || ''))
@@ -1407,7 +1424,6 @@ endmodule
 
   runSynthCode = async (opts) => {
     const o = opts || {}
-    if (busy) return {ok: false, text: '仿真/综合进行中，请稍后', error: 'busy'}
     if (!window.VeriSimEngines || !window.VeriSimSynth) return {ok: false, text: '综合引擎未加载', error: 'engine not loaded'}
     const synthLabel = o.source === 'synth_file'
       ? ($t('src.aiFile') + ': ' + (o.file || ''))
@@ -1421,6 +1437,8 @@ endmodule
     overlayTitle = $t('synth.overlayTitle')
     overlaySub = $t('synth.overlaySub')
     overlayPercent = 0
+    // 让浏览器先渲染遮罩层,避免直接卡死在 WASM 计算中
+    await new Promise(r => requestAnimationFrame(r))
     try {
       const design = sanitize(code)
       const synthInput = window.VeriSimSynth.stripForSynth(design)
@@ -1466,15 +1484,23 @@ endmodule
         ].join('; ')
         synthFlow = $t('flow.generic')
       }
+      // 引擎已缓存时不会触发进度回调,此处提前显示"计算中"
+      overlayTitle = $t('synth.overlayComputing')
+      overlaySub = $t('synth.overlayComputingHint')
+      await new Promise(r => requestAnimationFrame(r))
       const r = await window.VeriSimEngines.synthRun(script, files, p => {
         if (p && p.total) {
+          // 引擎正在下载（首次或缓存失效）,切回下载提示
+          overlayTitle = $t('synth.overlayTitle')
           overlayPercent = Math.round(100 * p.done / p.total)
           overlaySub = $t('synth.overlayDl', {done: (p.done / 1048576).toFixed(1), total: (p.total / 1048576).toFixed(1)})
         }
       })
-      overlayShow = false
       const ms = performance.now() - t0
       log(() => $t('log.synthDone', {ms: ms.toFixed(0)}), 'ok')
+      // 综合计算完成，进入结果解析与渲染阶段
+      overlayTitle = $t('synth.overlayRendering')
+      overlaySub = $t('synth.overlayRenderingHint')
       const stat = window.VeriSimSynth.parseStat(r.out, top)
       synthOverview = stat.overview
       synthCells = stat.cellRows
@@ -1490,6 +1516,8 @@ endmodule
           schReady = false
           log(() => $t('log.schFail', {msg: se.message}), 'wrn')
         }
+        // 原理图已渲染为 SVG，释放 JSON 网表（通常数百 KB）
+        schNetlist = null
       }
       if (o.pane) showPane(o.pane)
       else showPane('synth')
@@ -1505,6 +1533,7 @@ endmodule
         file: o.file || ''
       }
       resultState = $t('res.synthOk') + ' · ' + new Date().toLocaleTimeString()
+      overlayShow = false
       setBusy(false, $t('status.synthDone', {ms: ms.toFixed(0)}))
       return result
     } catch (e) {

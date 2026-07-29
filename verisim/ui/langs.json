@@ -79,6 +79,10 @@
     "synth.overlayTitle": "正在加载综合引擎…",
     "synth.overlaySub": "首次加载约 50 MB，请稍候，之后自动缓存",
     "synth.overlayDl": "正在加载 {done} / {total} MB",
+    "synth.overlayComputing": "正在综合计算…",
+    "synth.overlayComputingHint": "复杂设计可能耗时较长，页面可能短暂无响应",
+    "synth.overlayRendering": "正在生成结果…",
+    "synth.overlayRenderingHint": "解析报告、生成原理图…",
     "log.simStart": "开始仿真…",
     "log.dumpInjected": "已自动开启波形记录",
     "log.compileWarn": "编译告警：",
@@ -134,7 +138,9 @@
     "log.engineOut": "引擎输出",
     "err.noTop": "未找到顶层模块，请在代码中定义模块",
     "netlist.missing": "未生成门级网表。",
-    "status.initFail": "初始化失败"
+    "status.initFail": "初始化失败",
+    "log.busyTimeout": "运行超时（超过 3 分钟未响应），已自动复位 busy 状态。",
+    "log.busyReset": "busy 状态已手动复位。"
   },
   "en-US": {
     "act.sim": "Simulate",
@@ -216,6 +222,10 @@
     "synth.overlayTitle": "Loading synthesis engine…",
     "synth.overlaySub": "About 50 MB on first load; cached afterwards",
     "synth.overlayDl": "Loading {done} / {total} MB",
+    "synth.overlayComputing": "Synthesizing…",
+    "synth.overlayComputingHint": "Complex designs may take a while; the page may freeze briefly",
+    "synth.overlayRendering": "Generating results…",
+    "synth.overlayRenderingHint": "Parsing reports, rendering schematic…",
     "log.simStart": "Starting simulation…",
     "log.dumpInjected": "Waveform recording enabled automatically",
     "log.compileWarn": "Compile warnings:",
@@ -271,6 +281,8 @@
     "log.engineOut": "engine output",
     "err.noTop": "No top module found; please define a module in the code",
     "netlist.missing": "No gate netlist was generated.",
-    "status.initFail": "Initialization failed"
+    "status.initFail": "Initialization failed",
+    "log.busyTimeout": "Execution timed out (no response after 3 minutes), busy state auto-reset.",
+    "log.busyReset": "Busy state manually reset."
   }
 }
