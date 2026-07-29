@@ -158,6 +158,23 @@ backdropFilter, fx, link, morphId`。类型：
 
 编辑器里“复制幻灯片”会保留元素 id，因此“复制→重排→播放”即可得到设计好的转场。
 
+morph 转场页同样执行 `fx.countUp` 与 `fx.ambient`（一次性 kenburns 立即播放，无限 drift 在编排落定后启动）；`fx.enter` 只在非 morph 转场与首次显示时播放（morph 自带未匹配元素 fade+rise 错峰编排）。
+
+## 分页拆分
+
+`slides` 数组的元素可以是**字符串**——相对文档文件的分页引用（与图片相对引用同理），也可以是页面对象，两者可混用：
+
+```jsonc
+// index.json
+{
+  "format": "ppt/1", "version": 1, "docId": "…", "title": "…",
+  "size": { "width": 1280, "height": 720 }, "theme": { … },
+  "slides": ["slides/slide_1.json", "slides/slide_2.json"]
+}
+```
+
+每个分页文件是一页完整定义（id/transition/notes/elements）。宿主在加载文档时按引用逐个拉取组装（vhtml 版页面的 `resolveSlideRefs`），保存时拆分结构自动保留。字符串与对象可混用。
+
 ## 入场动画
 
 `fx: { enter: 'fade-up' | 'fade' | 'fade-down' | 'slide-left/right/up/down',
@@ -172,8 +189,8 @@ in 由近及远）。入场动画关键帧由宿主样式表提供（见 `ppt/st
 
 ## 明确不包含
 
-协作/同步（CRDT、relay、E2EE）、版本历史与自动保存、自更新与签名、品牌标识、
-演讲者视图、批注、PDF 导出、图表交互（tooltip/缩放）、**工具栏与样式表**。
+协作/同步（CRDT、relay、E2EE）、版本历史、自更新与签名、品牌标识、
+批注、**工具栏与样式表**。
 持久化完全交给宿主的 `onChange`。
 
 ## 文件
@@ -189,7 +206,7 @@ ui/
 │   ├── stage.html   <ppt-stage> 组件：import 引擎、$data 持有实例、宿主样式表
 │   ├── toolbar.html <ppt-toolbar> 组件：编辑工具栏（:st 状态 + @cmd 意图）
 │   └── panel.html   <ppt-panel> 组件：右侧属性面板（幻灯片/元素/动画/文本/形状/图片）
-├── cases/           内置样例库：cases.json 清单 + <id>/<id>.json（只读）
+├── cases/           内置样例库：cases.json 清单 + <id>/index.json + <id>/slides/*.json（分页拆分，只读；也兼容旧的单文件 <id>/<id>.json）
 └── README.md
 ```
 

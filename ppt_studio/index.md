@@ -7,13 +7,13 @@
 PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`，即 `/sessions/{会话id}/`）。页面只会加载当前会话下的 PPT 文件。
 
 - **内容创建与修改由你直接读写文件完成**：用 fs 工具在 `$SESSION` 下创建/编辑 ppt/1 文档 JSON（见下文格式），不经过 ui_run 传递大段内容。
-- **目录约定**：每套 PPT 一个目录，如 `$SESSION/产品发布会/产品发布会.json`。
+- **目录约定**：每套 PPT 一个目录，核心描述文件固定为 `index.json`，如 `$SESSION/产品发布会/index.json`；页数多时用分页拆分（见下文），每页一个 `slides/slide_N.json`。
 - **图片等资源**：放在该 json 同级的 `image/` 子目录（如 `$SESSION/产品发布会/image/cover.png`），文档中元素 `src` 写**相对路径**（相对该 json 文件，如 `image/cover.png`）。页面渲染时自动解析为可访问 URL，保存时自动还原为相对路径。页面编辑器本地上传的图片也会自动存入该 `image/` 目录，删除图片元素会同步删除对应文件。禁止写 base64 大体积图片到 json 里。
 - **页面操作**（打开、播放、新建、查询当前状态）通过 `ui_run` 事件完成，路径参数一律使用**全局 UFS 路径**（`sessions/{会话id}/...`，不要带 `$SESSION` 变量，可带或不带前导 `/`）。
 
 典型流程（用户说「做一个关于 X 的 PPT」）：
 
-1. 直接 fs 写入 `$SESSION/x-主题/x-主题.json`（ppt/1 文档，≤12 页，JSON 紧凑不缩进）
+1. 直接 fs 写入 `$SESSION/x-主题/index.json`（ppt/1 文档，≤12 页，JSON 用 2 空格缩进的展开格式，方便后续按行阅读与 edit 编辑；推荐分页拆分写法，见下文）
 2. `ui_run action=run_ppt argv=["sessions/{会话id}/x-主题/x-主题.json"]` 播放，或 `open_ppt` 仅在页面打开
 3. 一两句话向用户总结
 
@@ -71,7 +71,7 @@ PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`�
 
 无参数。
 
-### new_ppt — 新建空白 PPT（{name}/{name}.json）
+### new_ppt — 新建空白 PPT（{name}/index.json，拆分结构）
 
 | argv | 说明 |
 |---|---|
@@ -144,10 +144,37 @@ PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`�
 
 相邻页中 `id` 相同的元素在 morph 过渡时会自动互相动画——「复制一页再重排元素」即可做出流畅转场。
 
+## 分页拆分（推荐写法）
+
+`slides` 数组的元素可以是**字符串**（相对 index.json 的分页文件路径，与图片相对引用同理），也可以是页面对象，两者可混用。页面加载时按引用逐个拉取组装；保存时拆分结构自动保留（编辑器新增页分配 `slides/slide_N.json`，复制产生的同 id 页自动内联防覆盖，删页后失效分页文件被清理）。
+
+```jsonc
+// index.json —— 只有文档元信息 + 分页引用，体积极小
+{
+  "format": "ppt/1", "version": 1, "docId": "…", "title": "…",
+  "size": { "width": 1280, "height": 720 }, "theme": { … },
+  "slides": ["slides/slide_1.json", "slides/slide_2.json", "slides/slide_3.json"]
+}
+```
+
+每个分页文件是一页完整定义（`id` / `transition` / `notes` / `elements` 等）。**改某一页只需读写对应的 slide_N.json**，不必动 index.json。图片仍放 `image/`（相对 index.json 引用，不是相对分页文件）。
+
+## 动画能力（引擎实际支持集，勿超范围）
+
+- **入场**：元素 `fx: { "enter": "fade|fade-up|fade-down|slide-left|slide-right|slide-up|slide-down", "order": N, "enterDur": 秒 }`。`order` 按 80ms 步进错峰。注意：`fx.enter` 在**非 morph 转场**（fade/slide/zoom/none）与首次显示时播放；morph 转场自带「未匹配元素 fade+rise 错峰」编排，不再单独播放 enter。
+- **数字滚动**：文本元素 `fx.countUp: true`——文本中所有数字 token 从 0 滚到终值（支持小数/千分位）。morph 转场页同样生效。
+- **环境动效**：`fx.ambient: "kenburns"` + `fx.ken: { "dir": "drift|out|in", "scale": 1.15, "duration": 20 }`。`drift` 为无限往返缓动（小元素上是脉冲感），`out/in` 为单次缩放。morph 转场页同样生效（drift 在编排落定后启动）。
+- **页间 morph**：相邻页同 `id`（或同 `morphId`）元素自动插值几何、颜色与渐变；同 `id` 图表自动做数据 morph（bar⇄line⇄pie⇄scatter 均可）。
+- **隐藏状态页**：页 `stateOf: "<父页id>"`（可配 `name`）。状态页不参与线性翻页，只能经元素 `link: "<页id>"` 点击到达；在状态页按 ← 返回父页、→ 回到主线。适合做「点击按钮 → 图表原地变形」的交互。
+- **悬停交互**：页级 `hover: { "type": "focus-group", "dim": 0.22 }` + 元素 `group: "组名"`（悬停某组其余变暗）；或 `hover: { "type": "reveal", "default": "组名" }` + 元素 `showOnHover: "组名"`（悬停显隐）。仅演示时生效。
+- **模板字段**：文本 html 中 `{{page}}`、`{{pages}}`、`{{title}}`（支持 `{{page:2}}` 零填充），页码不计状态页。
+- **演讲者备注**：页级 `notes` 字段，演示时按 S 的演讲者视图可见。
+- **禁止写** `fx.loop`（motion-path / dash-march）：旧 bento 特性，当前引擎不实现，写了会被静默忽略——浮动粒子、蚂蚁线一律不要加。
+
 ## 工作规则
 
 1. **先读后改**：修改前先 fs 读取目标 json 了解现状；不确定有哪些文件时先 `list_ppt`。
-2. **控制体积**：每套不超过 12 页；图片走独立文件 + 相对引用，不要 base64 内嵌；json 不格式化缩进。
+2. **控制体积**：每套不超过 12 页；页数多或单页元素多时按分页拆分（index.json + slides/）；图片走独立文件 + 相对引用，不要 base64 内嵌；json 统一 2 空格缩进展开（便于按行阅读与 edit 精确修改）。
 3. **坐标合理**：基于文档 size 布局，避免元素越界重叠；文字框给足高度（fontSize 64 的标题至少 h=90）。
 4. **写完即所见**：你 fs 写文件后页面不会自动感知——调用 `open_ppt`（刷新打开）或 `run_ppt`（播放）让页面更新。
 5. **结果反馈**：操作完成后用一两句话向用户总结；播放后提醒用户按 Esc 退出。

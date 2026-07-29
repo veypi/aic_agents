@@ -1,0 +1,252 @@
+{
+  "id": "s11",
+  "transition": "morph",
+  "notes": "全栈开源：权重 + 技术报告 + 训练 Infra 三件套。引用语缓慢缩放落定后停顿，再翻向收尾页。",
+  "elements": [
+    {
+      "id": "fx-a",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 1020,
+      "y": -240,
+      "w": 580,
+      "h": 580,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 135,
+        "stops": [
+          { "at": 0, "color": "rgba(34,211,238,0.24)" },
+          { "at": 1, "color": "rgba(34,211,238,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 21 } }
+    },
+    {
+      "id": "fx-b",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": -260,
+      "y": 380,
+      "w": 500,
+      "h": 500,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 315,
+        "stops": [
+          { "at": 0, "color": "rgba(139,92,246,0.26)" },
+          { "at": 1, "color": "rgba(139,92,246,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 25 } }
+    },
+    {
+      "id": "mg-tile-a",
+      "type": "shape",
+      "shape": "rect",
+      "x": 1030,
+      "y": -250,
+      "w": 480,
+      "h": 480,
+      "rotation": -10,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 135,
+        "stops": [
+          { "at": 0, "color": "rgba(34,211,238,0.15)" },
+          { "at": 1, "color": "rgba(34,211,238,0)" }
+        ]
+      },
+      "radius": 110
+    },
+    {
+      "id": "mg-tile-b",
+      "type": "shape",
+      "shape": "rect",
+      "x": -260,
+      "y": 390,
+      "w": 410,
+      "h": 410,
+      "rotation": 8,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 315,
+        "stops": [
+          { "at": 0, "color": "rgba(139,92,246,0.15)" },
+          { "at": 1, "color": "rgba(139,92,246,0)" }
+        ]
+      },
+      "radius": 75
+    },
+    {
+      "id": "mg-ghost",
+      "type": "text",
+      "x": 60,
+      "y": 470,
+      "w": 320,
+      "h": 200,
+      "html": "10",
+      "fontSize": 170,
+      "fontWeight": 800,
+      "color": "rgba(110,231,249,0.08)",
+      "align": "center",
+      "valign": "middle"
+    },
+    {
+      "id": "mg-dot",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 1190,
+      "y": 622,
+      "w": 18,
+      "h": 18,
+      "fill": "#6ee7f9",
+      "opacity": 0.85,
+      "shadow": { "y": 0, "blur": 16, "color": "rgba(110,231,249,0.5)" }
+    },
+    {
+      "id": "fx-title",
+      "type": "text",
+      "x": 80,
+      "y": 56,
+      "w": 1000,
+      "h": 60,
+      "html": "全栈开源，<b>不止权重</b>",
+      "fontSize": 40,
+      "fontWeight": 700,
+      "color": "#ffffff",
+      "valign": "middle",
+      "fx": { "enter": "fade-up", "order": 0 }
+    },
+    {
+      "id": "fx-line",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 126,
+      "w": 64,
+      "h": 4,
+      "fill": "#4f7fff",
+      "radius": 2,
+      "fx": { "enter": "fade", "order": 0 }
+    },
+    {
+      "id": "pg-num",
+      "type": "text",
+      "x": 1150,
+      "y": 676,
+      "w": 80,
+      "h": 24,
+      "html": "{{page:2}}",
+      "fontSize": 13,
+      "color": "rgba(154,165,196,0.5)",
+      "align": "right",
+      "valign": "middle",
+      "letterSpacing": 2
+    },
+    {
+      "id": "s11-c1",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 190,
+      "w": 550,
+      "h": 170,
+      "fill": "#131a30",
+      "stroke": "#2a3557",
+      "strokeWidth": 1,
+      "radius": 18,
+      "shadow": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.35)" },
+      "fx": { "enter": "fade-up", "order": 1 }
+    },
+    {
+      "id": "s11-c1t",
+      "type": "text",
+      "x": 112,
+      "y": 190,
+      "w": 486,
+      "h": 170,
+      "html": "<b style='font-size:24px;color:#7ea2ff'>模型权重</b>　Hugging Face<br><span style='font-size:16px;color:#8b96b8'>huggingface.co/moonshotai/Kimi-K3</span><br><br><b style='font-size:24px;color:#a98bff'>技术报告</b>　GitHub<br><span style='font-size:16px;color:#8b96b8'>github.com/MoonshotAI/Kimi-K3</span>",
+      "fontSize": 19,
+      "color": "#ffffff",
+      "lineHeight": 1.5,
+      "valign": "middle",
+      "fx": { "enter": "fade-up", "order": 1 }
+    },
+    {
+      "id": "s11-c2",
+      "type": "shape",
+      "shape": "rect",
+      "x": 650,
+      "y": 190,
+      "w": 550,
+      "h": 170,
+      "fill": "#131a30",
+      "stroke": "#2a3557",
+      "strokeWidth": 1,
+      "radius": 18,
+      "shadow": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.35)" },
+      "fx": { "enter": "fade-up", "order": 2 }
+    },
+    {
+      "id": "s11-c2t",
+      "type": "text",
+      "x": 682,
+      "y": 190,
+      "w": 486,
+      "h": 170,
+      "html": "<b style='font-size:24px;color:#6ee7f9'>训练 Infra 三件套</b><br><br><span style='font-size:17px;color:#9aa5c4'>MoonEP 高性能通信 · FlashKDA 高性能算子 · AgentEnv 分布式 RL 环境，覆盖训练关键链路</span>",
+      "fontSize": 19,
+      "color": "#ffffff",
+      "lineHeight": 1.5,
+      "valign": "middle",
+      "fx": { "enter": "fade-up", "order": 2 }
+    },
+    {
+      "id": "s11-q",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 400,
+      "w": 1120,
+      "h": 240,
+      "fill": "#16224a",
+      "radius": 18,
+      "fx": { "enter": "fade-up", "order": 3 }
+    },
+    {
+      "id": "s11-qt",
+      "type": "text",
+      "x": 140,
+      "y": 430,
+      "w": 1000,
+      "h": 120,
+      "html": "“Open source is no longer lagging six months behind Western closed-source models.”",
+      "fontSize": 30,
+      "color": "#ffffff",
+      "align": "center",
+      "valign": "middle",
+      "lineHeight": 1.5,
+      "fontWeight": 600,
+      "fx": {
+        "enter": "fade-up",
+        "order": 3,
+        "ambient": "kenburns",
+        "ken": { "dir": "out", "scale": 1.03, "duration": 3 }
+      }
+    },
+    {
+      "id": "s11-qs",
+      "type": "text",
+      "x": 140,
+      "y": 560,
+      "w": 1000,
+      "h": 40,
+      "html": "开源与闭源的差距，在 Kimi K3 这一代几乎被完全抹平",
+      "fontSize": 18,
+      "color": "#9db8ff",
+      "align": "center",
+      "valign": "middle",
+      "fx": { "enter": "fade", "order": 4 }
+    }
+  ]
+}

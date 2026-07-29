@@ -154,9 +154,28 @@ function starterDoc() {
   }
 }
 
+/** JSON.parse with position → line/column mapping, for readable syntax errors. */
+function parseJsonVerbose(text, label) {
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    const msg = (e && e.message) || String(e)
+    const m = /position\s+(\d+)/i.exec(msg)
+    if (m) {
+      const pos = parseInt(m[1], 10)
+      const head = String(text).slice(0, pos)
+      const line = head.split('\n').length
+      const col = pos - (head.lastIndexOf('\n') + 1) + 1
+      const lineText = String(text).split('\n')[line - 1] || ''
+      throw new Error((label || 'Invalid JSON') + ': line ' + line + ' col ' + col + ' (' + msg + ')\n' + lineText + '\n' + ' '.repeat(Math.max(0, col - 1)) + '^')
+    }
+    throw new Error((label || 'Invalid JSON') + ': ' + msg)
+  }
+}
+
 /** Accept an object or JSON string; fill every default the renderers need. */
 function normalizeDoc(input) {
-  const doc = typeof input === 'string' ? JSON.parse(input) : deepClone(input || {})
+  const doc = typeof input === 'string' ? parseJsonVerbose(input, 'Invalid deck JSON') : deepClone(input || {})
   doc.format = doc.format || 'ppt/1'
   doc.version = doc.version || 1
   doc.docId = doc.docId || uid()
@@ -851,23 +870,52 @@ Presenter.prototype.applyEnterFx = function (layer, slide) {
     if (el.fx && el.fx.countUp && el.type === 'text') {
       self.animateNumbers(node, (el.fx.order || 0) * 0.08, el.fx.enterDur || 0.9)
     }
-    if (el.fx && el.fx.ambient === 'kenburns') {
-      var t = el.type === 'image' ? node.querySelector('img') : node
-      if (t) {
-        var ken = el.fx.ken || {}
-        var scale = ken.scale || 1.08
-        var dur2 = (ken.duration || 22) * 1000
-        if (ken.dir === 'out') {
-          t.animate([{ transform: 'scale(' + scale + ')' }, { transform: 'scale(1)' }],
-            { duration: dur2, easing: 'cubic-bezier(.22,.8,.36,1)', fill: 'both' })
-        } else if (ken.dir === 'in') {
-          t.animate([{ transform: 'scale(1)' }, { transform: 'scale(' + scale + ')' }],
-            { duration: dur2, easing: 'cubic-bezier(.22,.8,.36,1)', fill: 'both' })
-        } else {
-          t.animate([{ transform: 'scale(1)' }, { transform: 'scale(' + scale + ') translate(-1.5%,-1%)' }],
-            { duration: dur2, direction: 'alternate', iterations: Infinity, easing: 'ease-in-out' })
-        }
-      }
+    if (el.fx && el.fx.ambient === 'kenburns') self.startKenburns(el, node, 0)
+  })
+}
+
+/** Start an element's kenburns ambient (WAAPI). delayMs defers the start so a
+ *  morph flight or the entering rise (both driven via style.transform) never
+ *  fights the WAAPI transform on the same node. */
+Presenter.prototype.startKenburns = function (el, node, delayMs) {
+  var t = el.type === 'image' ? node.querySelector('img') : node
+  if (!t) return
+  var ken = (el.fx && el.fx.ken) || {}
+  var scale = ken.scale || 1.08
+  var dur2 = (ken.duration || 22) * 1000
+  var timing = { duration: dur2, delay: delayMs || 0 }
+  if (ken.dir === 'out') {
+    timing.easing = 'cubic-bezier(.22,.8,.36,1)'
+    timing.fill = 'both'
+    t.animate([{ transform: 'scale(' + scale + ')' }, { transform: 'scale(1)' }], timing)
+  } else if (ken.dir === 'in') {
+    timing.easing = 'cubic-bezier(.22,.8,.36,1)'
+    timing.fill = 'both'
+    t.animate([{ transform: 'scale(1)' }, { transform: 'scale(' + scale + ')' }], timing)
+  } else {
+    timing.direction = 'alternate'
+    timing.iterations = Infinity
+    timing.easing = 'ease-in-out'
+    t.animate([{ transform: 'scale(1)' }, { transform: 'scale(' + scale + ') translate(-1.5%,-1%)' }], timing)
+  }
+}
+
+/** Morph slides: runMorph handles the flight choreography, but two fx kinds
+ *  must still fire here — countUp (numbers roll on every arrival) and ambient
+ *  kenburns. One-shot kenburns (out/in) doubles as the enter effect and starts
+ *  immediately; infinite drift waits 1.25s for the choreography to settle. */
+Presenter.prototype.applyMorphFx = function (layer, slide) {
+  var self = this
+  slide.elements.forEach(function (el) {
+    if (!el.fx) return
+    var node = layer.querySelector('[data-el-id="' + el.id + '"]')
+    if (!node) return
+    if (el.fx.countUp && el.type === 'text') {
+      self.animateNumbers(node, 0.3 + (el.fx.order || 0) * 0.08, el.fx.enterDur || 0.9)
+    }
+    if (el.fx.ambient === 'kenburns') {
+      var oneShot = el.fx.ken && (el.fx.ken.dir === 'out' || el.fx.ken.dir === 'in')
+      self.startKenburns(el, node, oneShot ? 0 : 1250)
     }
   })
 }
@@ -1042,6 +1090,7 @@ Presenter.prototype.show = function (idx, dir, instant) {
     // element FLIES from its old frame via transform.
     finishOld()
     this.runMorph(newLayer, oldSlide, slide)
+    this.applyMorphFx(newLayer, slide)
     return
   }
 

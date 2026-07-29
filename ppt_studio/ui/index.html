@@ -560,6 +560,8 @@
   cur_path = ''          // 会话文件：相对会话根（如 会议纪要/会议纪要.json）；样例：相对 cases/
   cur_kind = ''          // 'session' | 'case'
   cur_case = ''          // 当前样例 id
+  cur_refs = {}          // 拆分文档：slideId → 分页相对引用（如 slides/slide_1.json）
+  cur_split = false      // 当前文档是否为拆分结构（决定保存时按拆分写回还是整体单写）
   slide_count = 0
   current = 0
   mode = 'edit'
@@ -589,7 +591,11 @@
   const sessRoot = () => '/sessions/' + sid + '/'
   const globalPath = (rel) => 'sessions/' + sid + '/' + rel
   const lastKey = () => 'ppt_open_' + sid
-  const caseJsonUrl = (id) => 'cases/' + id + '/' + id + '.json'
+  const caseJsonUrl = (id) => 'cases/' + id + '/index.json'        // 新约定：index.json + slides/ 拆分
+  const caseJsonUrlLegacy = (id) => 'cases/' + id + '/' + id + '.json'  // 兼容旧的单文件样例
+  // 样例资源（图片等）的绝对 URL 基座：组件内 fetch 会被运行时自动加 $mod.scoped 前缀，
+  // 但引擎运行时动态创建的 <img> 不走该前缀，必须给绝对路径（/aic/agents/{id}/cases/...）
+  const caseBaseUrl = (id) => String($mod.scoped || '').replace(/\/+$/, '') + '/cases/' + id + '/'
   // 写文件：统一走运行时封装的 $mod.fs_put（全局路径 + Blob/File）
   const fsPut = async (path, blob) => {
     if (typeof $mod.fs_put !== 'function') throw new Error('环境缺少 $mod.fs_put，请更新运行时')
@@ -670,6 +676,45 @@
     return d
   }
 
+  // ---- 带定位的 JSON 解析：语法错误时给出行/列、出错行内容与 caret 标记，方便直接跳修 ----
+  const parseJson = (text, label) => {
+    try {
+      return JSON.parse(text)
+    } catch (e) {
+      const msg = (e && e.message) || String(e)
+      const m = /position\s+(\d+)/i.exec(msg)
+      if (m) {
+        const pos = parseInt(m[1], 10)
+        const head = String(text || '').slice(0, pos)
+        const line = head.split('\n').length
+        const col = pos - (head.lastIndexOf('\n') + 1) + 1
+        const lineText = String(text || '').split('\n')[line - 1] || ''
+        throw new Error((label || 'JSON 语法错误') + '：第 ' + line + ' 行第 ' + col + ' 列（' + msg + '）\n' + lineText + '\n' + ' '.repeat(Math.max(0, col - 1)) + '^')
+      }
+      throw new Error((label || 'JSON 语法错误') + '：' + msg)
+    }
+  }
+
+  // ---- 分页拆分加载：slides 元素为字符串时，按相对 index.json 的路径逐个拉取分页 json；对象则原样使用 ----
+  // 返回 { refs, split }：refs 为 slideId → 引用路径；split 表示文档是否含引用页。doc.slides 原地解析为对象数组
+  const resolveSlideRefs = async (doc, base) => {
+    const refs = {}
+    let split = false
+    if (doc && Array.isArray(doc.slides)) {
+      doc.slides = await Promise.all(doc.slides.map(async (s) => {
+        if (typeof s !== 'string') return s
+        split = true
+        const r = await fetch(base + s)
+        if (!r.ok) throw new Error('幻灯片文件加载失败：' + s + '（HTTP ' + r.status + '）')
+        const sl = parseJson(await r.text(), '幻灯片 JSON 语法错误（' + s + '）')
+        if (!sl || !Array.isArray(sl.elements)) throw new Error('非法的幻灯片文件（缺少 elements）：' + s)
+        if (sl.id) refs[sl.id] = s
+        return sl
+      }))
+    }
+    return { refs, split }
+  }
+
   // ---- 图片存储：插入上传到 {deck目录}/image/，删除同步删文件 ----
   // 内存中 el.src 用完整 URL（与 resolveDocAssets 一致），保存时由 unresolveDocAssets 还原为相对路径 image/xxx
   const deckDir = () => {
@@ -730,7 +775,7 @@
       for (const it of node.items) {
         const rel = prefix ? prefix + '/' + it.name : it.name
         if (it.dir) {
-          if (it.name !== 'msgs' && it.name !== 'image') await walk(dir + it.name + '/', rel, depth + 1)
+          if (it.name !== 'msgs' && it.name !== 'image' && it.name !== 'slides') await walk(dir + it.name + '/', rel, depth + 1)
         } else if (/\.json$/i.test(it.name)) {
           out.push({path: rel, size: it.size || 0, mod_time: it.mod_time || 0})
         }
@@ -748,12 +793,49 @@
     if (typeof t !== 'string') t = JSON.stringify(t)
     return t
   }
-  // 保存：还原相对引用后写 JSON
+  // 保存：还原相对引用后写 JSON。拆分结构（slides 含字符串引用）按引用逐页写回，
+  // index.json 保持引用数组；编辑器新增/复制的页自动分配 slides/slide_N.json；不再被引用的旧分页文件同步清理
   const writeDeckFile = async (rel, doc) => {
     const out = unresolveDocAssets(doc, deckBaseUrl(rel))
     delete out.collab
-    const blob = new Blob([JSON.stringify(out)], {type: 'application/json'})
+    if (!cur_split) {
+      const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'})
+      await fsPut(sessRoot() + rel, blob)
+      return
+    }
+    const dir = rel.slice(0, rel.lastIndexOf('/') + 1)
+    const idCount = {}
+    out.slides.forEach((s) => { if (s && s.id) idCount[s.id] = (idCount[s.id] || 0) + 1 })
+    const used = new Set()
+    const nextRefs = {}
+    const refs = []
+    for (let i = 0; i < out.slides.length; i++) {
+      const s = out.slides[i]
+      // 同 id 被复制出多份时不写引用（避免互相覆盖），该页内联
+      let ref = s && s.id && idCount[s.id] === 1 ? cur_refs[s.id] : null
+      if (ref && used.has(ref)) ref = null
+      if (!ref) ref = 'slides/slide_' + (i + 1) + '.json'
+      if (used.has(ref)) { refs.push(s); continue }
+      used.add(ref)
+      await fsPut(sessRoot() + dir + ref, new Blob([JSON.stringify(s, null, 2)], {type: 'application/json'}))
+      if (s && s.id) nextRefs[s.id] = ref
+      refs.push(ref)
+    }
+    out.slides = refs
+    cur_refs = nextRefs
+    const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'})
     await fsPut(sessRoot() + rel, blob)
+    // 清理不再被引用的旧分页文件（如编辑器里删页后遗留）
+    try {
+      const node = await readDir(sessRoot() + dir + 'slides/')
+      if (node && node.dir && Array.isArray(node.items)) {
+        for (const it of node.items) {
+          if (!it.dir && /\.json$/i.test(it.name) && !used.has('slides/' + it.name)) {
+            try { await fsRm(sessRoot() + dir + 'slides/' + it.name) } catch (e) { }
+          }
+        }
+      }
+    } catch (e) { }
   }
 
   // ---- 保存链：串行化所有写入，防止慢请求乱序覆盖 ----
@@ -802,15 +884,18 @@
   openDeck = async (rel) => {
     flushSave()
     const text = await readSessionText(rel)
-    let doc
-    try {doc = JSON.parse(text)} catch (e) {throw new Error('不是合法的 JSON：' + rel)}
+    const doc = parseJson(text, '文档 JSON 语法错误（' + rel + '）')
     if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error('不是合法的 PPT 文档（缺少 slides）：' + rel)
+    const base = deckBaseUrl(rel)
+    const sr = await resolveSlideRefs(doc, base)
     cur_kind = 'session'
     cur_case = ''
     cur_path = rel
+    cur_refs = sr.refs
+    cur_split = sr.split
     suppressSave = true
     try {
-      stageApi().setDoc(resolveDocAssets(doc, deckBaseUrl(rel)))
+      stageApi().setDoc(resolveDocAssets(doc, base))
     } finally {
       suppressSave = false
     }
@@ -850,19 +935,23 @@
     if (!cases.length) await loadCases()
     const c = cases.find((x) => x.id === id) || cases[0]
     if (!c) throw new Error('没有可用样例')
-    const r = await fetch(caseJsonUrl(c.id))
+    let r = await fetch(caseJsonUrl(c.id))
+    if (!r.ok) r = await fetch(caseJsonUrlLegacy(c.id))
     if (!r.ok) throw new Error('样例加载失败：' + c.id)
-    let doc = null
-    try {doc = await r.json()} catch (e) {doc = null}
-    if (!doc) throw new Error('样例不是合法 JSON：' + c.id)
+    const doc = parseJson(await r.text(), '样例 JSON 语法错误（' + c.id + '）')
     delete doc.collab
     if (!Array.isArray(doc.slides) || !doc.slides.length) throw new Error('样例不合法（缺少 slides）：' + c.id)
+    const base = caseBaseUrl(c.id)
+    // 分页引用用相对基座（组件内 fetch 会被自动加 scoped 前缀）；图片另用绝对基座（引擎 img 不加前缀）
+    const sr = await resolveSlideRefs(doc, 'cases/' + c.id + '/')
     cur_kind = 'case'
     cur_case = c.id
-    cur_path = c.id + '/' + c.id + '.json'
+    cur_path = c.id + '/index.json'
+    cur_refs = sr.refs
+    cur_split = sr.split
     suppressSave = true
     try {
-      stageApi().setDoc(resolveDocAssets(doc, 'cases/' + c.id + '/'))
+      stageApi().setDoc(resolveDocAssets(doc, base))
     } finally {
       suppressSave = false
     }
@@ -895,11 +984,13 @@
       sess_files = files
       const taken = new Set(files.map((f) => f.path))
       let name = base, n = 1
-      while (taken.has(name + '/' + name + '.json')) {n++; name = base + '-' + n}
-      const rel = name + '/' + name + '.json'
+      while (taken.has(name + '/index.json')) {n++; name = base + '-' + n}
+      const rel = name + '/index.json'
       cur_kind = 'session'
       cur_case = ''
       cur_path = rel
+      cur_refs = {}
+      cur_split = true
       await new Promise((res, rej) => {
         saveChain = saveChain.then(() => writeDeckFile(rel, doc)).then(res, rej)
       })
@@ -1018,9 +1109,11 @@
     .slice(0, 60)
   newDeck = async (name, deckTitle) => {
     const n = sanitizeName(name) || 'untitled'
-    const rel = n + '/' + n + '.json'
+    const rel = n + '/index.json'
     const doc = stageApi().starterDoc()
     if (deckTitle) doc.title = String(deckTitle)
+    cur_refs = {}
+    cur_split = true
     await writeDeckFile(rel, doc)
     await openDeck(rel)
     save_state = $t('state.created')
@@ -1154,11 +1247,14 @@
   importDoc = async (file) => {
     if (!file) return
     const text = await file.text()
-    let doc
-    try {doc = JSON.parse(text)} catch (e) {doc = null}
+    const doc = parseJson(text, '导入文件 JSON 语法错误')
     if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('msg.importBad'))
     delete doc.collab
-    const base = cur_kind === 'case' ? 'cases/' + cur_case + '/' : deckBaseUrl(cur_path)
+    const base = cur_kind === 'case' ? caseBaseUrl(cur_case) : deckBaseUrl(cur_path)
+    // 样例：分页引用走相对基座（fetch 自动前缀）；会话文档：deckBaseUrl 是完整 http URL，fetch 直通
+    const sr = await resolveSlideRefs(doc, cur_kind === 'case' ? 'cases/' + cur_case + '/' : base)
+    cur_refs = sr.refs
+    cur_split = sr.split
     stageApi().setDoc(resolveDocAssets(doc, base))
     title = doc.title || title
     slide_count = doc.slides.length

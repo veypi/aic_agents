@@ -1,6 +1,13 @@
 {
-  "default": "product-pitch",
+  "default": "k3",
   "cases": [
+    {
+      "id": "k3",
+      "title": "Kimi K3 全球发布",
+      "desc": "12 页暗色电影感：全程 Morph 编排、图表原地变形、悬停聚焦、隐藏状态页",
+      "slides": 12,
+      "accent": "#4F7FFF"
+    },
     {
       "id": "product-pitch",
       "title": "产品发布 · Aurora 2.0",

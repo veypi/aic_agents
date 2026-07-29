@@ -1,0 +1,268 @@
+{
+  "id": "s7",
+  "transition": "morph",
+  "notes": "Agent 能力五项跑分全部登顶开源。点击左下「看评测结果分布 →」进入隐藏状态页，图表原地变形。",
+  "elements": [
+    {
+      "id": "fx-a",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": -220,
+      "y": -240,
+      "w": 580,
+      "h": 580,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 45,
+        "stops": [
+          { "at": 0, "color": "rgba(34,211,238,0.26)" },
+          { "at": 1, "color": "rgba(34,211,238,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 19 } }
+    },
+    {
+      "id": "fx-b",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 1020,
+      "y": 400,
+      "w": 500,
+      "h": 500,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 225,
+        "stops": [
+          { "at": 0, "color": "rgba(79,127,255,0.26)" },
+          { "at": 1, "color": "rgba(79,127,255,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 23 } }
+    },
+    {
+      "id": "mg-tile-a",
+      "type": "shape",
+      "shape": "rect",
+      "x": -240,
+      "y": -260,
+      "w": 480,
+      "h": 480,
+      "rotation": -10,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 45,
+        "stops": [
+          { "at": 0, "color": "rgba(34,211,238,0.15)" },
+          { "at": 1, "color": "rgba(34,211,238,0)" }
+        ]
+      },
+      "radius": 100
+    },
+    {
+      "id": "mg-tile-b",
+      "type": "shape",
+      "shape": "rect",
+      "x": 1030,
+      "y": 410,
+      "w": 390,
+      "h": 390,
+      "rotation": 14,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 225,
+        "stops": [
+          { "at": 0, "color": "rgba(79,127,255,0.15)" },
+          { "at": 1, "color": "rgba(79,127,255,0)" }
+        ]
+      },
+      "radius": 65
+    },
+    {
+      "id": "mg-ghost",
+      "type": "text",
+      "x": 900,
+      "y": 40,
+      "w": 320,
+      "h": 210,
+      "html": "06",
+      "fontSize": 175,
+      "fontWeight": 800,
+      "color": "rgba(34,211,238,0.08)",
+      "align": "center",
+      "valign": "middle"
+    },
+    {
+      "id": "mg-dot",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 700,
+      "y": 116,
+      "w": 18,
+      "h": 18,
+      "fill": "#22d3ee",
+      "opacity": 0.85,
+      "shadow": { "y": 0, "blur": 16, "color": "rgba(34,211,238,0.5)" }
+    },
+    {
+      "id": "fx-title",
+      "type": "text",
+      "x": 80,
+      "y": 56,
+      "w": 1000,
+      "h": 60,
+      "html": "Agent 能力，<b>登顶开源第一</b>",
+      "fontSize": 40,
+      "fontWeight": 700,
+      "color": "#ffffff",
+      "valign": "middle",
+      "fx": { "enter": "fade-up", "order": 0 }
+    },
+    {
+      "id": "fx-line",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 126,
+      "w": 64,
+      "h": 4,
+      "fill": "#4f7fff",
+      "radius": 2,
+      "fx": { "enter": "fade", "order": 0 }
+    },
+    {
+      "id": "pg-num",
+      "type": "text",
+      "x": 1150,
+      "y": 676,
+      "w": 80,
+      "h": 24,
+      "html": "{{page:2}}",
+      "fontSize": 13,
+      "color": "rgba(154,165,196,0.5)",
+      "align": "right",
+      "valign": "middle",
+      "letterSpacing": 2
+    },
+    {
+      "id": "s7-chart",
+      "type": "chart",
+      "x": 60,
+      "y": 160,
+      "w": 620,
+      "h": 440,
+      "option": {
+        "xAxis": {
+          "data": [
+            "Toolathlon",
+            "MCP Atlas",
+            "Terminal-Bench",
+            "BrowseComp",
+            "DeepSearchQA"
+          ]
+        },
+        "series": [
+          {
+            "type": "bar",
+            "name": "得分",
+            "data": [73.2, 84.2, 88.3, 91.2, 95.0]
+          }
+        ],
+        "color": ["#22d3ee"]
+      },
+      "fx": { "enter": "fade-up", "order": 1 }
+    },
+    {
+      "id": "s7-img",
+      "type": "image",
+      "src": "image/benchmarks.png",
+      "x": 720,
+      "y": 170,
+      "w": 480,
+      "h": 330,
+      "fit": "contain",
+      "radius": 12,
+      "fx": { "enter": "slide-right", "order": 2 }
+    },
+    {
+      "id": "s7-imgcap",
+      "type": "text",
+      "x": 720,
+      "y": 506,
+      "w": 480,
+      "h": 30,
+      "html": "8 项真实任务自动化评测，4 项全球第一（来源：Moonshot AI）",
+      "fontSize": 14,
+      "color": "#8b96b8",
+      "align": "center",
+      "valign": "middle",
+      "fx": { "enter": "fade", "order": 3 }
+    },
+    {
+      "id": "s7-gob",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "#16224a",
+      "stroke": "#3b5bd6",
+      "strokeWidth": 1,
+      "radius": 22,
+      "fx": { "enter": "fade-up", "order": 4 }
+    },
+    {
+      "id": "s7-got",
+      "type": "text",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "html": "看评测结果分布 →",
+      "fontSize": 16,
+      "color": "#cdd9ff",
+      "align": "center",
+      "valign": "middle",
+      "fontWeight": 600,
+      "fx": { "enter": "fade-up", "order": 4 }
+    },
+    {
+      "id": "s7-go",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "rgba(0,0,0,0)",
+      "link": "s7-dist"
+    },
+    {
+      "id": "s7-note",
+      "type": "shape",
+      "shape": "rect",
+      "x": 720,
+      "y": 560,
+      "w": 480,
+      "h": 100,
+      "fill": "#16224a",
+      "radius": 12,
+      "fx": { "enter": "fade-up", "order": 4 }
+    },
+    {
+      "id": "s7-notet",
+      "type": "text",
+      "x": 744,
+      "y": 560,
+      "w": 432,
+      "h": 100,
+      "html": "BrowseComp 91.2 刷新 SOTA：仅凭 100 万 Token 原生上下文完成，无上下文压缩、无多 Agent 堆叠",
+      "fontSize": 17,
+      "color": "#cdd9ff",
+      "valign": "middle",
+      "fontWeight": 600,
+      "lineHeight": 1.6,
+      "fx": { "enter": "fade-up", "order": 5 }
+    }
+  ]
+}

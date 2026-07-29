@@ -1,0 +1,29 @@
+{
+  "format": "bento/slides",
+  "version": 1,
+  "docId": "kimi-k3-launch-2026",
+  "title": "Kimi K3 全球发布",
+  "size": { "width": 1280, "height": 720 },
+  "theme": {
+    "background": "#0b1020",
+    "color": "#eef2ff",
+    "accent": "#4f7fff",
+    "fontFamily": "system-ui"
+  },
+  "slides": [
+    "slides/slide_1.json",
+    "slides/slide_2.json",
+    "slides/slide_3.json",
+    "slides/slide_4.json",
+    "slides/slide_5.json",
+    "slides/slide_6.json",
+    "slides/slide_7.json",
+    "slides/slide_8.json",
+    "slides/slide_9.json",
+    "slides/slide_10.json",
+    "slides/slide_11.json",
+    "slides/slide_12.json",
+    "slides/slide_13.json",
+    "slides/slide_14.json"
+  ]
+}

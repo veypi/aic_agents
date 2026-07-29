@@ -1,0 +1,246 @@
+{
+  "id": "s5",
+  "transition": "morph",
+  "notes": "规模对比柱状图，+75% 与 9/12 滚动计数。点击左下「看份额分布 →」，同一张图原地变形为饼图（隐藏状态页）。",
+  "elements": [
+    {
+      "id": "fx-a",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": -240,
+      "y": -180,
+      "w": 520,
+      "h": 520,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 45,
+        "stops": [
+          { "at": 0, "color": "rgba(79,127,255,0.3)" },
+          { "at": 1, "color": "rgba(79,127,255,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 18 } }
+    },
+    {
+      "id": "fx-b",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 1080,
+      "y": 340,
+      "w": 520,
+      "h": 520,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 225,
+        "stops": [
+          { "at": 0, "color": "rgba(139,92,246,0.26)" },
+          { "at": 1, "color": "rgba(139,92,246,0)" }
+        ]
+      },
+      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 22 } }
+    },
+    {
+      "id": "mg-tile-a",
+      "type": "shape",
+      "shape": "rect",
+      "x": -260,
+      "y": -200,
+      "w": 440,
+      "h": 440,
+      "rotation": -8,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 45,
+        "stops": [
+          { "at": 0, "color": "rgba(79,127,255,0.16)" },
+          { "at": 1, "color": "rgba(79,127,255,0)" }
+        ]
+      },
+      "radius": 90
+    },
+    {
+      "id": "mg-tile-b",
+      "type": "shape",
+      "shape": "rect",
+      "x": 1080,
+      "y": 340,
+      "w": 400,
+      "h": 400,
+      "rotation": 10,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 225,
+        "stops": [
+          { "at": 0, "color": "rgba(139,92,246,0.15)" },
+          { "at": 1, "color": "rgba(139,92,246,0)" }
+        ]
+      },
+      "radius": 60
+    },
+    {
+      "id": "mg-ghost",
+      "type": "text",
+      "x": 860,
+      "y": 40,
+      "w": 320,
+      "h": 210,
+      "html": "04",
+      "fontSize": 175,
+      "fontWeight": 800,
+      "color": "rgba(79,127,255,0.08)",
+      "align": "center",
+      "valign": "middle"
+    },
+    {
+      "id": "mg-dot",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 806,
+      "y": 660,
+      "w": 20,
+      "h": 20,
+      "fill": "#4f7fff",
+      "opacity": 0.85,
+      "shadow": { "y": 0, "blur": 16, "color": "rgba(79,127,255,0.5)" }
+    },
+    {
+      "id": "fx-title",
+      "type": "text",
+      "x": 80,
+      "y": 56,
+      "w": 1000,
+      "h": 60,
+      "html": "开源模型的<b>规模新纪录</b>",
+      "fontSize": 40,
+      "fontWeight": 700,
+      "color": "#ffffff",
+      "valign": "middle",
+      "fx": { "enter": "fade-up", "order": 0 }
+    },
+    {
+      "id": "fx-line",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 126,
+      "w": 64,
+      "h": 4,
+      "fill": "#4f7fff",
+      "radius": 2,
+      "fx": { "enter": "fade", "order": 0 }
+    },
+    {
+      "id": "pg-num",
+      "type": "text",
+      "x": 1150,
+      "y": 676,
+      "w": 80,
+      "h": 24,
+      "html": "{{page:2}}",
+      "fontSize": 13,
+      "color": "rgba(154,165,196,0.5)",
+      "align": "right",
+      "valign": "middle",
+      "letterSpacing": 2
+    },
+    {
+      "id": "s5-chart",
+      "type": "chart",
+      "x": 80,
+      "y": 170,
+      "w": 700,
+      "h": 430,
+      "option": {
+        "xAxis": { "data": ["Kimi K2", "DeepSeek V4 Pro", "Kimi K3"] },
+        "series": [
+          {
+            "type": "bar",
+            "name": "总参数量（万亿）",
+            "data": [1.0, 1.6, 2.8]
+          }
+        ],
+        "color": ["#4f7fff"]
+      },
+      "fx": { "enter": "fade-up", "order": 1 }
+    },
+    {
+      "id": "s5-r1",
+      "type": "text",
+      "x": 830,
+      "y": 220,
+      "w": 380,
+      "h": 120,
+      "html": "<b style='color:#4f7fff;font-size:46px'>+75%</b><br><span style='font-size:17px;color:#9aa5c4'>比 DeepSeek V4 Pro（约 1.6T）大约 75%</span>",
+      "fontSize": 20,
+      "color": "#ffffff",
+      "lineHeight": 1.5,
+      "fx": { "enter": "fade-up", "order": 2, "countUp": true }
+    },
+    {
+      "id": "s5-r2",
+      "type": "text",
+      "x": 830,
+      "y": 380,
+      "w": 380,
+      "h": 130,
+      "html": "<b style='color:#8b5cf6;font-size:46px'>9 / 12</b><br><span style='font-size:17px;color:#9aa5c4'>过去 12 个月中 9 个月，Kimi 保持开源模型规模上限</span>",
+      "fontSize": 20,
+      "color": "#ffffff",
+      "lineHeight": 1.5,
+      "fx": { "enter": "fade-up", "order": 3, "countUp": true }
+    },
+    {
+      "id": "s5-r3",
+      "type": "text",
+      "x": 830,
+      "y": 550,
+      "w": 380,
+      "h": 100,
+      "html": "<span style='font-size:17px;color:#9aa5c4'>参数如大脑神经连接：近 3 万亿参数意味着更深的思考与更准的回答 —— 月之暗面官方</span>",
+      "fontSize": 18,
+      "lineHeight": 1.6,
+      "color": "#c6d2f5",
+      "fx": { "enter": "fade-up", "order": 4 }
+    },
+    {
+      "id": "s5-gob",
+      "type": "shape",
+      "shape": "rect",
+      "x": 100,
+      "y": 616,
+      "w": 190,
+      "h": 44,
+      "fill": "#16224a",
+      "stroke": "#3b5bd6",
+      "strokeWidth": 1,
+      "radius": 22,
+      "fx": { "enter": "fade-up", "order": 5 }
+    },
+    {
+      "id": "s5-got",
+      "type": "text",
+      "x": 100,
+      "y": 616,
+      "w": 190,
+      "h": 44,
+      "html": "看份额分布 →",
+      "fontSize": 16,
+      "color": "#cdd9ff",
+      "align": "center",
+      "valign": "middle",
+      "fontWeight": 600,
+      "fx": { "enter": "fade-up", "order": 5 }
+    },
+    {
+      "id": "s5-go",
+      "type": "shape",
+      "shape": "rect",
+      "x": 100,
+      "y": 616,
+      "w": 190,
+      "h": 44,
+      "fill": "rgba(0,0,0,0)",
+      "link": "s5-pie"
+    }
+  ]
+}
