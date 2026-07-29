@@ -4,15 +4,15 @@
     {
       "id": "k3",
       "title": "Kimi K3 全球发布",
-      "desc": "12 页暗色电影感：全程 Morph 编排、图表原地变形、悬停聚焦、隐藏状态页",
-      "slides": 12,
+      "desc": "17 页暗色电影感 · 全能力版：全程 Morph、图表三连变形、玻璃拟态、表格/散点/折线/贝塞尔、噪点与渐变标题",
+      "slides": 17,
       "accent": "#4F7FFF"
     },
     {
-      "id": "product-pitch",
-      "title": "产品发布 · Aurora 2.0",
-      "desc": "7 页暗色电影感：Morph 编排、实时图表、对比表格",
-      "slides": 7,
+      "id": "qwen3.8",
+      "title": "Qwen3.8 全球发布",
+      "desc": "Qwen3.8 全球发布",
+      "slides": 10,
       "accent": "#FF6A4D"
     },
     {
@@ -21,13 +21,6 @@
       "desc": "6 页亮色汇报：KPI 总览、趋势图、渠道明细、问题与行动",
       "slides": 6,
       "accent": "#0E8C7F"
-    },
-    {
-      "id": "demo",
-      "title": "引擎能力全集",
-      "desc": "16 页 bento showcase：渐变 morph、图表变形、交互状态（含内嵌字体，体积较大）",
-      "slides": 16,
-      "accent": "#FF9E8A"
     }
   ]
 }

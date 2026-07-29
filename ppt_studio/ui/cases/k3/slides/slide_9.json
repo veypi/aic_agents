@@ -1,109 +1,125 @@
 {
-  "id": "s7-dist",
-  "name": "结果分布",
-  "stateOf": "s7",
+  "id": "s7",
   "transition": "morph",
-  "notes": "隐藏状态页：8 项真实任务评测中 4 项全球第一。同一张图表从柱状图原地变形为饼图。按 ← 或点按钮返回主线。",
+  "notes": "Agent 能力五项跑分全部登顶开源。点击左下「看评测结果分布 →」进入隐藏状态页，图表原地变形。",
   "elements": [
     {
       "id": "fx-a",
       "type": "shape",
       "shape": "ellipse",
-      "x": -220,
-      "y": -240,
-      "w": 580,
-      "h": 580,
+      "x": 780,
+      "y": -180,
+      "w": 560,
+      "h": 560,
       "fill": "transparent",
       "fillGradient": {
         "angle": 45,
         "stops": [
-          { "at": 0, "color": "rgba(34,211,238,0.26)" },
-          { "at": 1, "color": "rgba(34,211,238,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.26)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 19 } }
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-b",
       "type": "shape",
       "shape": "ellipse",
-      "x": 1020,
-      "y": 400,
-      "w": 500,
-      "h": 500,
+      "x": -240,
+      "y": 380,
+      "w": 480,
+      "h": 480,
       "fill": "transparent",
       "fillGradient": {
         "angle": 225,
         "stops": [
-          { "at": 0, "color": "rgba(79,127,255,0.26)" },
-          { "at": 1, "color": "rgba(79,127,255,0)" }
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.26)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
         ]
       },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 23 } }
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "mg-tile-a",
+      "id": "tile-a-08",
       "type": "shape",
       "shape": "rect",
-      "x": 1120,
-      "y": 80,
-      "w": 380,
-      "h": 380,
-      "rotation": -8,
-      "fill": "transparent",
-      "fillGradient": {
-        "angle": 225,
-        "stops": [
-          { "at": 0, "color": "rgba(139,92,246,0.16)" },
-          { "at": 1, "color": "rgba(139,92,246,0)" }
-        ]
-      },
-      "radius": 70
-    },
-    {
-      "id": "mg-tile-b",
-      "type": "shape",
-      "shape": "rect",
-      "x": -140,
-      "y": -160,
-      "w": 400,
-      "h": 400,
-      "rotation": 10,
+      "x": -240,
+      "y": -260,
+      "w": 480,
+      "h": 480,
+      "rotation": -10,
       "fill": "transparent",
       "fillGradient": {
         "angle": 45,
         "stops": [
-          { "at": 0, "color": "rgba(34,211,238,0.15)" },
-          { "at": 1, "color": "rgba(34,211,238,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "radius": 85
+      "radius": 100,
+      "opacity": 1
     },
     {
-      "id": "mg-ghost",
-      "type": "text",
-      "x": 840,
-      "y": 440,
-      "w": 360,
-      "h": 210,
-      "html": "4/8",
-      "fontSize": 160,
-      "fontWeight": 800,
-      "color": "rgba(34,211,238,0.09)",
-      "align": "center",
-      "valign": "middle"
-    },
-    {
-      "id": "mg-dot",
+      "id": "tile-b-08",
       "type": "shape",
-      "shape": "ellipse",
-      "x": 726,
-      "y": 604,
-      "w": 14,
-      "h": 14,
-      "fill": "#8b5cf6",
-      "opacity": 0.85,
-      "shadow": { "y": 0, "blur": 16, "color": "rgba(139,92,246,0.5)" }
+      "shape": "rect",
+      "x": 1030,
+      "y": 410,
+      "w": 390,
+      "h": 390,
+      "rotation": 14,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 225,
+        "stops": [
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
+        ]
+      },
+      "radius": 65,
+      "opacity": 1
+    },
+    {
+      "id": "ghost-08",
+      "type": "text",
+      "x": 900,
+      "y": 40,
+      "w": 320,
+      "h": 210,
+      "html": "06",
+      "fontSize": 175,
+      "fontWeight": 800,
+      "color": "rgba(34,211,238,0.08)",
+      "align": "center",
+      "valign": "middle",
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-title",
@@ -112,11 +128,17 @@
       "y": 56,
       "w": 1000,
       "h": 60,
-      "html": "8 项评测，<b>4 项全球第一</b>",
+      "html": "Agent 能力，<b>登顶开源第一</b>",
       "fontSize": 40,
       "fontWeight": 700,
       "color": "#ffffff",
-      "valign": "middle"
+      "valign": "middle",
+      "fx": {
+        "enter": "fade-up",
+        "order": 0
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-line",
@@ -127,7 +149,13 @@
       "w": 64,
       "h": 4,
       "fill": "#4f7fff",
-      "radius": 2
+      "radius": 2,
+      "fx": {
+        "enter": "fade",
+        "order": 0
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "pg-num",
@@ -141,7 +169,9 @@
       "color": "rgba(154,165,196,0.5)",
       "align": "right",
       "valign": "middle",
-      "letterSpacing": 2
+      "letterSpacing": 2,
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "s7-chart",
@@ -151,29 +181,61 @@
       "w": 620,
       "h": 440,
       "option": {
+        "xAxis": {
+          "data": [
+            "Toolathlon",
+            "MCP Atlas",
+            "Terminal-Bench",
+            "BrowseComp",
+            "DeepSearchQA"
+          ]
+        },
         "series": [
           {
-            "type": "pie",
-            "name": "8 项评测",
+            "type": "bar",
+            "name": "得分",
             "data": [
-              { "name": "全球第一 · 4 项", "value": 4 },
-              { "name": "其他名次 · 4 项", "value": 4 }
+              73.2,
+              84.2,
+              88.3,
+              91.2,
+              95
             ]
           }
         ],
-        "color": ["#22d3ee", "#26314f"]
-      }
+        "color": [
+          "#22d3ee"
+        ]
+      },
+      "fx": {
+        "enter": "fade-up",
+        "order": 1
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "s7-img",
       "type": "image",
-      "src": "image/benchmarks.png",
+      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/benchmarks.png",
       "x": 720,
       "y": 170,
       "w": 480,
       "h": 330,
       "fit": "contain",
-      "radius": 12
+      "radius": 12,
+      "fx": {
+        "enter": "slide-right",
+        "order": 2,
+        "ambient": "kenburns",
+        "ken": {
+          "dir": "drift",
+          "scale": 1.05,
+          "duration": 16
+        }
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "s7-imgcap",
@@ -182,14 +244,20 @@
       "y": 506,
       "w": 480,
       "h": 30,
-      "html": "8 项真实任务自动化评测 · 其中 4 项全球第一",
+      "html": "8 项真实任务自动化评测，4 项全球第一（来源：Moonshot AI）",
       "fontSize": 14,
       "color": "#8b96b8",
       "align": "center",
-      "valign": "middle"
+      "valign": "middle",
+      "fx": {
+        "enter": "fade",
+        "order": 3
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-backb",
+      "id": "s7-gob",
       "type": "shape",
       "shape": "rect",
       "x": 80,
@@ -199,24 +267,36 @@
       "fill": "#16224a",
       "stroke": "#3b5bd6",
       "strokeWidth": 1,
-      "radius": 22
+      "radius": 22,
+      "fx": {
+        "enter": "fade-up",
+        "order": 4
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-backt",
+      "id": "s7-got",
       "type": "text",
       "x": 80,
       "y": 616,
       "w": 210,
       "h": 44,
-      "html": "← 返回跑分图",
+      "html": "看评测结果分布 →",
       "fontSize": 16,
       "color": "#cdd9ff",
       "align": "center",
       "valign": "middle",
-      "fontWeight": 600
+      "fontWeight": 600,
+      "fx": {
+        "enter": "fade-up",
+        "order": 4
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-back",
+      "id": "s7-go",
       "type": "shape",
       "shape": "rect",
       "x": 80,
@@ -224,7 +304,9 @@
       "w": 210,
       "h": 44,
       "fill": "rgba(0,0,0,0)",
-      "link": "s7"
+      "link": "s7-dist",
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "s7-note",
@@ -235,7 +317,13 @@
       "w": 480,
       "h": 100,
       "fill": "#16224a",
-      "radius": 12
+      "radius": 12,
+      "fx": {
+        "enter": "fade-up",
+        "order": 4
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "s7-notet",
@@ -244,12 +332,36 @@
       "y": 560,
       "w": 432,
       "h": 100,
-      "html": "图表在演示中原地变形——这是隐藏状态页：线性翻页会跳过它，只有点击按钮才能到达",
+      "html": "BrowseComp 91.2 刷新 SOTA：仅凭 100 万 Token 原生上下文完成，无上下文压缩、无多 Agent 堆叠",
       "fontSize": 17,
       "color": "#cdd9ff",
       "valign": "middle",
       "fontWeight": 600,
-      "lineHeight": 1.6
+      "lineHeight": 1.6,
+      "fx": {
+        "enter": "fade-up",
+        "order": 5
+      },
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "mg-dot",
+      "type": "shape",
+      "shape": "rect",
+      "x": 604,
+      "y": 190,
+      "w": 16,
+      "h": 16,
+      "fill": "#22d3ee",
+      "opacity": 0.85,
+      "shadow": {
+        "y": 0,
+        "blur": 16,
+        "color": "rgba(34,211,238,0.5)"
+      },
+      "rotation": 0
     }
-  ]
+  ],
+  "background": "#0b1020"
 }

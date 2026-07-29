@@ -1,107 +1,125 @@
 {
-  "id": "s7",
+  "id": "s6",
   "transition": "morph",
-  "notes": "Agent 能力五项跑分全部登顶开源。点击左下「看评测结果分布 →」进入隐藏状态页，图表原地变形。",
+  "notes": "对标最强闭源：GDPval-AA 全球第三、AA-Briefcase 全球第二。两张图表随 Morph 转场自左向右错峰浮现（fade+rise 编排）。",
   "elements": [
     {
       "id": "fx-a",
       "type": "shape",
       "shape": "ellipse",
-      "x": -220,
-      "y": -240,
-      "w": 580,
-      "h": 580,
+      "x": 780,
+      "y": -180,
+      "w": 560,
+      "h": 560,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 45,
+        "angle": 135,
         "stops": [
-          { "at": 0, "color": "rgba(34,211,238,0.26)" },
-          { "at": 1, "color": "rgba(34,211,238,0)" }
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.26)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
         ]
       },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 19 } }
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-b",
       "type": "shape",
       "shape": "ellipse",
-      "x": 1020,
-      "y": 400,
-      "w": 500,
-      "h": 500,
-      "fill": "transparent",
-      "fillGradient": {
-        "angle": 225,
-        "stops": [
-          { "at": 0, "color": "rgba(79,127,255,0.26)" },
-          { "at": 1, "color": "rgba(79,127,255,0)" }
-        ]
-      },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 23 } }
-    },
-    {
-      "id": "mg-tile-a",
-      "type": "shape",
-      "shape": "rect",
       "x": -240,
-      "y": -260,
+      "y": 380,
       "w": 480,
       "h": 480,
-      "rotation": -10,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 45,
+        "angle": 315,
         "stops": [
-          { "at": 0, "color": "rgba(34,211,238,0.15)" },
-          { "at": 1, "color": "rgba(34,211,238,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.22)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "radius": 100
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "mg-tile-b",
+      "id": "tile-a-07",
       "type": "shape",
       "shape": "rect",
-      "x": 1030,
-      "y": 410,
-      "w": 390,
-      "h": 390,
-      "rotation": 14,
+      "x": 1060,
+      "y": -230,
+      "w": 470,
+      "h": 470,
+      "rotation": 10,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 225,
+        "angle": 135,
         "stops": [
-          { "at": 0, "color": "rgba(79,127,255,0.15)" },
-          { "at": 1, "color": "rgba(79,127,255,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "radius": 65
+      "radius": 110,
+      "opacity": 1
     },
     {
-      "id": "mg-ghost",
+      "id": "tile-b-07",
+      "type": "shape",
+      "shape": "rect",
+      "x": -210,
+      "y": 450,
+      "w": 370,
+      "h": 370,
+      "rotation": -12,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 315,
+        "stops": [
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
+        ]
+      },
+      "radius": 55,
+      "opacity": 1
+    },
+    {
+      "id": "ghost-07",
       "type": "text",
-      "x": 900,
-      "y": 40,
+      "x": 880,
+      "y": 470,
       "w": 320,
-      "h": 210,
-      "html": "06",
-      "fontSize": 175,
+      "h": 200,
+      "html": "05",
+      "fontSize": 170,
       "fontWeight": 800,
       "color": "rgba(34,211,238,0.08)",
       "align": "center",
-      "valign": "middle"
-    },
-    {
-      "id": "mg-dot",
-      "type": "shape",
-      "shape": "ellipse",
-      "x": 700,
-      "y": 116,
-      "w": 18,
-      "h": 18,
-      "fill": "#22d3ee",
-      "opacity": 0.85,
-      "shadow": { "y": 0, "blur": 16, "color": "rgba(34,211,238,0.5)" }
+      "valign": "middle",
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-title",
@@ -110,12 +128,17 @@
       "y": 56,
       "w": 1000,
       "h": 60,
-      "html": "Agent 能力，<b>登顶开源第一</b>",
+      "html": "直面全球最强<b>闭源模型</b>",
       "fontSize": 40,
       "fontWeight": 700,
       "color": "#ffffff",
       "valign": "middle",
-      "fx": { "enter": "fade-up", "order": 0 }
+      "fx": {
+        "enter": "fade-up",
+        "order": 0
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-line",
@@ -127,7 +150,12 @@
       "h": 4,
       "fill": "#4f7fff",
       "radius": 2,
-      "fx": { "enter": "fade", "order": 0 }
+      "fx": {
+        "enter": "fade",
+        "order": 0
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "pg-num",
@@ -141,128 +169,159 @@
       "color": "rgba(154,165,196,0.5)",
       "align": "right",
       "valign": "middle",
-      "letterSpacing": 2
+      "letterSpacing": 2,
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-chart",
+      "id": "s6-c1label",
+      "type": "text",
+      "x": 80,
+      "y": 156,
+      "w": 540,
+      "h": 30,
+      "html": "GDPval-AA v2（44 职业 · 9 大行业真实任务）",
+      "fontSize": 16,
+      "color": "#9aa5c4",
+      "valign": "middle",
+      "fx": {
+        "enter": "fade-up",
+        "order": 1
+      },
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s6-chart1",
       "type": "chart",
       "x": 60,
-      "y": 160,
-      "w": 620,
-      "h": 440,
+      "y": 190,
+      "w": 580,
+      "h": 400,
       "option": {
         "xAxis": {
           "data": [
-            "Toolathlon",
-            "MCP Atlas",
-            "Terminal-Bench",
-            "BrowseComp",
-            "DeepSearchQA"
+            "Opus 4.8",
+            "Kimi K3",
+            "GPT-5.6 Max",
+            "Fable 5 Max"
           ]
         },
         "series": [
           {
             "type": "bar",
-            "name": "得分",
-            "data": [73.2, 84.2, 88.3, 91.2, 95.0]
+            "name": "GDPval-AA v2",
+            "data": [
+              1600,
+              1687,
+              1748,
+              1815
+            ]
           }
         ],
-        "color": ["#22d3ee"]
+        "color": [
+          "#4f7fff"
+        ]
       },
-      "fx": { "enter": "fade-up", "order": 1 }
+      "fx": {
+        "enter": "slide-left",
+        "order": 1
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-img",
-      "type": "image",
-      "src": "image/benchmarks.png",
-      "x": 720,
-      "y": 170,
-      "w": 480,
-      "h": 330,
-      "fit": "contain",
-      "radius": 12,
-      "fx": { "enter": "slide-right", "order": 2 }
-    },
-    {
-      "id": "s7-imgcap",
+      "id": "s6-c2label",
       "type": "text",
-      "x": 720,
-      "y": 506,
-      "w": 480,
+      "x": 700,
+      "y": 156,
+      "w": 540,
       "h": 30,
-      "html": "8 项真实任务自动化评测，4 项全球第一（来源：Moonshot AI）",
-      "fontSize": 14,
-      "color": "#8b96b8",
-      "align": "center",
-      "valign": "middle",
-      "fx": { "enter": "fade", "order": 3 }
-    },
-    {
-      "id": "s7-gob",
-      "type": "shape",
-      "shape": "rect",
-      "x": 80,
-      "y": 616,
-      "w": 210,
-      "h": 44,
-      "fill": "#16224a",
-      "stroke": "#3b5bd6",
-      "strokeWidth": 1,
-      "radius": 22,
-      "fx": { "enter": "fade-up", "order": 4 }
-    },
-    {
-      "id": "s7-got",
-      "type": "text",
-      "x": 80,
-      "y": 616,
-      "w": 210,
-      "h": 44,
-      "html": "看评测结果分布 →",
+      "html": "AA-Briefcase（长程知识工作私有评测）",
       "fontSize": 16,
+      "color": "#9aa5c4",
+      "valign": "middle",
+      "fx": {
+        "enter": "fade-up",
+        "order": 2
+      },
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s6-chart2",
+      "type": "chart",
+      "x": 680,
+      "y": 190,
+      "w": 560,
+      "h": 400,
+      "option": {
+        "xAxis": {
+          "data": [
+            "GPT-5.6 Max",
+            "Kimi K3",
+            "Fable 5 Max"
+          ]
+        },
+        "series": [
+          {
+            "type": "bar",
+            "name": "AA-Briefcase",
+            "data": [
+              1495,
+              1527,
+              1587
+            ]
+          }
+        ],
+        "color": [
+          "#8b5cf6"
+        ]
+      },
+      "fx": {
+        "enter": "slide-right",
+        "order": 2
+      },
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s6-note",
+      "type": "text",
+      "x": 80,
+      "y": 610,
+      "w": 1120,
+      "h": 56,
+      "html": "GDPval-AA 全球第三 · AA-Briefcase 全球第二 —— 除最强闭源旗舰外，稳定超越其他所有模型",
+      "fontSize": 20,
       "color": "#cdd9ff",
       "align": "center",
       "valign": "middle",
       "fontWeight": 600,
-      "fx": { "enter": "fade-up", "order": 4 }
+      "fx": {
+        "enter": "fade",
+        "order": 3
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s7-go",
+      "id": "mg-dot",
       "type": "shape",
-      "shape": "rect",
-      "x": 80,
-      "y": 616,
-      "w": 210,
-      "h": 44,
-      "fill": "rgba(0,0,0,0)",
-      "link": "s7-dist"
-    },
-    {
-      "id": "s7-note",
-      "type": "shape",
-      "shape": "rect",
-      "x": 720,
-      "y": 560,
-      "w": 480,
-      "h": 100,
-      "fill": "#16224a",
-      "radius": 12,
-      "fx": { "enter": "fade-up", "order": 4 }
-    },
-    {
-      "id": "s7-notet",
-      "type": "text",
-      "x": 744,
-      "y": 560,
-      "w": 432,
-      "h": 100,
-      "html": "BrowseComp 91.2 刷新 SOTA：仅凭 100 万 Token 原生上下文完成，无上下文压缩、无多 Agent 堆叠",
-      "fontSize": 17,
-      "color": "#cdd9ff",
-      "valign": "middle",
-      "fontWeight": 600,
-      "lineHeight": 1.6,
-      "fx": { "enter": "fade-up", "order": 5 }
+      "shape": "ellipse",
+      "x": 653,
+      "y": 208,
+      "w": 14,
+      "h": 14,
+      "fill": "#22d3ee",
+      "opacity": 0.85,
+      "shadow": {
+        "y": 0,
+        "blur": 16,
+        "color": "rgba(34,211,238,0.5)"
+      },
+      "rotation": 0
     }
-  ]
+  ],
+  "background": "#0b1020"
 }

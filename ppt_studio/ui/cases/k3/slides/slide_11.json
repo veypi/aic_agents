@@ -1,108 +1,127 @@
 {
-  "id": "s9",
+  "id": "s7-scatter",
+  "name": "效率散点",
+  "stateOf": "s7",
   "transition": "morph",
-  "notes": "三个真实世界案例：48 小时芯片设计、视觉闭环、长程编码。演示时悬停任意卡片，其余卡片变暗聚焦。",
-  "hover": { "type": "focus-group", "dim": 0.22 },
+  "notes": "隐藏状态页第三弹：同一张图表从饼图再变形为散点（柱状 → 饼图 → 散点三连 morph）。K3 以 2.8T 规模把 Agent 综合得分推到 88.6。按 ← 返回主线，或点按钮逐级返回。",
   "elements": [
     {
       "id": "fx-a",
       "type": "shape",
       "shape": "ellipse",
-      "x": 440,
-      "y": -260,
-      "w": 580,
-      "h": 580,
+      "x": 780,
+      "y": -180,
+      "w": 560,
+      "h": 560,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 90,
+        "angle": 45,
         "stops": [
-          { "at": 0, "color": "rgba(79,127,255,0.26)" },
-          { "at": 1, "color": "rgba(79,127,255,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.26)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.15, "duration": 20 } }
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-b",
       "type": "shape",
       "shape": "ellipse",
-      "x": -220,
-      "y": 420,
+      "x": -240,
+      "y": 380,
       "w": 480,
       "h": 480,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 270,
+        "angle": 225,
         "stops": [
-          { "at": 0, "color": "rgba(139,92,246,0.24)" },
-          { "at": 1, "color": "rgba(139,92,246,0)" }
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.26)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
         ]
       },
-      "fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.12, "duration": 24 } }
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "mg-tile-a",
+      "id": "tile-a-16",
       "type": "shape",
       "shape": "rect",
-      "x": 420,
-      "y": -270,
-      "w": 490,
-      "h": 490,
-      "rotation": -6,
-      "fill": "transparent",
-      "fillGradient": {
-        "angle": 90,
-        "stops": [
-          { "at": 0, "color": "rgba(79,127,255,0.15)" },
-          { "at": 1, "color": "rgba(79,127,255,0)" }
-        ]
-      },
-      "radius": 120
-    },
-    {
-      "id": "mg-tile-b",
-      "type": "shape",
-      "shape": "rect",
-      "x": -210,
-      "y": 430,
+      "x": 1120,
+      "y": -140,
       "w": 390,
       "h": 390,
-      "rotation": 12,
+      "rotation": 10,
       "fill": "transparent",
       "fillGradient": {
-        "angle": 270,
+        "angle": 225,
         "stops": [
-          { "at": 0, "color": "rgba(139,92,246,0.15)" },
-          { "at": 1, "color": "rgba(139,92,246,0)" }
+          {
+            "at": 0,
+            "color": "rgba(34,211,238,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(34,211,238,0)"
+          }
         ]
       },
-      "radius": 60
+      "radius": 75,
+      "opacity": 1
     },
     {
-      "id": "mg-ghost",
-      "type": "text",
-      "x": 900,
-      "y": 470,
-      "w": 320,
-      "h": 200,
-      "html": "08",
-      "fontSize": 170,
-      "fontWeight": 800,
-      "color": "rgba(139,92,246,0.08)",
-      "align": "center",
-      "valign": "middle"
-    },
-    {
-      "id": "mg-dot",
+      "id": "tile-b-16",
       "type": "shape",
-      "shape": "ellipse",
-      "x": 1204,
-      "y": 88,
-      "w": 20,
-      "h": 20,
-      "fill": "#8b5cf6",
-      "opacity": 0.85,
-      "shadow": { "y": 0, "blur": 16, "color": "rgba(139,92,246,0.5)" }
+      "shape": "rect",
+      "x": -180,
+      "y": 420,
+      "w": 400,
+      "h": 400,
+      "rotation": -8,
+      "fill": "transparent",
+      "fillGradient": {
+        "angle": 45,
+        "stops": [
+          {
+            "at": 0,
+            "color": "rgba(79,127,255,0.15)"
+          },
+          {
+            "at": 1,
+            "color": "rgba(79,127,255,0)"
+          }
+        ]
+      },
+      "radius": 85,
+      "opacity": 1
+    },
+    {
+      "id": "ghost-16",
+      "type": "text",
+      "x": 840,
+      "y": 440,
+      "w": 360,
+      "h": 210,
+      "html": "XY",
+      "fontSize": 160,
+      "fontWeight": 800,
+      "color": "rgba(34,211,238,0.09)",
+      "align": "center",
+      "valign": "middle",
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-title",
@@ -111,12 +130,13 @@
       "y": 56,
       "w": 1000,
       "h": 60,
-      "html": "不止跑分：<b>真实世界的执行力</b>",
+      "html": "规模 × 得分，<b>效率为王</b>",
       "fontSize": 40,
       "fontWeight": 700,
       "color": "#ffffff",
       "valign": "middle",
-      "fx": { "enter": "fade-up", "order": 0 }
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "fx-line",
@@ -128,7 +148,8 @@
       "h": 4,
       "fill": "#4f7fff",
       "radius": 2,
-      "fx": { "enter": "fade", "order": 0 }
+      "rotation": 0,
+      "opacity": 1
     },
     {
       "id": "pg-num",
@@ -142,156 +163,213 @@
       "color": "rgba(154,165,196,0.5)",
       "align": "right",
       "valign": "middle",
-      "letterSpacing": 2
+      "letterSpacing": 2,
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s9-c1",
-      "type": "shape",
-      "shape": "rect",
-      "x": 80,
-      "y": 180,
-      "w": 357,
-      "h": 380,
-      "fill": "#131a30",
-      "stroke": "#2a3557",
-      "strokeWidth": 1,
-      "radius": 18,
-      "shadow": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.35)" },
-      "group": "g-chip",
-      "fx": { "enter": "fade-up", "order": 1 }
+      "id": "s7-chart",
+      "type": "chart",
+      "x": 60,
+      "y": 160,
+      "w": 620,
+      "h": 440,
+      "option": {
+        "xAxis": {
+          "data": [
+            "K2 · 1.0T",
+            "V4 Pro · 1.6T",
+            "K3 · 2.8T"
+          ]
+        },
+        "series": [
+          {
+            "type": "scatter",
+            "name": "Agent 综合得分",
+            "data": [
+              68.5,
+              74.1,
+              88.6
+            ]
+          }
+        ],
+        "color": [
+          "#22d3ee"
+        ]
+      },
+      "rotation": 0,
+      "opacity": 1
     },
     {
-      "id": "s9-c1n",
+      "id": "s7-img",
+      "type": "image",
+      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/benchmarks.png",
+      "x": 720,
+      "y": 170,
+      "w": 480,
+      "h": 330,
+      "fit": "contain",
+      "radius": 12,
+      "fx": {
+        "ambient": "kenburns",
+        "ken": {
+          "dir": "drift",
+          "scale": 1.05,
+          "duration": 16
+        }
+      },
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-imgcap",
       "type": "text",
-      "x": 112,
-      "y": 214,
-      "w": 293,
-      "h": 70,
-      "html": "48 小时",
-      "fontSize": 44,
-      "fontWeight": 800,
-      "color": "#4f7fff",
-      "valign": "middle",
-      "group": "g-chip",
-      "fx": { "enter": "fade-up", "order": 1, "countUp": true }
-    },
-    {
-      "id": "s9-c1t",
-      "type": "text",
-      "x": 112,
-      "y": 292,
-      "w": 293,
-      "h": 240,
-      "html": "<b>自主芯片设计</b><br><br><span style='color:#9aa5c4'>官方演示中，K3 在极少人工干预下持续 48 小时推进芯片设计任务，展露月之暗面在 AI for Hardware 上的真实野心。</span>",
-      "fontSize": 20,
-      "color": "#ffffff",
-      "lineHeight": 1.65,
-      "group": "g-chip",
-      "fx": { "enter": "fade-up", "order": 2 }
-    },
-    {
-      "id": "s9-c2",
-      "type": "shape",
-      "shape": "rect",
-      "x": 461,
-      "y": 180,
-      "w": 357,
-      "h": 380,
-      "fill": "#131a30",
-      "stroke": "#2a3557",
-      "strokeWidth": 1,
-      "radius": 18,
-      "shadow": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.35)" },
-      "group": "g-vis",
-      "fx": { "enter": "fade-up", "order": 2 }
-    },
-    {
-      "id": "s9-c2n",
-      "type": "text",
-      "x": 493,
-      "y": 214,
-      "w": 293,
-      "h": 70,
-      "html": "视觉闭环",
-      "fontSize": 44,
-      "fontWeight": 800,
-      "color": "#8b5cf6",
-      "valign": "middle",
-      "group": "g-vis",
-      "fx": { "enter": "fade-up", "order": 2 }
-    },
-    {
-      "id": "s9-c2t",
-      "type": "text",
-      "x": 493,
-      "y": 292,
-      "w": 293,
-      "h": 240,
-      "html": "<b>软件工程 × 视觉推理</b><br><br><span style='color:#9aa5c4'>利用截图与视觉反馈持续自我修正，优化游戏开发、前端页面与 CAD 设计等强视觉场景。</span>",
-      "fontSize": 20,
-      "color": "#ffffff",
-      "lineHeight": 1.65,
-      "group": "g-vis",
-      "fx": { "enter": "fade-up", "order": 3 }
-    },
-    {
-      "id": "s9-c3",
-      "type": "shape",
-      "shape": "rect",
-      "x": 842,
-      "y": 180,
-      "w": 357,
-      "h": 380,
-      "fill": "#131a30",
-      "stroke": "#2a3557",
-      "strokeWidth": 1,
-      "radius": 18,
-      "shadow": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.35)" },
-      "group": "g-code",
-      "fx": { "enter": "fade-up", "order": 3 }
-    },
-    {
-      "id": "s9-c3n",
-      "type": "text",
-      "x": 874,
-      "y": 214,
-      "w": 293,
-      "h": 70,
-      "html": "长程编码",
-      "fontSize": 44,
-      "fontWeight": 800,
-      "color": "#22d3ee",
-      "valign": "middle",
-      "group": "g-code",
-      "fx": { "enter": "fade-up", "order": 3 }
-    },
-    {
-      "id": "s9-c3t",
-      "type": "text",
-      "x": 874,
-      "y": 292,
-      "w": 293,
-      "h": 240,
-      "html": "<b>极少监督的持续工程</b><br><br><span style='color:#9aa5c4'>长时间工程任务不间断推进，理解大型代码库，自主协调终端工具完成复杂开发流程。</span>",
-      "fontSize": 20,
-      "color": "#ffffff",
-      "lineHeight": 1.65,
-      "group": "g-code",
-      "fx": { "enter": "fade-up", "order": 4 }
-    },
-    {
-      "id": "s9-quote",
-      "type": "text",
-      "x": 80,
-      "y": 600,
-      "w": 1120,
-      "h": 56,
-      "html": "“开源模型不再落后西方闭源模型六个月。再读一遍，想想这意味着什么。” —— AI 评论员 @kimmonismus",
-      "fontSize": 17,
+      "x": 720,
+      "y": 506,
+      "w": 480,
+      "h": 30,
+      "html": "同一张图表的第三次原地变形：柱状 → 饼图 → 散点",
+      "fontSize": 14,
       "color": "#8b96b8",
       "align": "center",
       "valign": "middle",
-      "fx": { "enter": "fade", "order": 5 }
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-bkb",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "#16224a",
+      "stroke": "#3b5bd6",
+      "strokeWidth": 1,
+      "radius": 22,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-bkt",
+      "type": "text",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "html": "← 返回分布",
+      "fontSize": 16,
+      "color": "#cdd9ff",
+      "align": "center",
+      "valign": "middle",
+      "fontWeight": 600,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-bk1",
+      "type": "shape",
+      "shape": "rect",
+      "x": 80,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "rgba(0,0,0,0)",
+      "link": "s7-dist",
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-hmb",
+      "type": "shape",
+      "shape": "rect",
+      "x": 310,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "#16224a",
+      "stroke": "#3b5bd6",
+      "strokeWidth": 1,
+      "radius": 22,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-hmt",
+      "type": "text",
+      "x": 310,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "html": "回到跑分图",
+      "fontSize": 16,
+      "color": "#cdd9ff",
+      "align": "center",
+      "valign": "middle",
+      "fontWeight": 600,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-hm",
+      "type": "shape",
+      "shape": "rect",
+      "x": 310,
+      "y": 616,
+      "w": 210,
+      "h": 44,
+      "fill": "rgba(0,0,0,0)",
+      "link": "s7",
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-note",
+      "type": "shape",
+      "shape": "rect",
+      "x": 720,
+      "y": 560,
+      "w": 480,
+      "h": 100,
+      "fill": "#16224a",
+      "radius": 12,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "s7-notet",
+      "type": "text",
+      "x": 744,
+      "y": 560,
+      "w": 432,
+      "h": 100,
+      "html": "K3 以近两倍的参数规模，把 Agent 综合得分推到 88.6——规模与效率第一次同时登顶",
+      "fontSize": 17,
+      "color": "#cdd9ff",
+      "valign": "middle",
+      "fontWeight": 600,
+      "lineHeight": 1.6,
+      "rotation": 0,
+      "opacity": 1
+    },
+    {
+      "id": "mg-dot",
+      "type": "shape",
+      "shape": "ellipse",
+      "x": 566,
+      "y": 196,
+      "w": 16,
+      "h": 16,
+      "fill": "#ffffff",
+      "opacity": 0.85,
+      "shadow": {
+        "y": 0,
+        "blur": 16,
+        "color": "rgba(255,255,255,0.5)"
+      },
+      "rotation": 0
     }
-  ]
+  ],
+  "background": "#0b1020"
 }

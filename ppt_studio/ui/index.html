@@ -338,22 +338,8 @@
     line-height: 1.5;
   }
 
-  /* ---- 主区域 ---- */
+  /* ---- 主区域：stage-box + 右侧切换式侧栏 ---- */
   .main {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-  }
-
-  .stage-pane {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .stage-main {
     flex: 1;
     min-height: 0;
     display: flex;
@@ -375,11 +361,54 @@
     flex-direction: column;
   }
 
-  .stage-main ppt-panel {
+  /* ---- 右侧切换式侧栏（AI 助手 / 属性 双 tab） ---- */
+  .side-pane {
     flex: none;
-    width: 252px;
+    width: 380px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
+  }
+
+  .side-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 切 tab：面板从 display:none 恢复显示时动画重放，形成轻量淡入 */
+  .side-body > * {
+    animation: side-in var(--transition-base);
+  }
+
+  @keyframes side-in {
+    from {
+      opacity: .35;
+      transform: translateY(5px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .side-ai {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .side-props {
+    flex: 1;
     min-height: 0;
     display: block;
+    /* panel.html 自带 border-left（旧版紧邻舞台时作分隔线），现由 .side-pane 统一提供，避免双线 */
+    border-left: none !important;
   }
 
   /* ---- 底部悬浮控制条（放映丸 + 缩放丸） ---- */
@@ -444,18 +473,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .chat-pane {
-    flex: none;
-    width: 380px;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    border-left: 1px solid var(--border-color);
-    background: var(--bg-color-secondary);
-  }
-
   @media (max-width: 960px) {
-    .chat-pane {
+    .side-pane {
       width: 300px;
     }
 
@@ -529,26 +548,29 @@
     <button class="btn primary" @click="runPresent" :disabled="presenting || !stage_ready">▶ {{ $t('btn.present') }}</button>
     <span class="save-state">{{ save_state }}</span>
   </div>
-  <div class="main">
-    <section class="stage-pane" @click="show_files = false; show_cases = false">
-      <ppt-toolbar v-if="mode === 'edit' && stage_ready" :st="st" @cmd="onToolbarCmd"></ppt-toolbar>
-      <div class="stage-main">
-        <div class="stage-box">
-          <ppt-stage ref="stage" @update="onDocChange" @slidechange="onSlideChange"
-            @presentclose="onPresentClose" @statechange="onStateChange" @error="onStageError"></ppt-stage>
-          <div class="stage-cluster" v-if="mode === 'edit' && stage_ready">
-            <button class="pill" @click="runPresent" :disabled="presenting">▶ {{ $t('btn.present') }}</button>
-            <span class="pill zoom">
-              <button @click="zoomOut" :title="'Ctrl-'">−</button>
-              <button class="zv" @click="zoomReset" :title="'Ctrl+0'">{{ st.zoom || 100 }}%</button>
-              <button @click="zoomIn" :title="'Ctrl+'">＋</button>
-            </span>
-          </div>
-        </div>
-        <ppt-panel v-if="mode === 'edit' && stage_ready" :st="st" @cmd="onToolbarCmd"></ppt-panel>
+  <ppt-toolbar v-if="mode === 'edit' && stage_ready" :st="st" :side-tab="side_tab" @cmd="onToolbarCmd"></ppt-toolbar>
+  <div class="main" @click="show_files = false; show_cases = false">
+    <div class="stage-box">
+      <ppt-stage ref="stage" @update="onDocChange" @slidechange="onSlideChange"
+        @presentclose="onPresentClose" @statechange="onStateChange" @error="onStageError"></ppt-stage>
+      <div class="stage-cluster" v-if="mode === 'edit' && stage_ready">
+        <button class="pill" @click="runPresent" :disabled="presenting">▶ {{ $t('btn.present') }}</button>
+        <span class="pill zoom">
+          <button @click="zoomOut" :title="'Ctrl-'">−</button>
+          <button class="zv" @click="zoomReset" :title="'Ctrl+0'">{{ st.zoom || 100 }}%</button>
+          <button @click="zoomIn" :title="'Ctrl+'">＋</button>
+        </span>
       </div>
-    </section>
-    <ai-box class="chat-pane" v:id="sid"></ai-box>
+    </div>
+    <aside class="side-pane">
+      <!-- tab 开关在工具栏右缘（:side-tab 下发 + @cmd sideTab 上报），侧栏本体只留内容区 -->
+      <div class="side-body">
+        <!-- 两栏常驻挂载，v-show 只切 display：ai-box 会话/NATS 订阅与面板状态不因切换而销毁重建 -->
+        <ai-box class="side-ai" v:id="sid" v-show="side_tab === 'ai'"></ai-box>
+        <ppt-panel class="side-props" v-show="stage_ready && side_tab === 'props' && mode === 'edit'" :st="st"
+          @cmd="onToolbarCmd"></ppt-panel>
+      </div>
+    </aside>
   </div>
 </body>
 <script setup>
@@ -562,6 +584,8 @@
   cur_case = ''          // 当前样例 id
   cur_refs = {}          // 拆分文档：slideId → 分页相对引用（如 slides/slide_1.json）
   cur_split = false      // 当前文档是否为拆分结构（决定保存时按拆分写回还是整体单写）
+  saved_snap = {}        // 增量保存：deck目录+分页引用 → 上次成功写入的序列化内容
+  saved_index_snap = {}  // 增量保存：deck路径 → index.json 上次成功写入的序列化内容
   slide_count = 0
   current = 0
   mode = 'edit'
@@ -576,6 +600,7 @@
   show_cases = false
   cases_loading = false
   st = {}                // 引擎状态快照（statechange），驱动编辑工具栏
+  side_tab = 'ai'        // 右侧栏当前 tab：'ai'（AI 对话，默认）| 'props'（属性面板）
 
   // ---- 私有 ----
   let saveTimer = null
@@ -585,6 +610,7 @@
   let forking = false
   let sessionLoadedFor = ''
   let unsubs = []
+  let hadSelection = false   // 上一次 statechange 的选中态：识别「无选中 → 选中」跃迁以自动切 tab
 
   // UFS 文件 HTTP 服务前缀（由运行时注入 $mod.fs_prefix），用于把文件路径转成可渲染 URL（图片等）
   const fsPrefix = String($mod.fs_prefix || '').replace(/\/+$/, '')
@@ -598,12 +624,12 @@
   const caseBaseUrl = (id) => String($mod.scoped || '').replace(/\/+$/, '') + '/cases/' + id + '/'
   // 写文件：统一走运行时封装的 $mod.fs_put（全局路径 + Blob/File）
   const fsPut = async (path, blob) => {
-    if (typeof $mod.fs_put !== 'function') throw new Error('环境缺少 $mod.fs_put，请更新运行时')
+    if (typeof $mod.fs_put !== 'function') throw new Error($t('err.noFsPut'))
     return await $mod.fs_put(path, blob)
   }
   // 删除文件/目录：统一走运行时封装的 $mod.fs_rm（全局路径）
   const fsRm = async (path) => {
-    if (typeof $mod.fs_rm !== 'function') throw new Error('环境缺少 $mod.fs_rm，请更新运行时')
+    if (typeof $mod.fs_rm !== 'function') throw new Error($t('err.noFsRm'))
     const r = await $mod.fs_rm(path)
     if (r && r.ok === false) throw new Error('HTTP ' + (r.status || 'error'))
     return r
@@ -613,10 +639,10 @@
   fmtSize = (n) => (n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B')
   fmtAgo = (ts) => {
     const d = Date.now() / 1000 - ts
-    if (d < 60) return '刚刚'
-    if (d < 3600) return Math.floor(d / 60) + ' 分钟前'
-    if (d < 86400) return Math.floor(d / 3600) + ' 小时前'
-    return Math.floor(d / 86400) + ' 天前'
+    if (d < 60) return $t('time.justNow')
+    if (d < 3600) return $t('time.minutesAgo', {n: Math.floor(d / 60)})
+    if (d < 86400) return $t('time.hoursAgo', {n: Math.floor(d / 3600)})
+    return $t('time.daysAgo', {n: Math.floor(d / 86400)})
   }
   const truthy = (v) => v === true || v === 1 || String(v).toLowerCase() === 'true' || v === '1'
   const asInt = (v, dft) => {const n = parseInt(v, 10); return isNaN(n) ? dft : n}
@@ -689,9 +715,9 @@
         const line = head.split('\n').length
         const col = pos - (head.lastIndexOf('\n') + 1) + 1
         const lineText = String(text || '').split('\n')[line - 1] || ''
-        throw new Error((label || 'JSON 语法错误') + '：第 ' + line + ' 行第 ' + col + ' 列（' + msg + '）\n' + lineText + '\n' + ' '.repeat(Math.max(0, col - 1)) + '^')
+        throw new Error((label || $t('err.jsonSyntax')) + $t('err.jsonAt', {line: line, col: col, msg: msg}) + '\n' + lineText + '\n' + ' '.repeat(Math.max(0, col - 1)) + '^')
       }
-      throw new Error((label || 'JSON 语法错误') + '：' + msg)
+      throw new Error((label || $t('err.jsonSyntax')) + $t('err.jsonMsg', {msg: msg}))
     }
   }
 
@@ -701,15 +727,26 @@
     const refs = {}
     let split = false
     if (doc && Array.isArray(doc.slides)) {
-      doc.slides = await Promise.all(doc.slides.map(async (s) => {
+      doc.slides = await Promise.all(doc.slides.map(async (s, i) => {
         if (typeof s !== 'string') return s
         split = true
-        const r = await fetch(base + s)
-        if (!r.ok) throw new Error('幻灯片文件加载失败：' + s + '（HTTP ' + r.status + '）')
-        const sl = parseJson(await r.text(), '幻灯片 JSON 语法错误（' + s + '）')
-        if (!sl || !Array.isArray(sl.elements)) throw new Error('非法的幻灯片文件（缺少 elements）：' + s)
-        if (sl.id) refs[sl.id] = s
-        return sl
+        try {
+          const r = await fetch(base + s)
+          if (!r.ok) throw new Error($t('err.slideLoad', {file: s, status: r.status}))
+          const sl = parseJson(await r.text(), $t('err.slideJson', {file: s}))
+          if (!sl || !Array.isArray(sl.elements)) throw new Error($t('err.slideBad', {file: s}))
+          if (sl.id) refs[sl.id] = s
+          return sl
+        } catch (e) {
+          // 单页失败不拖垮整稿：占位错误页（演示/打印自动跳过、编辑模式可删除），引用保留供保存回写
+          return {
+            id: 'broken-' + i,
+            broken: true,
+            brokenRef: s,
+            brokenError: (e && e.message) || String(e),
+            elements: [],
+          }
+        }
       }))
     }
     return { refs, split }
@@ -799,8 +836,11 @@
     const out = unresolveDocAssets(doc, deckBaseUrl(rel))
     delete out.collab
     if (!cur_split) {
-      const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'})
-      await fsPut(sessRoot() + rel, blob)
+      const text = JSON.stringify(out, null, 2)
+      if (text !== saved_index_snap[rel]) {
+        await fsPut(sessRoot() + rel, new Blob([text], {type: 'application/json'}))
+        saved_index_snap[rel] = text
+      }
       return
     }
     const dir = rel.slice(0, rel.lastIndexOf('/') + 1)
@@ -811,30 +851,66 @@
     const refs = []
     for (let i = 0; i < out.slides.length; i++) {
       const s = out.slides[i]
+      // 加载失败的占位页：不写文件，原引用字符串回写（补写文件后重新打开即可恢复）
+      if (s && s.broken && s.brokenRef) {
+        used.add(s.brokenRef)
+        refs.push(s.brokenRef)
+        continue
+      }
       // 同 id 被复制出多份时不写引用（避免互相覆盖），该页内联
       let ref = s && s.id && idCount[s.id] === 1 ? cur_refs[s.id] : null
       if (ref && used.has(ref)) ref = null
       if (!ref) ref = 'slides/slide_' + (i + 1) + '.json'
       if (used.has(ref)) { refs.push(s); continue }
       used.add(ref)
-      await fsPut(sessRoot() + dir + ref, new Blob([JSON.stringify(s, null, 2)], {type: 'application/json'}))
+      // 增量保存：序列化内容没变的分页跳过写文件（键含 deck 目录，防跨 deck 污染）
+      const text = JSON.stringify(s, null, 2)
+      if (saved_snap[dir + ref] !== text) {
+        await fsPut(sessRoot() + dir + ref, new Blob([text], {type: 'application/json'}))
+        saved_snap[dir + ref] = text
+      }
       if (s && s.id) nextRefs[s.id] = ref
       refs.push(ref)
     }
     out.slides = refs
     cur_refs = nextRefs
-    const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'})
-    await fsPut(sessRoot() + rel, blob)
-    // 清理不再被引用的旧分页文件（如编辑器里删页后遗留）
-    try {
-      const node = await readDir(sessRoot() + dir + 'slides/')
-      if (node && node.dir && Array.isArray(node.items)) {
-        for (const it of node.items) {
-          if (!it.dir && /\.json$/i.test(it.name) && !used.has('slides/' + it.name)) {
-            try { await fsRm(sessRoot() + dir + 'slides/' + it.name) } catch (e) { }
+    const indexText = JSON.stringify(out, null, 2)
+    const indexChanged = indexText !== saved_index_snap[rel]
+    if (indexChanged) {
+      await fsPut(sessRoot() + rel, new Blob([indexText], {type: 'application/json'}))
+      saved_index_snap[rel] = indexText
+    }
+    // 结构有变化才清理：删除不再被引用的旧分页文件（如编辑器里删页后遗留）+ 过期快照
+    if (indexChanged) {
+      Object.keys(saved_snap).forEach((k) => {
+        if (k.indexOf(dir) === 0 && !used.has(k.slice(dir.length))) delete saved_snap[k]
+      })
+      try {
+        const node = await readDir(sessRoot() + dir + 'slides/')
+        if (node && node.dir && Array.isArray(node.items)) {
+          for (const it of node.items) {
+            if (!it.dir && /\.json$/i.test(it.name) && !used.has('slides/' + it.name)) {
+              try { await fsRm(sessRoot() + dir + 'slides/' + it.name) } catch (e) { }
+            }
           }
         }
-      }
+      } catch (e) { }
+    }
+  }
+
+  // 打开文档后初始化保存快照：之后自动保存只写内容真正变化的分页文件（样例/非拆分文档仅重置）
+  const snapDeckOpen = () => {
+    saved_snap = {}
+    saved_index_snap = {}
+    if (cur_kind !== 'session' || !cur_path || !cur_split) return
+    try {
+      const base = deckBaseUrl(cur_path)
+      const dir = cur_path.slice(0, cur_path.lastIndexOf('/') + 1)
+      const doc = stageApi().getDoc()
+      ;((doc && doc.slides) || []).forEach((s) => {
+        const ref = s && s.id ? cur_refs[s.id] : null
+        if (ref) saved_snap[dir + ref] = JSON.stringify(unresolveDocAssets({slides: [s]}, base).slides[0], null, 2)
+      })
     } catch (e) { }
   }
 
@@ -876,7 +952,7 @@
   // ---- 舞台访问 ----
   const stageApi = () => {
     const st = $refs.stage
-    if (!st || !st.$data || !st.$data.ready) throw new Error('PPT 尚未就绪，请稍候重试')
+    if (!st || !st.$data || !st.$data.ready) throw new Error($t('err.notReady'))
     return st.$data
   }
 
@@ -884,8 +960,8 @@
   openDeck = async (rel) => {
     flushSave()
     const text = await readSessionText(rel)
-    const doc = parseJson(text, '文档 JSON 语法错误（' + rel + '）')
-    if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error('不是合法的 PPT 文档（缺少 slides）：' + rel)
+    const doc = parseJson(text, $t('err.deckJson', {file: rel}))
+    if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('err.deckBad', {file: rel}))
     const base = deckBaseUrl(rel)
     const sr = await resolveSlideRefs(doc, base)
     cur_kind = 'session'
@@ -899,6 +975,7 @@
     } finally {
       suppressSave = false
     }
+    snapDeckOpen()
     title = doc.title || rel
     slide_count = doc.slides.length
     current = 0
@@ -934,13 +1011,13 @@
     flushSave()
     if (!cases.length) await loadCases()
     const c = cases.find((x) => x.id === id) || cases[0]
-    if (!c) throw new Error('没有可用样例')
+    if (!c) throw new Error($t('err.noCases'))
     let r = await fetch(caseJsonUrl(c.id))
     if (!r.ok) r = await fetch(caseJsonUrlLegacy(c.id))
-    if (!r.ok) throw new Error('样例加载失败：' + c.id)
-    const doc = parseJson(await r.text(), '样例 JSON 语法错误（' + c.id + '）')
+    if (!r.ok) throw new Error($t('err.caseLoad', {id: c.id}))
+    const doc = parseJson(await r.text(), $t('err.caseJson', {id: c.id}))
     delete doc.collab
-    if (!Array.isArray(doc.slides) || !doc.slides.length) throw new Error('样例不合法（缺少 slides）：' + c.id)
+    if (!Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('err.caseBad', {id: c.id}))
     const base = caseBaseUrl(c.id)
     // 分页引用用相对基座（组件内 fetch 会被自动加 scoped 前缀）；图片另用绝对基座（引擎 img 不加前缀）
     const sr = await resolveSlideRefs(doc, 'cases/' + c.id + '/')
@@ -955,6 +1032,7 @@
     } finally {
       suppressSave = false
     }
+    snapDeckOpen()
     title = doc.title || c.title || c.id
     slide_count = doc.slides.length
     current = 0
@@ -975,7 +1053,7 @@
 
   // ---- 样例「存入会话」：显式操作（顶栏按钮 / save_ppt 事件）。样例本身绝不自动保存 ----
   forkToSession = async (doc) => {
-    if (forking) throw new Error('正在存入会话，请稍候')
+    if (forking) throw new Error($t('err.forking'))
     forking = true
     try {
       const c = cases.find((x) => x.id === cur_case) || {}
@@ -1130,12 +1208,12 @@
   saveNow = async () => {
     flushSave()
     if (cur_kind === 'case') {
-      if (!sid) throw new Error('样例模式：建立 AI 会话后才能保存')
+      if (!sid) throw new Error($t('err.caseNeedSession'))
       const rel = await forkToSession(stageApi().getDoc())
       save_state = $t('state.savedToSession')
       return {path: globalPath(rel), forked: true}
     }
-    if (!cur_path) throw new Error('当前没有打开的文件')
+    if (!cur_path) throw new Error($t('err.noOpenFile'))
     await writeDeckFile(cur_path, stageApi().getDoc())
     save_state = $t('state.saved')
     return {path: globalPath(cur_path)}
@@ -1167,9 +1245,17 @@
   onSlideChange = (i) => {current = i}
   onPresentClose = () => {presenting = false}
 
-  // ---- 工具栏 ----
+  // ---- 工具栏 / 侧栏 tab ----
+  const applyMode = (m) => {
+    mode = m
+    // 预览模式没有属性面板：若正停在属性 tab 自动切回 AI
+    if (m === 'view' && side_tab === 'props') side_tab = 'ai'
+  }
   switchMode = (m) => {
-    try {stageApi().setMode(m); mode = m} catch (e) { }
+    try {stageApi().setMode(m); applyMode(m)} catch (e) { }
+  }
+  switchSide = (t) => {
+    if (t === 'ai' || t === 'props') side_tab = t
   }
   runPresent = () => {
     try {
@@ -1185,6 +1271,11 @@
   onStateChange = (s) => {
     st = s || {}
     if (s && typeof s.current === 'number') current = s.current
+    // 选中元素的瞬间自动切到属性 tab；仅在「无选中 → 选中」跃迁时触发，
+    // 避免缩放/撤销等后续 statechange 把正在对话的用户反复拖走
+    const has = !!(s && s.selection)
+    if (has && !hadSelection && mode === 'edit' && side_tab === 'ai') side_tab = 'props'
+    hadSelection = has
   }
   onStageError = (msg) => $message.error(String(msg || 'engine error'))
 
@@ -1193,6 +1284,7 @@
     let stg
     try {stg = stageApi()} catch (e) {$message.error((e && e.message) || String(e)); return }
     switch (c.name) {
+      case 'sideTab': switchSide(c.value); return   // 侧栏 tab 意图，与舞台编辑 API 无关
       case 'insertText': stg.insertText(); break
       case 'insertShape': stg.insertShape(c.value); break
       case 'insertImage': stg.insertImage(c.file); break
@@ -1222,44 +1314,12 @@
       case 'reseedChart': stg.reseedChart(c.value); break
       case 'penMode': stg.togglePen(); break
       case 'printDoc': stg.print(); break
-      case 'exportJson': exportDoc(); break
-      case 'importJson':
-        importDoc(c.file).catch((e) => $message.error($t('msg.importFailed', {err: (e && e.message) || e})))
+      case 'exportPptx':
+        stg.exportPptx()
+          .then((name) => $message.success($t('msg.exported', {name: name})))
+          .catch((e) => $message.error($t('msg.exportFailed', {err: (e && e.message) || e})))
         break
     }
-  }
-
-  // 导出当前文档 JSON（还原相对图片引用，样例导出内存态）
-  exportDoc = () => {
-    const doc = stageApi().getDoc()
-    if (!doc) return
-    const out = cur_kind === 'session' && cur_path ? unresolveDocAssets(doc, deckBaseUrl(cur_path)) : doc
-    delete out.collab
-    const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'})
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = (sanitizeName(out.title) || 'deck') + '.json'
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-  }
-
-  // 导入 JSON 替换当前文档：会话文档经 onChange 自动保存链落盘；样例仅替换内存态
-  importDoc = async (file) => {
-    if (!file) return
-    const text = await file.text()
-    const doc = parseJson(text, '导入文件 JSON 语法错误')
-    if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('msg.importBad'))
-    delete doc.collab
-    const base = cur_kind === 'case' ? caseBaseUrl(cur_case) : deckBaseUrl(cur_path)
-    // 样例：分页引用走相对基座（fetch 自动前缀）；会话文档：deckBaseUrl 是完整 http URL，fetch 直通
-    const sr = await resolveSlideRefs(doc, cur_kind === 'case' ? 'cases/' + cur_case + '/' : base)
-    cur_refs = sr.refs
-    cur_split = sr.split
-    stageApi().setDoc(resolveDocAssets(doc, base))
-    title = doc.title || title
-    slide_count = doc.slides.length
-    current = 0
-    $message.success($t('msg.imported'))
   }
 
   // ---- ui_run 事件（AI 通过 ui_run 调用；内容编辑由 AI 直接写文件完成） ----
@@ -1269,9 +1329,9 @@
   // 规范化为会话内相对路径；仅允许当前会话目录
   const normPath = (p) => {
     p = String(p || '').trim().replace(/^\/+/, '')
-    if (!p || p.indexOf('..') >= 0) throw new Error('非法路径')
+    if (!p || p.indexOf('..') >= 0) throw new Error($t('err.badPath'))
     const prefix = 'sessions/' + sid + '/'
-    if (p.indexOf(prefix) !== 0) throw new Error('仅支持当前会话目录下的文件：' + prefix + '<目录>/<文件>.json')
+    if (p.indexOf(prefix) !== 0) throw new Error($t('err.pathScope', {prefix: prefix}))
     return p.slice(prefix.length)
   }
   const errReply = (e) => ({ok: false, error: String((e && e.message) || e)})
@@ -1329,7 +1389,7 @@
         const st = stageApi()
         const start = Math.max(1, asInt(a.start, 1))
         const total = st.slideCount
-        if (start > total) throw new Error('起始页超出范围（共 ' + total + ' 页）')
+        if (start > total) throw new Error($t('err.startRange', {total: total}))
         st.present(start - 1)
         presenting = true
         return {ok: true, presenting: true, start: start, total: total, path: curGlobalPath()}
@@ -1358,7 +1418,7 @@
         const rel = normPath(a.path || a['0'])
         const i = rel.lastIndexOf('/')
         const dir = i >= 0 ? rel.slice(0, i) : rel
-        if (!dir) throw new Error('无法确定所在目录：' + rel)
+        if (!dir) throw new Error($t('err.noDir', {file: rel}))
         const wasCurrent = cur_kind === 'session' && !!cur_path && cur_path.indexOf(dir + '/') === 0
         await fsRm(sessRoot() + dir + '/')
         try {localStorage.removeItem(lastKey())} catch (e) { }
@@ -1392,7 +1452,7 @@
             kind: cur_kind,
             slide_count: (doc.slides || []).length,
             doc: slimDoc(doc),
-            note: 'assets 已剥离为 key 列表；内容编辑请直接修改会话目录下的 JSON 文件'
+            note: $t('note.assetsStripped')
           }
         }
         return {
@@ -1412,9 +1472,9 @@
       try {
         const a = argsOf(msg)
         const m = String(a.mode || '')
-        if (m !== 'edit' && m !== 'view') throw new Error('--mode 仅支持 edit | view')
+        if (m !== 'edit' && m !== 'view') throw new Error($t('err.badMode'))
         stageApi().setMode(m)
-        mode = m
+        applyMode(m)
         return {ok: true, mode: m}
       } catch (e) {return errReply(e)}
     })

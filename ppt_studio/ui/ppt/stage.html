@@ -107,6 +107,14 @@
     opacity: .35;
   }
 
+  body .ppt-slide-broken {
+    outline: 2px dashed rgba(245, 158, 11, 0.55);
+    outline-offset: -2px;
+    background-image: repeating-linear-gradient(-45deg,
+        rgba(245, 158, 11, 0.04) 0 14px,
+        transparent 14px 28px);
+  }
+
   body .ppt-editing {
     outline: 2px solid #4f6ef7;
     outline-offset: 1px;
@@ -128,7 +136,7 @@
 
   body .ppt-btn:hover {
     background: #f6f5f2;
-    border-color: #cfcnc5;
+    border-color: #cfc9c5;
   }
 
   body .ppt-btn:active {
@@ -248,14 +256,57 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
   }
 
-  body .ppt-h-nw { left: -6px; top: -6px; cursor: nwse-resize; }
-  body .ppt-h-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
-  body .ppt-h-ne { right: -6px; top: -6px; cursor: nesw-resize; }
-  body .ppt-h-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
-  body .ppt-h-n { left: 50%; margin-left: -5px; top: -6px; cursor: ns-resize; }
-  body .ppt-h-s { left: 50%; margin-left: -5px; bottom: -6px; cursor: ns-resize; }
-  body .ppt-h-e { right: -6px; top: 50%; margin-top: -5px; cursor: ew-resize; }
-  body .ppt-h-w { left: -6px; top: 50%; margin-top: -5px; cursor: ew-resize; }
+  body .ppt-h-nw {
+    left: -6px;
+    top: -6px;
+    cursor: nwse-resize;
+  }
+
+  body .ppt-h-se {
+    right: -6px;
+    bottom: -6px;
+    cursor: nwse-resize;
+  }
+
+  body .ppt-h-ne {
+    right: -6px;
+    top: -6px;
+    cursor: nesw-resize;
+  }
+
+  body .ppt-h-sw {
+    left: -6px;
+    bottom: -6px;
+    cursor: nesw-resize;
+  }
+
+  body .ppt-h-n {
+    left: 50%;
+    margin-left: -5px;
+    top: -6px;
+    cursor: ns-resize;
+  }
+
+  body .ppt-h-s {
+    left: 50%;
+    margin-left: -5px;
+    bottom: -6px;
+    cursor: ns-resize;
+  }
+
+  body .ppt-h-e {
+    right: -6px;
+    top: 50%;
+    margin-top: -5px;
+    cursor: ew-resize;
+  }
+
+  body .ppt-h-w {
+    left: -6px;
+    top: 50%;
+    margin-top: -5px;
+    cursor: ew-resize;
+  }
 
   /* ---- 旋转手柄（选中框上方，带连接线） ---- */
   body .ppt-rot {
@@ -298,8 +349,17 @@
     z-index: 20;
   }
 
-  body .ppt-guide-v { top: 0; bottom: 0; width: 1px; }
-  body .ppt-guide-h { left: 0; right: 0; height: 1px; }
+  body .ppt-guide-v {
+    top: 0;
+    bottom: 0;
+    width: 1px;
+  }
+
+  body .ppt-guide-h {
+    left: 0;
+    right: 0;
+    height: 1px;
+  }
 
   /* ---- 框选矩形 ---- */
   body .ppt-marquee {
@@ -544,43 +604,95 @@
 
   /* ---- 入场动画关键帧（JSON 中 fx.enter / fx.ambient 引用） ---- */
   @keyframes ppt-enter-fade-up {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-enter-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes ppt-enter-fade-down {
-    from { opacity: 0; transform: translateY(-16px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(-16px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-enter-slide-left {
-    from { opacity: 0; transform: translateX(120px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateX(120px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-enter-slide-right {
-    from { opacity: 0; transform: translateX(-120px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateX(-120px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-enter-slide-up {
-    from { opacity: 0; transform: translateY(120px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(120px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-enter-slide-down {
-    from { opacity: 0; transform: translateY(-120px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(-120px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes ppt-kenburns {
-    from { transform: scale(1); }
-    to { transform: scale(1.08) translate(-1.5%, -1%); }
+    from {
+      transform: scale(1);
+    }
+
+    to {
+      transform: scale(1.08) translate(-1.5%, -1%);
+    }
   }
 </style>
 
@@ -588,10 +700,10 @@
   <div ref="host" class="stage-host"></div>
   <div v-if="!ready && !error" class="stage-mask">
     <div class="stage-spin"></div>
-    <div>PPT 引擎加载中…</div>
+    <div>{{ $t('stage.loading') }}</div>
   </div>
   <div v-if="error" class="stage-mask error">
-    <div>引擎加载失败：{{ error }}</div>
+    <div>{{ $t('stage.loadFailed', {err: error}) }}</div>
   </div>
 </body>
 <script setup>
@@ -674,53 +786,57 @@
     engine.present(isNaN(n) || n < 0 ? 0 : n)
   }
 
-  closePresent = () => { if (engine) engine.closePresent() }
+  closePresent = () => {if (engine) engine.closePresent()}
 
   // ---- 编辑 API 透传（headless 引擎的 toolbar 接口） ----
-  insertText = () => { if (engine) engine.insertText() }
-  insertShape = (kind) => { if (engine) engine.insertShape(kind) }
-  insertImage = (file) => { if (engine) engine.insertImage(file) }
-  deleteSelected = () => { if (engine) engine.deleteSelected() }
-  setFill = (color) => { if (engine) engine.setFill(color) }
-  setTextColor = (color) => { if (engine) engine.setTextColor(color) }
-  setFontSize = (n) => { if (engine) engine.setFontSize(n) }
-  toggleBold = () => { if (engine) engine.toggleBold() }
-  setAlign = (a) => { if (engine) engine.setAlign(a) }
-  setSlideBackground = (color) => { if (engine) engine.setSlideBackground(color) }
-  setTransition = (t) => { if (engine) engine.setTransition(t) }
-  addSlide = () => { if (engine) engine.addSlide() }
-  duplicateSlide = () => { if (engine) engine.duplicateSlide() }
-  deleteSlide = () => { if (engine) engine.deleteSlide() }
-  moveSlide = (d) => { if (engine) engine.moveSlide(d) }
-  undo = () => { if (engine) engine.undo() }
-  redo = () => { if (engine) engine.redo() }
+  insertText = () => {if (engine) engine.insertText()}
+  insertShape = (kind) => {if (engine) engine.insertShape(kind)}
+  insertImage = (file) => {if (engine) engine.insertImage(file)}
+  deleteSelected = () => {if (engine) engine.deleteSelected()}
+  setFill = (color) => {if (engine) engine.setFill(color)}
+  setTextColor = (color) => {if (engine) engine.setTextColor(color)}
+  setFontSize = (n) => {if (engine) engine.setFontSize(n)}
+  toggleBold = () => {if (engine) engine.toggleBold()}
+  setAlign = (a) => {if (engine) engine.setAlign(a)}
+  setSlideBackground = (color) => {if (engine) engine.setSlideBackground(color)}
+  setTransition = (t) => {if (engine) engine.setTransition(t)}
+  addSlide = () => {if (engine) engine.addSlide()}
+  duplicateSlide = () => {if (engine) engine.duplicateSlide()}
+  deleteSlide = () => {if (engine) engine.deleteSlide()}
+  moveSlide = (d) => {if (engine) engine.moveSlide(d)}
+  undo = () => {if (engine) engine.undo()}
+  redo = () => {if (engine) engine.redo()}
 
   // ---- 属性面板 / 缩放 / 导航 API ----
-  updateSelected = (props) => { if (engine) engine.updateSelected(props) }
-  updateSlide = (props) => { if (engine) engine.updateSlide(props) }
-  updateDocSize = (w, h) => { if (engine) engine.updateDocSize(w, h) }
-  goTo = (d) => { if (engine) engine.goTo(d) }
-  zoomIn = () => { if (engine) engine.zoomIn() }
-  zoomOut = () => { if (engine) engine.zoomOut() }
-  zoomReset = () => { if (engine) engine.zoomReset() }
-  setZoom = (z) => { if (engine) engine.setZoom(z) }
+  updateSelected = (props) => {if (engine) engine.updateSelected(props)}
+  updateSlide = (props) => {if (engine) engine.updateSlide(props)}
+  updateDocSize = (w, h) => {if (engine) engine.updateDocSize(w, h)}
+  goTo = (d) => {if (engine) engine.goTo(d)}
+  zoomIn = () => {if (engine) engine.zoomIn()}
+  zoomOut = () => {if (engine) engine.zoomOut()}
+  zoomReset = () => {if (engine) engine.zoomReset()}
+  setZoom = (z) => {if (engine) engine.setZoom(z)}
 
   // ---- 插入 / 剪贴板 / 页序 API ----
-  insertTable = () => { if (engine) engine.insertTable() }
-  insertChart = (preset) => { if (engine) engine.insertChart(preset) }
-  insertMedia = (kind, file) => { if (engine) engine.insertMedia(kind, file) }
-  insertSvg = (markup) => { if (engine) engine.insertSvg(markup) }
-  reseedChart = (preset) => { if (engine) engine.reseedChart(preset) }
-  duplicateSelected = () => { if (engine) engine.duplicateSelected() }
-  copySelection = (cut) => { if (engine) engine.copySelection(cut) }
-  moveSlideTo = (from, to) => { if (engine) engine.moveSlideTo(from, to) }
-  insertSlideAt = (i) => { if (engine) engine.insertSlideAt(i) }
-  togglePen = () => { if (engine) engine.togglePen() }
-  print = () => { if (engine) engine.print() }
+  insertTable = () => {if (engine) engine.insertTable()}
+  insertChart = (preset) => {if (engine) engine.insertChart(preset)}
+  insertMedia = (kind, file) => {if (engine) engine.insertMedia(kind, file)}
+  insertSvg = (markup) => {if (engine) engine.insertSvg(markup)}
+  reseedChart = (preset) => {if (engine) engine.reseedChart(preset)}
+  duplicateSelected = () => {if (engine) engine.duplicateSelected()}
+  copySelection = (cut) => {if (engine) engine.copySelection(cut)}
+  moveSlideTo = (from, to) => {if (engine) engine.moveSlideTo(from, to)}
+  insertSlideAt = (i) => {if (engine) engine.insertSlideAt(i)}
+  togglePen = () => {if (engine) engine.togglePen()}
+  print = () => {if (engine) engine.print()}
+  // PPT 导出：传入 $mod.scoped 前缀的 vendor 绝对 URL，引擎动态 import 不依赖模块基址
+  exportPptx = (opts) => engine
+    ? engine.exportPptx(Object.assign({pptxgenUrl: String($mod.scoped || '').replace(/\/+$/, '') + '/ppt/vendor/pptxgen.esm.js'}, opts || {}))
+    : Promise.reject(new Error('engine not ready'))
 </script>
 <script dispose>
   if (engine) {
-    try { engine.destroy() } catch (e) { }
+    try {engine.destroy()} catch (e) { }
     engine = null
   }
 </script>
