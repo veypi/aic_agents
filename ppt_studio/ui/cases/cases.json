@@ -1,0 +1,26 @@
+{
+  "default": "product-pitch",
+  "cases": [
+    {
+      "id": "product-pitch",
+      "title": "产品发布 · Aurora 2.0",
+      "desc": "7 页暗色电影感：Morph 编排、实时图表、对比表格",
+      "slides": 7,
+      "accent": "#FF6A4D"
+    },
+    {
+      "id": "weekly-report",
+      "title": "数据周报 · 第 31 周",
+      "desc": "6 页亮色汇报：KPI 总览、趋势图、渠道明细、问题与行动",
+      "slides": 6,
+      "accent": "#0E8C7F"
+    },
+    {
+      "id": "demo",
+      "title": "引擎能力全集",
+      "desc": "16 页 bento showcase：渐变 morph、图表变形、交互状态（含内嵌字体，体积较大）",
+      "slides": 16,
+      "accent": "#FF9E8A"
+    }
+  ]
+}
