@@ -817,7 +817,8 @@
         <button class="btn sm" :disabled="busy" @click="clearConsole">{{ $t('act.clear') }}</button>
       </div>
       <div class="console" ref="consoleEl">
-        <div :key="line.id" v-for="line in consoleLines" :class="line.cls">{{ typeof line.text === 'function' ? line.text() : line.text }}</div>
+        <div :key="line.id" v-for="line in consoleLines" :class="line.cls">{{ typeof line.text === 'function' ?
+          line.text() : line.text }}</div>
       </div>
     </section>
 
@@ -933,7 +934,7 @@ endmodule
   overlaySub = ''
   overlayPercent = 0
 
-  aiSessionId = lsGet('ai_session_id') || ''
+  aiSessionId = $router.current.query.session_id || ''
   aiOpen = window.innerWidth >= 860
   sessionFiles = []
   uiRunUnsubs = []
@@ -966,7 +967,6 @@ endmodule
     lineNumbers = out
   }
   saveCode = () => lsSet('code', code || '')
-  saveAiSessionId = (sid) => lsSet('ai_session_id', sid || '')
   onCodeInput = () => {
     refreshLineNumbers()
     sourceLabel = $t('src.manual')
@@ -1123,7 +1123,7 @@ endmodule
     try {
       const r = await $mod.fs_get('/sessions/' + aiSessionId)
       if (!r.ok) {
-        if (r.status === 404) { sessionFiles = []; return {ok: true, total: 0} }
+        if (r.status === 404) {sessionFiles = []; return {ok: true, total: 0}}
         throw new Error('HTTP ' + r.status)
       }
       const d = await r.json()
@@ -1948,7 +1948,7 @@ endmodule
     })()
 
   $watch(() => aiSessionId, (sid) => {
-    saveAiSessionId(sid)
+    $router.setQuery({session_id: sid})
     bindUiRun(sid)
     loadSessionFiles()
   })
