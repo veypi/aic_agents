@@ -380,7 +380,7 @@
   }
 
   /* 切 tab：面板从 display:none 恢复显示时动画重放，形成轻量淡入 */
-  .side-body > * {
+  .side-body>* {
     animation: side-in var(--transition-base);
   }
 
@@ -492,7 +492,8 @@
   <div class="topbar">
     <div class="brand">PPT Studio</div>
     <div class="doc-meta">
-      <span class="doc-title"><span class="kind-chip" v-if="cur_kind === 'case'">{{ $t('badge.case') }}</span>{{ title || $t('loading') }}</span>
+      <span class="doc-title"><span class="kind-chip" v-if="cur_kind === 'case'">{{ $t('badge.case') }}</span>{{ title
+        || $t('loading') }}</span>
       <span class="doc-sub">{{ cur_kind === 'case' ? 'cases/' + cur_case : (cur_path || $t('noFile')) }}</span>
     </div>
     <div class="spacer"></div>
@@ -511,7 +512,8 @@
             <span class="cdot"
               :style="{ background: c.accent || 'var(--color-primary)', color: c.accent || 'var(--color-primary)' }"></span>
             <div class="cmeta">
-              <span class="cname">{{ c.title }}<span class="cdef" v-if="c.id === default_case">{{ $t('cases.default') }}</span></span>
+              <span class="cname">{{ c.title }}<span class="cdef" v-if="c.id === default_case">{{ $t('cases.default')
+                  }}</span></span>
               <span class="cdesc">{{ c.desc }}</span>
             </div>
             <span class="cslides">{{ $t('cases.pages', {n: c.slides}) }}</span>
@@ -539,20 +541,22 @@
         </div>
       </div>
     </div>
-    <button class="btn" v-if="cur_kind === 'case'" @click="saveCaseUI" :disabled="!sid || !stage_ready">{{ $t('btn.saveCase') }}</button>
+    <button class="btn" v-if="cur_kind === 'case'" @click="saveCaseUI" :disabled="!sid || !stage_ready">{{
+      $t('btn.saveCase') }}</button>
     <button class="btn" @click="newDeckUI" :disabled="!sid || !stage_ready">＋ {{ $t('btn.new') }}</button>
     <div class="seg">
       <button :class="{ on: mode === 'edit' }" @click="switchMode('edit')">{{ $t('mode.edit') }}</button>
       <button :class="{ on: mode === 'view' }" @click="switchMode('view')">{{ $t('mode.view') }}</button>
     </div>
-    <button class="btn primary" @click="runPresent" :disabled="presenting || !stage_ready">▶ {{ $t('btn.present') }}</button>
+    <button class="btn primary" @click="runPresent" :disabled="presenting || !stage_ready">▶ {{ $t('btn.present')
+      }}</button>
     <span class="save-state">{{ save_state }}</span>
   </div>
   <ppt-toolbar v-if="mode === 'edit' && stage_ready" :st="st" :side-tab="side_tab" @cmd="onToolbarCmd"></ppt-toolbar>
   <div class="main" @click="show_files = false; show_cases = false">
     <div class="stage-box">
-      <ppt-stage ref="stage" @update="onDocChange" @slidechange="onSlideChange"
-        @presentclose="onPresentClose" @statechange="onStateChange" @error="onStageError"></ppt-stage>
+      <ppt-stage ref="stage" @update="onDocChange" @slidechange="onSlideChange" @presentclose="onPresentClose"
+        @statechange="onStateChange" @error="onStageError"></ppt-stage>
       <div class="stage-cluster" v-if="mode === 'edit' && stage_ready">
         <button class="pill" @click="runPresent" :disabled="presenting">▶ {{ $t('btn.present') }}</button>
         <span class="pill zoom">
@@ -575,7 +579,7 @@
 </body>
 <script setup>
   // ---- 会话 ID：localStorage 缓存，刷新后复用同一会话 ----
-  sid = localStorage.getItem('ppt_studio_sid') || ''
+  sid = $router.current.query.session_id || ''
 
   // ---- 界面状态 ----
   title = ''
@@ -749,7 +753,7 @@
         }
       }))
     }
-    return { refs, split }
+    return {refs, split}
   }
 
   // ---- 图片存储：插入上传到 {deck目录}/image/，删除同步删文件 ----
@@ -845,7 +849,7 @@
     }
     const dir = rel.slice(0, rel.lastIndexOf('/') + 1)
     const idCount = {}
-    out.slides.forEach((s) => { if (s && s.id) idCount[s.id] = (idCount[s.id] || 0) + 1 })
+    out.slides.forEach((s) => {if (s && s.id) idCount[s.id] = (idCount[s.id] || 0) + 1})
     const used = new Set()
     const nextRefs = {}
     const refs = []
@@ -861,7 +865,7 @@
       let ref = s && s.id && idCount[s.id] === 1 ? cur_refs[s.id] : null
       if (ref && used.has(ref)) ref = null
       if (!ref) ref = 'slides/slide_' + (i + 1) + '.json'
-      if (used.has(ref)) { refs.push(s); continue }
+      if (used.has(ref)) {refs.push(s); continue}
       used.add(ref)
       // 增量保存：序列化内容没变的分页跳过写文件（键含 deck 目录，防跨 deck 污染）
       const text = JSON.stringify(s, null, 2)
@@ -890,7 +894,7 @@
         if (node && node.dir && Array.isArray(node.items)) {
           for (const it of node.items) {
             if (!it.dir && /\.json$/i.test(it.name) && !used.has('slides/' + it.name)) {
-              try { await fsRm(sessRoot() + dir + 'slides/' + it.name) } catch (e) { }
+              try {await fsRm(sessRoot() + dir + 'slides/' + it.name)} catch (e) { }
             }
           }
         }
@@ -907,10 +911,10 @@
       const base = deckBaseUrl(cur_path)
       const dir = cur_path.slice(0, cur_path.lastIndexOf('/') + 1)
       const doc = stageApi().getDoc()
-      ;((doc && doc.slides) || []).forEach((s) => {
-        const ref = s && s.id ? cur_refs[s.id] : null
-        if (ref) saved_snap[dir + ref] = JSON.stringify(unresolveDocAssets({slides: [s]}, base).slides[0], null, 2)
-      })
+        ; ((doc && doc.slides) || []).forEach((s) => {
+          const ref = s && s.id ? cur_refs[s.id] : null
+          if (ref) saved_snap[dir + ref] = JSON.stringify(unresolveDocAssets({slides: [s]}, base).slides[0], null, 2)
+        })
     } catch (e) { }
   }
 
@@ -1514,13 +1518,11 @@
 </script>
 <script>
   // ai-box 会话建立/切换：缓存到 localStorage、重绑 ui_run、挂载会话文件
-  $watch(() => sid, (v, ov) => {
-    if (v && v !== ov) {
-      try {localStorage.setItem('ppt_studio_sid', v)} catch (e) { }
-      bindSession(v)
-      sess_files = []
-      attachSession()   // sid 变化后旧守卫自动失效（sessionLoadedFor 还是旧 sid）
-    }
+  $watch(() => sid, (v) => {
+    $router.setQuery({session_id: sid})
+    bindSession(v)
+    sess_files = []
+    attachSession()   // sid 变化后旧守卫自动失效（sessionLoadedFor 还是旧 sid）
   })
   boot()
 </script>

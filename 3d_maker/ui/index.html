@@ -642,7 +642,8 @@
 
     // ---------- 会话 ID：与 ai-box 双向绑定，$watch 监听变化动态重绑 nc 事件 ----------
     // 默认空串：等 ai-box 回写真实会话 ID 后再绑定 nc，避免无效订阅
-    sid = localStorage.getItem('3dmaker_sid') || '';
+    sid = $router.current.query.session_id || ''
+    bv = null
 
     // ---------- 界面状态 ----------
     viewModes = [
@@ -696,7 +697,7 @@
     kernelLoadText = '正在加载高性能解析器…';
     kernelName = 'builtin';
     loadOCCT = async () => {
-      const v = bv();
+      const v = bv;
       if (!v) return;
       kernelLoading = true;
       kernelProgress = 0;
@@ -705,7 +706,7 @@
           kernelProgress = pct;
           if (text) kernelLoadText = text;
         });
-        const r = await v.setKernel(kernel, {name: 'occt'});
+        const r = awaitbv.setKernel(kernel, {name: 'occt'});
         if (r && r.success) $message.success('高性能解析器已启用');
         else $message.info('高性能解析器与当前模型不兼容，继续使用内置解析器');
       } catch (e) {
@@ -719,35 +720,34 @@
     toggleKernel = () => {
       if (kernelLoading) return; // 加载中不重复触发
       if (kernelName === 'occt') {
-        bv()?.setKernel(null, {name: 'builtin'}); // setKernel(null) 自动回退内置 KERNEL_API
+        bv?.setKernel(null, {name: 'builtin'}); // setKernel(null) 自动回退内置 KERNEL_API
       } else {
         loadOCCT(); // 加载完成后自动 setKernel 切到 OCCT
       }
     };
 
     // ---------- 工具栏动作：全部转发给 viewer 引擎（引擎实例放 window，避免响应式包装） ----------
-    const bv = () => window._bv;
-    setMode = (m) => {showSettings = false; showFiles = false; bv()?.setViewMode(m);}
-    toggleMeasure = () => bv()?.enableMeasurement(!measureOn);
-    fit = () => bv()?.fitToView();
-    toggleProj = () => bv()?.toggleProjection();
-    applySettings = () => bv()?.setDisplay({
+    setMode = (m) => {showSettings = false; showFiles = false; bv?.setViewMode(m);}
+    toggleMeasure = () => bv?.enableMeasurement(!measureOn);
+    fit = () => bv?.fitToView();
+    toggleProj = () => bv?.toggleProjection();
+    applySettings = () => bv?.setDisplay({
       grid: settings.grid,
       axes: settings.axes,
       ground: settings.ground,
       shadows: settings.shadows,
       transparency: Number(settings.transparency),
     });
-    applyMaterial = () => bv()?.setMaterial({
+    applyMaterial = () => bv?.setMaterial({
       color: material.color,
       metalness: Number(material.metalness),
       roughness: Number(material.roughness),
     });
     applySection = () => {
-      const v = bv();
+      const v = bv;
       if (!v) return;
-      v.setSectionPlane(section.axis, Number(section.offset), section.invert);
-      const r = v.getSectionRange();
+      bv.setSectionPlane(section.axis, Number(section.offset), section.invert);
+      const r = bv.getSectionRange();
       if (r) {section.min = r.min; section.max = r.max;}
     };
     toggleSet = (k) => {settings[k] = !settings[k]; applySettings();};
@@ -766,12 +766,12 @@
       if (isMobile) mobileShowSide = !mobileShowSide;
       else showSide = !showSide;
     };
-    isolate = () => bv()?.isolateSelected();
-    hideSel = () => bv()?.hideSelected();
-    showAll = () => bv()?.showAllParts();
+    isolate = () => bv?.isolateSelected();
+    hideSel = () => bv?.hideSelected();
+    showAll = () => bv?.showAllParts();
     doDownload = async () => {
       try {
-        const r = await bv()?.download($refs.fmtSel.value);
+        const r = await bv?.download($refs.fmtSel.value);
         $message.success(`已导出 ${r.filename}`);
       } catch (e) {
         $message.error('导出失败：' + (e?.message || e));
@@ -833,9 +833,10 @@
     loadSessFile = async (path) => {
       showFiles = false;
       try {
-        const resp = await window.fetch(`${fsBase}/sessions/${sid}/${path}`); // window.fetch：$mod.fetch 会拼路由前缀
+        const resp = await $mod.fs_get(`/sessions/${sid}/${path}`);
+        console.log(resp)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        await bv()?.run(await resp.text());
+        await bv?.run(await resp.text());
       } catch (e) {
         $message.error('文件加载失败：' + (e?.message || e));
       }
@@ -846,17 +847,16 @@
     onParam = (p) => {
       p.value = Number(p.value);
       clearTimeout(_paramTimer);
-      _paramTimer = setTimeout(() => bv()?.setParam(p.name, p.value), 350);
+      _paramTimer = setTimeout(() => bv?.setParam(p.name, p.value), 350);
     };
 
     // ---------- 内置案例：加载 $AGENT/examples 示例模型 ----------
     const agentId = String($mod.scoped || '').split('/')[3]; // /aic/agents/{id} → {id}
-    const fsBase = '/' + String($mod.scoped || '').split('/')[1] + '/fs'; // → /aic/fs 文件服务前缀
     loadExample = async (name) => {
       try {
-        const resp = await window.fetch(`${fsBase}/agents/${agentId}/examples/${name}.js`);
+        const resp = await $mod.fs_get(`/agents/${agentId}/examples/${name}.js`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await bv()?.run(await resp.text());
+        return await bv?.run(await resp.text());
       } catch (e) {
         console.warn('[案例] 加载失败:', e.message);
         $message.error('案例加载失败：' + (e?.message || e));
@@ -867,6 +867,44 @@
       const v = $refs.exSel.value;
       $refs.exSel.value = '';
       if (v) loadExample(v);
+    };
+
+    // ---------- 模型代码缓存：按会话(sid)隔离，避免多会话共用同一缓存互相覆盖 ----------
+    // v2 结构 {sid: code}；旧 v1 单值 key（3dmaker_last_code）首次读取时自动迁移到当前会话后删除
+    CODE_CACHE_KEY = '3dmaker_last_code_v2';
+    CODE_CACHE_MAX = 10; // 最多保留最近 10 个会话的缓存，防止 localStorage 无限膨胀
+    readLastCode = (id) => {
+      if (!id) return null;
+      try {
+        const legacy = localStorage.getItem('3dmaker_last_code');
+        if (legacy) {
+          const m = JSON.parse(localStorage.getItem(CODE_CACHE_KEY) || '{}');
+          m[id] = legacy;
+          localStorage.setItem(CODE_CACHE_KEY, JSON.stringify(m));
+          localStorage.removeItem('3dmaker_last_code');
+          return legacy;
+        }
+        const map = JSON.parse(localStorage.getItem(CODE_CACHE_KEY) || '{}');
+        return map && map[id] ? map[id] : null;
+      } catch (_) {return null;}
+    };
+    saveLastCode = (id, code) => {
+      if (!id || !code) return;
+      try {
+        const map = JSON.parse(localStorage.getItem(CODE_CACHE_KEY) || '{}');
+        map[id] = code;
+        const keys = Object.keys(map);
+        while (keys.length > CODE_CACHE_MAX) delete map[keys.shift()]; // 淘汰最旧条目
+        localStorage.setItem(CODE_CACHE_KEY, JSON.stringify(map));
+      } catch (_) { }
+    };
+    clearLastCode = (id) => {
+      if (!id) return;
+      try {
+        const map = JSON.parse(localStorage.getItem(CODE_CACHE_KEY) || '{}');
+        delete map[id];
+        localStorage.setItem(CODE_CACHE_KEY, JSON.stringify(map));
+      } catch (_) { }
     };
 
     // ---------- nc 事件：按 sid 动态绑定 / 解绑 ----------
@@ -883,7 +921,7 @@
       // run_code：直接执行代码字符串
       unsubs.push($mod.$nc.sub(`s.${id}.ui_run.run_code`, async (err, msg) => {
         const code = JSON.parse(msg.string()).code;
-        return await bv()?.run(code);
+        return await bv?.run(code);
       }));
       // run_file：执行 UFS 代码文件（全局路径，支持 sessions/ home/ agents/ 三个根目录）
       // 用法：ui_run action=run_file argv=["--path", "sessions/{sid}/models/x.js"]
@@ -894,11 +932,11 @@
           if (!path || path.includes('..')) {
             return {success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（UFS 全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）'};
           }
-          const resp = await window.fetch(`${fsBase}/${path}`); // 必须用 window.fetch：$mod.fetch 会自动拼路由前缀
+          const resp = await $mod.fs_get(`${path}`); // 必须用 window.fetch：$mod.fetch 会自动拼路由前缀
           if (!resp.ok) {
-            return {success: false, code: 'FILE_NOT_FOUND', message: `文件读取失败（HTTP ${resp.status}）：${fsBase}/${path}`};
+            return {success: false, code: 'FILE_NOT_FOUND', message: `文件读取失败（HTTP ${resp.status}）：${path}`};
           }
-          return await bv()?.run(await resp.text());
+          return await bv?.run(await resp.text());
         } catch (e) {
           return {success: false, code: 'RUN_FILE_ERROR', message: String((e && e.message) || e)};
         }
@@ -907,19 +945,20 @@
     };
     // ai-box 的 ID 变化 → 解绑旧会话 nc 事件，绑定新会话
     $watch(() => sid, (nv, ov) => {
-      if (nv && nv !== ov) {
-        console.log(`[BrepView] 会话切换: ${ov} → ${nv}`);
-        localStorage.setItem('3dmaker_sid', sid)
-        bindSession(nv);
-        sessFiles = [];
-        if (showFiles) refreshSessFiles(); // 会话变化时，若弹出面板开着则刷新文件列表
-      }
+      $router.setQuery({session_id: sid})
+      console.log(`[BrepView] 会话切换: ${ov} → ${nv}`);
+      bindSession(nv);
+      // 会话切换时恢复该会话最近运行的模型（如有缓存），无缓存则保持当前场景
+      const code = readLastCode(nv);
+      if (code) bv?.run(code);
+      sessFiles = [];
+      if (showFiles) refreshSessFiles(); // 会话变化时，若弹出面板开着则刷新文件列表
     });
   </script>
 
   <script>
     // 创建引擎：接收 canvas 作为参数；JS 不做任何界面工作
-    window._bv = new BrepView($refs.gl, {
+    bv = new BrepView($refs.gl, {
       theme: 'light',
       shadows: true,
       grid: true,
@@ -927,55 +966,53 @@
       groundPlane: true,
       onReady: () => console.log('[BrepView] 就绪'),
     });
-    const v = window._bv;
 
     // 引擎事件 → 界面响应式状态
-    v.on('status', (s) => {statusType = s.type; statusText = s.text;});
-    v.on('shapeLoaded', (r) => {
+    bv.on('status', (s) => {statusType = s.type; statusText = s.text;});
+    bv.on('shapeLoaded', (r) => {
       stats = r.stats;
       lastTime = r.executionTime + ' ms';
-      params = v.extractParams();
-      // 持久化最近成功运行的模型代码（代码体积小，重新执行即可复原模型）
-      try {localStorage.setItem('3dmaker_last_code', v.getCode());} catch (_) { }
+      params = bv.extractParams();
+      // 持久化最近成功运行的模型代码（按会话隔离存储，重新执行即可复原模型）
+      saveLastCode(sid, bv.getCode());
       console.log(`[BrepView] 模型更新：${r.stats.mesh.triangles} 三角面, ${r.stats.partCount} 部件, ${r.stats.mesh.complexity} 复杂度`);
     });
-    v.on('error', (r) => {$message.error(r.message || '运行错误');});
-    v.on('warnings', (ws) => {if (ws.length) $message.info('⚠️ ' + ws[0]);});
-    v.on('viewModeChange', (m) => {viewMode = m;});
-    v.on('projectionChange', (m) => {projection = m;});
-    v.on('measureModeChange', (on) => {measureOn = on;});
-    v.on('measure', (m) => {measureText = m ? `📐 ${m.text}` : '';});
-    v.on('selectionChange', (list) => {selection = list;});
-    v.on('sectionRange', (r) => {
+    bv.on('error', (r) => {$message.error(r.message || '运行错误');});
+    bv.on('warnings', (ws) => {if (ws.length) $message.info('⚠️ ' + ws[0]);});
+    bv.on('viewModeChange', (m) => {viewMode = m;});
+    bv.on('projectionChange', (m) => {projection = m;});
+    bv.on('measureModeChange', (on) => {measureOn = on;});
+    bv.on('measure', (m) => {measureText = m ? `📐 ${m.text}` : '';});
+    bv.on('selectionChange', (list) => {selection = list;});
+    bv.on('sectionRange', (r) => {
       section.axis = r.axis;
       section.min = r.min;
       section.max = r.max;
       section.offset = r.value;
       if (viewMode === 'section') applySection();
     });
-    v.on('reset', () => {
+    bv.on('reset', () => {
       stats = null;
       lastTime = '-';
       params = [];
       selection = [];
       measureText = '';
-      try {localStorage.removeItem('3dmaker_last_code');} catch (_) { } // 场景已清空，清除缓存模型
+      clearLastCode(sid); // 场景已清空，清除当前会话的缓存模型
     });
 
     // 绑定当前会话的 nc 事件 + 恢复最近运行的模型（无缓存则加载默认乐高积木案例）
     bindSession(sid);
-    window._sid = sid; // 调试：暴露当前订阅的会话 ID
-    v.on('kernelChange', (k) => {kernelName = k.name;});
+    bv.on('kernelChange', (k) => {kernelName = k.name;});
 
-    const lastCode = localStorage.getItem('3dmaker_last_code');
-    if (lastCode) v.run(lastCode);
+    const lastCode = readLastCode(sid);
+    if (lastCode) bv.run(lastCode);
     else loadExample('lego-brick');
 
     // 高性能解析器：完全不自动加载——默认始终使用内置内核，
     // 仅当用户点击工具栏“🧮 内置 / ⚡ OCCT”按钮切换时才加载 OCCT（首次需下载编译，之后命中本地缓存秒切）。
 
     // header 高度自适应：换行（如手机窄屏）时同步调整左右面板顶部偏移
-    window._bvCleanups = [];
+    $data.bvCleanups = [];
     const topbar = $refs.topbar;
     if (topbar) {
       const rootEl = topbar.parentNode;
@@ -983,7 +1020,7 @@
       syncTop();
       const topRO = new ResizeObserver(syncTop);
       topRO.observe(topbar);
-      window._bvCleanups.push(() => topRO.disconnect());
+      $data.bvCleanups.push(() => topRO.disconnect());
     }
 
     // 手机模式媒体查询
@@ -991,15 +1028,15 @@
     const syncMq = () => {isMobile = mq.matches;};
     syncMq();
     mq.addEventListener('change', syncMq);
-    window._bvCleanups.push(() => mq.removeEventListener('change', syncMq));
+    $data.bvCleanups.push(() => mq.removeEventListener('change', syncMq));
   </script>
 
   <script dispose>
-    (window._bvCleanups || []).forEach((f) => {try {f();} catch (_) { } });
-    window._bvCleanups = [];
+    ($data.bvCleanups || []).forEach((f) => {try {f();} catch (_) { } });
+    $data.bvCleanups = [];
     unsubAll();
-    window._bv?.dispose();
-    window._bv = null;
+    bv?.dispose();
+    bv = null;
   </script>
 </body>
 
