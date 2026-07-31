@@ -176,7 +176,7 @@
     {
       "id": "s8-img",
       "type": "image",
-      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/arena.jpg",
+      "src": "image/arena.jpg",
       "x": 80,
       "y": 170,
       "w": 560,
@@ -328,3 +328,4 @@
   ],
   "background": "#0b1020"
 }
+

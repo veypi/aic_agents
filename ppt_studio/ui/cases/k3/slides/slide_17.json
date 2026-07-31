@@ -257,7 +257,7 @@
     {
       "id": "s12-img",
       "type": "image",
-      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/cover.webp",
+      "src": "image/cover.webp",
       "x": 0,
       "y": 0,
       "w": 1280,
@@ -514,3 +514,4 @@
     }
   ]
 }
+

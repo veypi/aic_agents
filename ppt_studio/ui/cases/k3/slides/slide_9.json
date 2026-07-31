@@ -194,18 +194,10 @@
           {
             "type": "bar",
             "name": "得分",
-            "data": [
-              73.2,
-              84.2,
-              88.3,
-              91.2,
-              95
-            ]
+            "data": [73.2, 84.2, 88.3, 91.2, 95]
           }
         ],
-        "color": [
-          "#22d3ee"
-        ]
+        "color": ["#22d3ee"]
       },
       "fx": {
         "enter": "fade-up",
@@ -217,7 +209,7 @@
     {
       "id": "s7-img",
       "type": "image",
-      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/benchmarks.png",
+      "src": "image/benchmarks.png",
       "x": 720,
       "y": 170,
       "w": 480,
@@ -365,3 +357,4 @@
   ],
   "background": "#0b1020"
 }
+

@@ -176,26 +176,16 @@
       "h": 440,
       "option": {
         "xAxis": {
-          "data": [
-            "K2 · 1.0T",
-            "V4 Pro · 1.6T",
-            "K3 · 2.8T"
-          ]
+          "data": ["K2 · 1.0T", "V4 Pro · 1.6T", "K3 · 2.8T"]
         },
         "series": [
           {
             "type": "scatter",
             "name": "Agent 综合得分",
-            "data": [
-              68.5,
-              74.1,
-              88.6
-            ]
+            "data": [68.5, 74.1, 88.6]
           }
         ],
-        "color": [
-          "#22d3ee"
-        ]
+        "color": ["#22d3ee"]
       },
       "rotation": 0,
       "opacity": 1
@@ -203,7 +193,7 @@
     {
       "id": "s7-img",
       "type": "image",
-      "src": "/aic/agents/59b1f99dab9f4a319b58ccf93c768205/cases/k3/image/benchmarks.png",
+      "src": "image/benchmarks.png",
       "x": 720,
       "y": 170,
       "w": 480,
@@ -373,3 +363,4 @@
   ],
   "background": "#0b1020"
 }
+
