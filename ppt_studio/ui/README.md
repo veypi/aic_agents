@@ -234,20 +234,20 @@ AI 对话，画布选中元素的瞬间自动切到属性 tab（仅「无选中 
 - **初始加载优先级**：缓存过的打开文件（localStorage `ppt_open_{sid}`）→ 会话目录最近
   修改的 PPT → 默认样例。顶栏「✦ 样例」「📁 文件」弹层分别切换样例、列出会话 PPT。
 - **会话文档**：存放在 `/sessions/{sid}/<名称>/<名称>.json`，编辑后 1.2s 防抖经
-  `$mod.fs_put` 自动保存（写入串行化防乱序覆盖）。ai-box 的 session id 缓存在
+  `$mod.$cloud_fs.put` 自动保存（写入串行化防乱序覆盖）。ai-box 的 session id 缓存在
   localStorage（`ppt_studio_sid`），刷新后复用同一会话。
 - **工具栏数据流**：引擎 `statechange` → stage `$emit` → 页面 `st` → 工具栏 `:st`
   渲染；工具栏 `@cmd` 意图 → 页面中转为 stage 命令式调用。导出两种：`exportPptx`
   （引擎内置，vendored PptxGenJS 离线生成 .pptx 下载）与 `print()`（浏览器打印
   另存 PDF）；不支持导入/上传。
 - **图片不内嵌 base64**：编辑器经 `imageStore` 钩子把图片上传到 `<名称>/image/`，
-  json 里存相对路径（`image/xxx.png`）；渲染时经 `$mod.fs_prefix` 解析为 HTTP URL，
+  json 里存相对路径（`image/xxx.png`）；渲染时经 `$mod.$cloud_fs.fsPrefix` 解析为 HTTP URL，
   保存时还原。删除图片元素 / 删除页会同步删除对应图片文件。
 - **样例只读**：页面不会自动保存对样例的编辑；点顶栏「存入会话」显式转为会话文件后可编辑保存。
 - **文件删除**：「📁 文件」弹层每项 ✕ 删除整个目录（json + `image/`），不可恢复。
 - **双语**：面板与工具栏文案在 `langs.json`（zh-CN / en-US），经 `$t()` 引用，语言跟随全局 header。
 
 双向交互：AI 直接用 fs 工具读写会话目录下的 json 完成内容编辑；页面操作经
-`ui_run` 事件（`list_ppt / open_ppt / open_case / run_ppt [--start] / stop_ppt /
-new_ppt / save_ppt / get_ppt [--full] / set_mode / delete_ppt`），路径参数为全局
-UFS 路径（`sessions/{sid}/...`）。事件声明见 agent 的 `index.md`。
+`page_exec` 指令（`list_ppt / open_ppt / open_case / run_ppt [--start] / stop_ppt /
+new_ppt / save_ppt / get_ppt [--full] / set_mode / delete_ppt`），由 AI 用 `exec 1host=page`
+调用，路径参数为全局 UFS 路径（`sessions/{sid}/...`）。指令声明见 agent 的 `index.md`。

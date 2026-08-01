@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <meta name="description" content="PPT Studio — vhtml 版幻灯片工作台：内置样例 + 会话文件存储 + AI 助手 + ui_run 双向交互" />
+  <meta name="description" content="PPT Studio — vhtml 版幻灯片工作台：内置样例 + 会话文件存储 + AI 助手 + page_exec 双向交互" />
   <title>PPT Studio</title>
 </head>
 <style>
@@ -613,11 +613,10 @@
   let suppressSave = false
   let forking = false
   let sessionLoadedFor = ''
-  let unsubs = []
   let hadSelection = false   // 上一次 statechange 的选中态：识别「无选中 → 选中」跃迁以自动切 tab
 
-  // UFS 文件 HTTP 服务前缀（由运行时注入 $mod.fs_prefix），用于把文件路径转成可渲染 URL（图片等）
-  const fsPrefix = String($mod.fs_prefix || '').replace(/\/+$/, '')
+  // UFS 文件 HTTP 服务前缀（$mod.$cloud_fs.fsPrefix），用于把文件路径转成可渲染 URL（图片等）
+  const fsPrefix = String($mod.$cloud_fs?.fsPrefix || '').replace(/\/+$/, '')
   const sessRoot = () => '/sessions/' + sid + '/'
   const globalPath = (rel) => 'sessions/' + sid + '/' + rel
   const lastKey = () => 'ppt_open_' + sid
@@ -626,17 +625,15 @@
   // 样例资源（图片等）的绝对 URL 基座：组件内 fetch 会被运行时自动加 $mod.scoped 前缀，
   // 但引擎运行时动态创建的 <img> 不走该前缀，必须给绝对路径（/aic/agents/{id}/cases/...）
   const caseBaseUrl = (id) => String($mod.scoped || '').replace(/\/+$/, '') + '/cases/' + id + '/'
-  // 写文件：统一走运行时封装的 $mod.fs_put（全局路径 + Blob/File）
+  // 写文件：统一走 $mod.$cloud_fs.put（绝对路径 + Blob/File）
   const fsPut = async (path, blob) => {
-    if (typeof $mod.fs_put !== 'function') throw new Error($t('err.noFsPut'))
-    return await $mod.fs_put(path, blob)
+    if (!$mod.$cloud_fs) throw new Error($t('err.noFsPut'))
+    return await $mod.$cloud_fs.put(path, blob)
   }
-  // 删除文件/目录：统一走运行时封装的 $mod.fs_rm（全局路径）
+  // 删除文件/目录：统一走 $mod.$cloud_fs.rm（绝对路径；失败 throw）
   const fsRm = async (path) => {
-    if (typeof $mod.fs_rm !== 'function') throw new Error($t('err.noFsRm'))
-    const r = await $mod.fs_rm(path)
-    if (r && r.ok === false) throw new Error('HTTP ' + (r.status || 'error'))
-    return r
+    if (!$mod.$cloud_fs) throw new Error($t('err.noFsRm'))
+    return await $mod.$cloud_fs.rm(path)
   }
 
   // ---- 显示辅助 ----
@@ -796,18 +793,16 @@
     }
   }
 
-  // ---- 会话文件读写（$mod.fs_get / $mod.fs_put） ----
+  // ---- 会话文件读写（$mod.$cloud_fs） ----
   const readDir = async (dir) => {
-    let node = await $mod.fs_get(dir)
-    if (node && node.ok === false) return null // 404 等：目录不存在
-    if (node && typeof node.json === 'function') node = await node.json()
-    if (typeof node === 'string') {try {node = JSON.parse(node)} catch (_) {node = null} }
-    return node
+    try {
+      return await $mod.$cloud_fs.get(dir)   // 目录 → {ok, dir, items}；404 → throw → null
+    } catch (_) { return null }
   }
   // 递归列出会话中的 .json 文件（跳过无权限目录，按修改时间倒序）
   const walkJson = async () => {
     const out = []
-    if (typeof $mod.fs_get !== 'function') return out
+    if (!$mod.$cloud_fs) return out
     const walk = async (dir, prefix, depth) => {
       if (depth > 3) return
       let node
@@ -826,13 +821,10 @@
     out.sort((a, b) => b.mod_time - a.mod_time)
     return out
   }
-  // fs_get 全局路径读取；兼容 string / fetch Response / object 三种返回形态
+  // $cloud_fs.get 读取会话文件文本（404 等直接 throw）
   const readSessionText = async (rel) => {
-    let t = await $mod.fs_get(sessRoot() + rel)
-    if (t && t.ok === false) throw new Error('HTTP ' + t.status)
-    if (t && typeof t.text === 'function') t = await t.text()
-    if (typeof t !== 'string') t = JSON.stringify(t)
-    return t
+    const r = await $mod.$cloud_fs.get(sessRoot() + rel)
+    return typeof r.content === 'string' ? r.content : await r.content.text()
   }
   // 保存：还原相对引用后写 JSON。拆分结构（slides 含字符串引用）按引用逐页写回，
   // index.json 保持引用数组；编辑器新增/复制的页自动分配 slides/slide_N.json；不再被引用的旧分页文件同步清理
@@ -1208,7 +1200,7 @@
     })
   }
 
-  // ---- 立即保存（ui_run save_ppt）；样例不自动保存，此显式调用将样例转为会话文件 ----
+  // ---- 立即保存（page_exec save_ppt）；样例不自动保存，此显式调用将样例转为会话文件 ----
   saveNow = async () => {
     flushSave()
     if (cur_kind === 'case') {
@@ -1326,9 +1318,54 @@
     }
   }
 
-  // ---- ui_run 事件（AI 通过 ui_run 调用；内容编辑由 AI 直接写文件完成） ----
-  const argsOf = (msg) => {
-    try {return JSON.parse(msg.string() || '{}')} catch (_) {return {}}
+  // 语音讲解：TTS 限流 3s/个（阿里 Throttling.RateQuota），合成请求按序节流发出（每个请求发出时刻起 3s 后发下一个，合成完成时间不影响节奏）；第一个就绪即可开播，播放环环按序 await 单项
+  const fetchVoiceOnce = (text) => fetch('@' + $mod.scoped + '/api/speech', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text: String(text)}),
+  })
+    .then((resp) => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.blob() })
+    .then((blob) => URL.createObjectURL(blob))
+    .catch((e) => { console.warn('[PPT] 语音合成失败:', (e && e.message) || e); return null })
+  // 节流合成队列：返回按序 promise 数组（每项就绪即 resolve）
+  const fetchVoicesThrottled = (items) => {
+    const resolvers = []
+    const promises = items.map((item, i) => {
+      if (!item || !item.voice || !$mod.scoped) return Promise.resolve(null)
+      return new Promise((resolve) => { resolvers[i] = resolve })
+    })
+    let chain = Promise.resolve()
+    items.forEach((item, i) => {
+      if (!item || !item.voice || !$mod.scoped) return
+      chain = chain.then(() => {
+        const p = fetchVoiceOnce(item.voice)
+        p.then((url) => resolvers[i](url))
+        return new Promise((r) => setTimeout(r, 3000))
+      })
+    })
+    return promises
+  }
+  // 播放单段语音（阻塞至播放完成或失败），播完释放 URL
+  const playVoiceUrl = (url) => new Promise((resolve) => {
+    const audio = new Audio(url)
+    const done = (ok) => { URL.revokeObjectURL(url); resolve(ok) }
+    audio.onended = () => done(true)
+    audio.onerror = () => done(false)
+    audio.play().catch(() => done(false))
+  })
+
+  // ---- page_exec 事件（AI 通过 exec 1host=page 调用；内容编辑由 AI 直接写文件完成） ----
+  // exec argv 解析：--key val 优先，否则取第一个非 -- 位置参数
+  const arg = (argv, key, dft) => {
+    const i = argv.indexOf('--' + key)
+    if (i >= 0 && argv[i + 1] !== undefined) return String(argv[i + 1])
+    // 位置参数回退：排除已被 --flag 消费的值（避免 --script 的值被当作位置参数）
+    const used = new Set()
+    for (let j = 0; j < argv.length; j++) {
+      if (String(argv[j]).startsWith('--') && argv[j + 1] !== undefined) { used.add(j); used.add(j + 1); j++ }
+    }
+    const pos = argv.find((a, j) => typeof a === 'string' && !String(a).startsWith('--') && !used.has(j))
+    return pos !== undefined ? pos : dft
   }
   // 规范化为会话内相对路径；仅允许当前会话目录
   const normPath = (p) => {
@@ -1339,163 +1376,197 @@
     return p.slice(prefix.length)
   }
   const errReply = (e) => ({ok: false, error: String((e && e.message) || e)})
+  const reply = (obj) => ({content: JSON.stringify(obj)})
   const curGlobalPath = () => cur_kind === 'case' ? 'cases/' + cur_path : (cur_path ? globalPath(cur_path) : '')
 
   bindSession = (id) => {
-    unsubAll()
-    if (!id || !$mod.$nc) return
-    const sub = (action, fn) => {
-      try {
-        const u = $mod.$nc.sub('s.' + id + '.ui_run.' + action, fn)
-        if (u) unsubs.push(u)
-      } catch (e) { }
-    }
-
-    // 列出当前会话中的 PPT 文件 + 内置样例
-    sub('list_ppt', async () => {
-      const files = await walkJson()
-      if (!cases.length) await loadCases()
-      return {
-        ok: true,
-        current: curGlobalPath(),
-        current_kind: cur_kind,
-        current_case: cur_kind === 'case' ? cur_case : '',
-        files: files.map((f) => ({path: globalPath(f.path), size: f.size, mod_time: f.mod_time})),
-        cases: cases.map((c) => ({id: c.id, title: c.title, desc: c.desc || '', slides: c.slides || 0, default: c.id === default_case}))
-      }
-    })
-
-    // 打开指定会话文件（加载为当前文档）
-    sub('open_ppt', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const rel = normPath(a.path || a['0'])
-        await openDeck(rel)
-        return {ok: true, path: globalPath(rel), title: title, slide_count: slide_count}
-      } catch (e) {return errReply(e)}
-    })
-
-    // 打开内置样例
-    sub('open_case', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const r = await openCase(a.id || a['0'] || default_case)
-        return Object.assign({ok: true}, r)
-      } catch (e) {return errReply(e)}
-    })
-
-    // 播放：带 path 则先打开再演示；无 path 演示当前文档（含样例）
-    sub('run_ppt', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const p = a.path || a['0']
-        if (p) await openDeck(normPath(p))
-        const st = stageApi()
-        const start = Math.max(1, asInt(a.start, 1))
-        const total = st.slideCount
-        if (start > total) throw new Error($t('err.startRange', {total: total}))
-        st.present(start - 1)
-        presenting = true
-        return {ok: true, presenting: true, start: start, total: total, path: curGlobalPath()}
-      } catch (e) {return errReply(e)}
-    })
-
-    // 退出演示
-    sub('stop_ppt', async () => {
-      try {stageApi().closePresent(); presenting = false} catch (e) { }
-      return {ok: true, presenting: false}
-    })
-
-    // 新建空白 deck（{name}/{name}.json），返回全局路径
-    sub('new_ppt', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const r = await newDeck(a.name || a['0'], a.title)
-        return Object.assign({ok: true}, r)
-      } catch (e) {return errReply(e)}
-    })
-
-    // 删除会话文件所在目录（{dir}/ 整个目录，含 json 与 image/ 图片）
-    sub('delete_ppt', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const rel = normPath(a.path || a['0'])
-        const i = rel.lastIndexOf('/')
-        const dir = i >= 0 ? rel.slice(0, i) : rel
-        if (!dir) throw new Error($t('err.noDir', {file: rel}))
-        const wasCurrent = cur_kind === 'session' && !!cur_path && cur_path.indexOf(dir + '/') === 0
-        await fsRm(sessRoot() + dir + '/')
-        try {localStorage.removeItem(lastKey())} catch (e) { }
-        if (wasCurrent) {
-          cancelPendingSave()
-          cur_path = ''
-          cur_kind = ''
-          title = ''
-          await openSomething()
-        } else {
-          refreshFiles()
-        }
-        return {ok: true, deleted: 'sessions/' + sid + '/' + dir + '/'}
-      } catch (e) {return errReply(e)}
-    })
-
-    // 立即保存当前文档（样例则先复制为会话文件）
-    sub('save_ppt', async () => {
-      try {return Object.assign({ok: true}, await saveNow())} catch (e) {return errReply(e)}
-    })
-
-    // 当前文档信息（默认摘要；--full true 完整但剥离 assets）
-    sub('get_ppt', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const doc = stageApi().getDoc()
-        if (truthy(a.full)) {
-          return {
+    pe?.stop()
+    pe = null
+    if (!id || !$mod.$page_exec) return
+    pe = $mod.$page_exec(id, [
+      // 列出当前会话中的 PPT 文件 + 内置样例
+      {name: 'list_ppt', description: '列出当前会话中的 PPT 文件与内置样例',
+        handler: async () => {
+          const files = await walkJson()
+          if (!cases.length) await loadCases()
+          return reply({
             ok: true,
-            path: curGlobalPath(),
-            kind: cur_kind,
-            slide_count: (doc.slides || []).length,
-            doc: slimDoc(doc),
-            note: $t('note.assetsStripped')
-          }
-        }
-        return {
-          ok: true,
-          path: curGlobalPath(),
-          kind: cur_kind,
-          title: doc.title || '',
-          size: doc.size || null,
-          slide_count: (doc.slides || []).length,
-          slides: (doc.slides || []).map((s, i) => slideSummary(s, i))
-        }
-      } catch (e) {return errReply(e)}
-    })
+            current: curGlobalPath(),
+            current_kind: cur_kind,
+            current_case: cur_kind === 'case' ? cur_case : '',
+            files: files.map((f) => ({path: globalPath(f.path), size: f.size, mod_time: f.mod_time})),
+            cases: cases.map((c) => ({id: c.id, title: c.title, desc: c.desc || '', slides: c.slides || 0, default: c.id === default_case}))
+          })
+        }},
 
-    // 切换 edit / view
-    sub('set_mode', async (err, msg) => {
-      try {
-        const a = argsOf(msg)
-        const m = String(a.mode || '')
-        if (m !== 'edit' && m !== 'view') throw new Error($t('err.badMode'))
-        stageApi().setMode(m)
-        applyMode(m)
-        return {ok: true, mode: m}
-      } catch (e) {return errReply(e)}
-    })
-  }
+      // 打开指定会话文件（加载为当前文档）
+      {name: 'open_ppt', description: '打开指定会话文件（--path 或位置参数，会话内相对路径）',
+        handler: async (argv) => {
+          try {
+            const rel = normPath(arg(argv, 'path'))
+            await openDeck(rel)
+            return reply({ok: true, path: globalPath(rel), title: title, slide_count: slide_count})
+          } catch (e) {return reply(errReply(e))}
+        }},
 
-  unsubAll = () => {
-    unsubs.forEach((u) => {
-      try {
-        if (typeof u === 'function') u()
-        else if (u && typeof u.unsubscribe === 'function') u.unsubscribe()
-      } catch (e) { }
-    })
-    unsubs = []
+      // 打开内置样例
+      {name: 'open_case', description: '打开内置样例（--id 或位置参数传样例 id）',
+        handler: async (argv) => {
+          try {
+            const r = await openCase(arg(argv, 'id') || default_case)
+            return reply(Object.assign({ok: true}, r))
+          } catch (e) {return reply(errReply(e))}
+        }},
+
+      // 播放：带 path 则先打开再演示；无 path 演示当前文档（含样例）；--script 讲解脚本逐页播放（阻塞）完才返回
+      {name: 'run_ppt', description: '播放 PPT（全屏演示／演讲模式）：--path 先打开再演示；--index 起始页（1 基）；--script 讲解脚本 JSON 数组 [{"id":"页id","voice":"讲解词"},...] 按序演讲（支持错序跳页，逐页播放）',
+        handler: async (argv) => {
+          try {
+            const p = arg(argv, 'path')
+            if (p) await openDeck(normPath(p))
+            const st = stageApi()
+            const total = st.slideCount
+            // --script 讲解脚本：[{id|index, voice}] 按序演讲，可错序跳页；页面位置用 id 定位（稳定），兼容 index 数字（1 基）
+            const scriptRaw = arg(argv, 'script')
+            if (scriptRaw) {
+              let script
+              try { script = JSON.parse(scriptRaw) } catch (_) { throw new Error('--script 需要合法 JSON 数组，如 [{"id":"slide-1","voice":"..."}]') }
+              if (!Array.isArray(script)) throw new Error('--script 需要 JSON 数组')
+              const doc = st.getDoc()
+              const slides = (doc && doc.slides) || []
+              st.present(0)
+              presenting = true
+              // 语音流水线：并行发起全部合成（第一个就绪即可开播），播放环环按序 await 单项；无 voice 项为纯播放演示（只跳页）
+              const voicePromises = fetchVoicesThrottled(script)
+              let voiced = 0
+              const skipped = []
+              for (let i = 0; i < script.length; i++) {
+                const item = script[i]
+                let idx = -1
+                if (item && typeof item === 'object') {
+                  if (typeof item.id === 'string' && item.id) {
+                    idx = slides.findIndex((s) => s && s.id === item.id)
+                  } else if (item.index != null) {
+                    idx = Math.max(0, Number(item.index) - 1)
+                  }
+                }
+                if (idx < 0 || idx >= total) {
+                  skipped.push(item ? (item.id || item.index) : '?')
+                  // 跳过项的语音（如已合成）释放
+                  voicePromises[i].then((u) => { if (u) URL.revokeObjectURL(u) })
+                  continue
+                }
+                st.presentGoTo(idx)
+                const url = await voicePromises[i]
+                if (url && (await playVoiceUrl(url))) {
+                  voiced++
+                } else {
+                  // 无语音或播放失败：停留 stay 毫秒（默认 2000）保持演讲节奏
+                  const stay = item && item.stay != null ? Number(item.stay) || 2000 : 2000
+                  await new Promise((r) => setTimeout(r, stay))
+                }
+              }
+              return reply({ok: true, presenting: true, start: 1, total: total, path: curGlobalPath(), voiced: voiced, script: script.length, skipped: skipped})
+            }
+            // 无脚本：纯演示，从 --index 页开始
+            const start = Math.max(1, asInt(arg(argv, 'index'), 1))
+            if (start > total) throw new Error($t('err.startRange', {total: total}))
+            st.present(start - 1)
+            presenting = true
+            return reply({ok: true, presenting: true, start: start, total: total, path: curGlobalPath()})
+          } catch (e) {return reply(errReply(e))}
+        }},
+
+      // 退出演示
+      {name: 'stop_ppt', description: '退出演示',
+        handler: async () => {
+          try {stageApi().closePresent(); presenting = false} catch (e) { }
+          return reply({ok: true, presenting: false})
+        }},
+
+      // 新建空白 deck（{name}/{name}.json），返回全局路径
+      {name: 'new_ppt', description: '新建空白 deck（--name 目录名，--title 标题），返回全局路径',
+        handler: async (argv) => {
+          try {
+            const r = await newDeck(arg(argv, 'name'), arg(argv, 'title'))
+            return reply(Object.assign({ok: true}, r))
+          } catch (e) {return reply(errReply(e))}
+        }},
+
+      // 删除会话文件所在目录（{dir}/ 整个目录，含 json 与 image/ 图片）
+      {name: 'delete_ppt', description: '删除会话文件所在目录（--path 传文件，删除 {dir}/ 整个目录）',
+        handler: async (argv) => {
+          try {
+            const rel = normPath(arg(argv, 'path'))
+            const i = rel.lastIndexOf('/')
+            const dir = i >= 0 ? rel.slice(0, i) : rel
+            if (!dir) throw new Error($t('err.noDir', {file: rel}))
+            const wasCurrent = cur_kind === 'session' && !!cur_path && cur_path.indexOf(dir + '/') === 0
+            await fsRm(sessRoot() + dir + '/')
+            try {localStorage.removeItem(lastKey())} catch (e) { }
+            if (wasCurrent) {
+              cancelPendingSave()
+              cur_path = ''
+              cur_kind = ''
+              title = ''
+              await openSomething()
+            } else {
+              refreshFiles()
+            }
+            return reply({ok: true, deleted: 'sessions/' + sid + '/' + dir + '/'})
+          } catch (e) {return reply(errReply(e))}
+        }},
+
+      // 立即保存当前文档（样例则先复制为会话文件）
+      {name: 'save_ppt', description: '立即保存当前文档（样例则先复制为会话文件）',
+        handler: async () => {
+          try {return reply(Object.assign({ok: true}, await saveNow()))} catch (e) {return reply(errReply(e))}
+        }},
+
+      // 当前文档信息（默认摘要；--full true 完整但剥离 assets）
+      {name: 'get_ppt', description: '当前文档信息（默认摘要；--full true 完整但剥离 assets）',
+        handler: async (argv) => {
+          try {
+            const doc = stageApi().getDoc()
+            if (truthy(arg(argv, 'full'))) {
+              return reply({
+                ok: true,
+                path: curGlobalPath(),
+                kind: cur_kind,
+                slide_count: (doc.slides || []).length,
+                doc: slimDoc(doc),
+                note: $t('note.assetsStripped')
+              })
+            }
+            return reply({
+              ok: true,
+              path: curGlobalPath(),
+              kind: cur_kind,
+              title: doc.title || '',
+              size: doc.size || null,
+              slide_count: (doc.slides || []).length,
+              slides: (doc.slides || []).map((s, i) => slideSummary(s, i))
+            })
+          } catch (e) {return reply(errReply(e))}
+        }},
+
+      // 切换 edit / view
+      {name: 'set_mode', description: '切换 edit / view 模式（--mode）',
+        handler: async (argv) => {
+          try {
+            const m = String(arg(argv, 'mode') || '')
+            if (m !== 'edit' && m !== 'view') throw new Error($t('err.badMode'))
+            stageApi().setMode(m)
+            applyMode(m)
+            return reply({ok: true, mode: m})
+          } catch (e) {return reply(errReply(e))}
+        }},
+    ])
+    pe.start()
   }
 
   cleanup = () => {
-    unsubAll()
+    pe?.stop()
     if (saveTimer) {clearTimeout(saveTimer); saveTimer = null}
   }
 
@@ -1517,7 +1588,7 @@
   }
 </script>
 <script>
-  // ai-box 会话建立/切换：缓存到 localStorage、重绑 ui_run、挂载会话文件
+  // ai-box 会话建立/切换：缓存到 localStorage、重绑 page_exec、挂载会话文件
   $watch(() => sid, (v) => {
     $router.setQuery({session_id: sid})
     bindSession(v)

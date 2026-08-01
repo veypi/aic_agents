@@ -812,6 +812,16 @@
   updateSlide = (props) => {if (engine) engine.updateSlide(props)}
   updateDocSize = (w, h) => {if (engine) engine.updateDocSize(w, h)}
   goTo = (d) => {if (engine) engine.goTo(d)}
+  // 绝对跳页：演示态操作 Presenter（show 同步 presenter.idx），编辑态 fallback 相对 goTo
+  presentGoTo = (idx) => {
+    if (!engine) return
+    const n = parseInt(idx, 10)
+    if (engine.presenter && engine.presenter.overlay) {
+      engine.presenter.show(n, 0, true)
+    } else if (engine.editor) {
+      engine.goTo(n - engine.editor.current)
+    }
+  }
   zoomIn = () => {if (engine) engine.zoomIn()}
   zoomOut = () => {if (engine) engine.zoomOut()}
   zoomReset = () => {if (engine) engine.zoomReset()}

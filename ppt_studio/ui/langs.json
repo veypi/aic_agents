@@ -199,8 +199,8 @@
     "err.pathScope": "仅支持当前会话目录下的文件：{prefix}<目录>/<文件>.json",
     "err.startRange": "起始页超出范围（共 {total} 页）",
     "err.badMode": "--mode 仅支持 edit | view",
-    "err.noFsPut": "环境缺少 $mod.fs_put，请更新运行时",
-    "err.noFsRm": "环境缺少 $mod.fs_rm，请更新运行时",
+    "err.noFsPut": "环境缺少 $mod.$cloud_fs，请更新运行时",
+    "err.noFsRm": "环境缺少 $mod.$cloud_fs，请更新运行时",
     "err.notReady": "PPT 尚未就绪，请稍候重试",
     "err.noDir": "无法确定所在目录：{file}",
     "note.assetsStripped": "assets 已剥离为 key 列表；内容编辑请直接修改会话目录下的 JSON 文件"
@@ -405,8 +405,8 @@
     "err.pathScope": "Only files under the current session directory are supported: {prefix}<dir>/<file>.json",
     "err.startRange": "Start slide out of range ({total} in total)",
     "err.badMode": "--mode only supports edit | view",
-    "err.noFsPut": "Environment lacks $mod.fs_put; please update the runtime",
-    "err.noFsRm": "Environment lacks $mod.fs_rm; please update the runtime",
+    "err.noFsPut": "Environment lacks $mod.$cloud_fs; please update the runtime",
+    "err.noFsRm": "Environment lacks $mod.$cloud_fs; please update the runtime",
     "err.notReady": "PPT is not ready yet, please retry shortly",
     "err.noDir": "Cannot determine the containing folder: {file}",
     "note.assetsStripped": "assets are reduced to a key list; edit content by modifying the JSON files in the session directory"
