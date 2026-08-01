@@ -1,362 +1,374 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta name="description" content="Well3D AI 分析助手面板" />
+  <meta name="description" content="Well3D AI 分析助手面板" />
 </head>
 <style>
-  body { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0;
-    background: var(--bg-color-secondary, #f7fcff); color: var(--text-color, #111827);
-    font: 13px/1.5 "Segoe UI", system-ui, sans-serif; }
-  ai-box { flex: 1 1 auto; min-height: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    background: var(--bg-color-secondary, #f7fcff);
+    color: var(--text-color, #111827);
+    font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+
+  ai-box {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 </style>
+
 <body>
   <ai-box v:id="sessionId"></ai-box>
 
-<script setup>
-  /* 会话 ID 缓存 key：按 agent 隔离，避免同平台多 agent 串号 */
-  const agentId = (location.pathname.match(/\/a\/([^/]+)\/i/) || [])[1] || 'default'
-  lsKey = `w3_ai_session_${agentId}`
+  <script setup>
 
-  /* ai-box 双向绑定的会话 ID：从浏览器缓存恢复，实现刷新后会话保持 */
-  sessionId = localStorage.getItem(lsKey) || ''
+    /* ai-box 双向绑定的会话 ID：从浏览器缓存恢复，实现刷新后会话保持 */
+    sessionId = $router.current.query.session_id || ''
 
-  /* 取消全部 ui_run 事件订阅（订阅句柄存放在 $mod 上，避免被响应式代理） */
-  clearUiSubs = () => {
-    const arr = $mod._w3UiSubs || []
-    arr.forEach((u) => {
-      try {
-        if (typeof u === 'function') u()
-        else if (u && typeof u.unsub === 'function') u.unsub()
-        else if (u && typeof u.unsubscribe === 'function') u.unsubscribe()
-      } catch (e) {}
-    })
-    $mod._w3UiSubs = []
-  }
-  $mod._w3UiSubs = []
-</script>
-
-<script>
-  /* =====================================================================
-   * 数据分析函数层 —— 设计纪律：AI 只拿聚合摘要，永远不碰原始大数组
-   * （position-logs / surface-values 在本层消化成统计值后再返回）
-   * ===================================================================== */
-
-  const w3 = () => {
-    const v = $mod._w3
-    if (!v || !v.store || !v.viewer) throw new Error('3D 场景尚未加载完成，请稍后重试')
-    return v
-  }
-  const r1 = (v) => Math.round(v * 10) / 10
-  const r2 = (v) => Math.round(v * 100) / 100
-  const DEG = 180 / Math.PI
-
-  const headerOf = (store, id) => {
-    const h = store.get('wellbore-headers', id)
-    if (!h) throw new Error(`未找到井「${id}」，请先调用 well_list 获取有效井 ID（注意侧钻井 ID 含空格，如 "F-03 T2"）`)
-    return h
-  }
-  const num = (v, name) => {
-    const x = parseFloat(v)
-    if (!Number.isFinite(x)) throw new Error(`参数 ${name} 必须是数字，收到：${v}`)
-    return x
-  }
-  const reqId = (args) => {
-    if (!args.id) throw new Error('缺少参数 --id')
-    return String(args.id)
-  }
-
-  function poslogPoints(store, id) {
-    const arr = store.get('position-logs', id)
-    if (!arr || !arr.length) throw new Error(`井 ${id} 缺少轨迹数据`)
-    const pts = []
-    for (let i = 0; i + 3 < arr.length; i += 4) {
-      pts.push({ e: arr[i], tvd: arr[i + 1], n: arr[i + 2], md: arr[i + 3] })
+    pe = null   // page_exec 实例（私有，避免被响应式代理）
+    /* 取消全部页面指令 */
+    clearUiSubs = () => {
+      pe?.stop()
+      pe = null
     }
-    return pts
-  }
+  </script>
 
-  /* 库内轨迹曲线以各自井口为原点（渲染精度考虑），跨井几何计算需加回井口偏移还原绝对坐标 */
-  function absPoint(store, viewer, id, md) {
-    const h = store.get('wellbore-headers', id)
-    const p = viewer.getPointAtDepth(id, md, true)
-    if (!p) return null
-    return { e: p[0] + h.easting, tvd: -p[1], n: h.northing - p[2] }
-  }
+  <script>
+    /* =====================================================================
+     * 数据分析函数层 —— 设计纪律：AI 只拿聚合摘要，永远不碰原始大数组
+     * （position-logs / surface-values 在本层消化成统计值后再返回）
+     * ===================================================================== */
 
-  /* 轨迹分段：方向向量 + 井斜角 + 狗腿度 */
-  function trajectorySegments(pts) {
-    const segs = []
-    for (let i = 1; i < pts.length; i++) {
-      const dE = pts[i].e - pts[i - 1].e
-      const dT = pts[i].tvd - pts[i - 1].tvd
-      const dN = pts[i].n - pts[i - 1].n
-      const len = Math.hypot(dE, dT, dN)
-      if (!len) continue
-      segs.push({
-        md: pts[i].md, len,
-        dir: [dE / len, dT / len, dN / len],
-        incl: Math.atan2(Math.hypot(dE, dN), dT) * DEG,
-      })
+    const w3 = () => {
+      const v = $mod._w3
+      if (!v || !v.store || !v.viewer) throw new Error('3D 场景尚未加载完成，请稍后重试')
+      return v
     }
-    const doglegs = []
-    for (let i = 1; i < segs.length; i++) {
-      const dot = segs[i - 1].dir[0] * segs[i].dir[0] + segs[i - 1].dir[1] * segs[i].dir[1] + segs[i - 1].dir[2] * segs[i].dir[2]
-      const ang = Math.acos(Math.min(1, Math.max(-1, dot))) * DEG
-      const course = (segs[i - 1].len + segs[i].len) / 2
-      if (course > 0) doglegs.push({ md: segs[i].md, dls: ang / course * 30 })
+    const r1 = (v) => Math.round(v * 10) / 10
+    const r2 = (v) => Math.round(v * 100) / 100
+    const DEG = 180 / Math.PI
+
+    const headerOf = (store, id) => {
+      const h = store.get('wellbore-headers', id)
+      if (!h) throw new Error(`未找到井「${id}」，请先调用 well_list 获取有效井 ID（注意侧钻井 ID 含空格，如 "F-03 T2"）`)
+      return h
     }
-    return { segs, doglegs }
-  }
-
-  /* 轨迹形态统计：井型 / 造斜点 / 最大井斜 / 狗腿度 / 位移 */
-  function trajectoryStats(store, id) {
-    const pts = poslogPoints(store, id)
-    const h = headerOf(store, id)
-    const { segs, doglegs } = trajectorySegments(pts)
-
-    let maxIncl = 0, maxInclMd = 0
-    segs.forEach((s) => { if (s.incl > maxIncl) { maxIncl = s.incl; maxInclMd = s.md } })
-    let kop = null
-    for (const s of segs) { if (s.incl >= 3) { kop = s.md; break } }
-    const maxDog = doglegs.reduce((m, d) => (d.dls > (m ? m.dls : -1) ? d : m), null)
-    const avgDog = doglegs.length ? doglegs.reduce((a, d) => a + d.dls, 0) / doglegs.length : 0
-    const horizLen = segs.filter((s) => s.incl >= 80).reduce((a, s) => a + s.len, 0)
-    const first = pts[0], last = pts[pts.length - 1]
-    const disp = Math.hypot(last.e - first.e, last.n - first.n)
-    const dispAz = (Math.atan2(last.e - first.e, last.n - first.n) * DEG + 360) % 360
-    const wellType = maxIncl < 10 ? '直井' : maxIncl < 60 ? '定向井' : maxIncl < 80 ? '大位移定向井' : '水平井'
-
-    return {
-      id, wellType, status: h.status, parent: h.parent || null,
-      tdMsl: r1(last.md), tvdAtTd: r1(last.tvd),
-      kopMd: kop == null ? null : r1(kop),
-      maxInclDeg: r1(maxIncl), maxInclMd: r1(maxInclMd),
-      avgDoglegPer30m: r2(avgDog),
-      maxDoglegPer30m: maxDog ? r2(maxDog.dls) : 0,
-      maxDoglegMd: maxDog ? r1(maxDog.md) : null,
-      horizontalSectionLen: r1(horizLen),
-      totalDisplacement: r1(disp), displacementAzimuth: r1(dispAz),
-      stationCount: pts.length,
+    const num = (v, name) => {
+      const x = parseFloat(v)
+      if (!Number.isFinite(x)) throw new Error(`参数 ${name} 必须是数字，收到：${v}`)
+      return x
     }
-  }
+    const reqId = (args) => {
+      if (!args.id) throw new Error('缺少参数 --id')
+      return String(args.id)
+    }
 
-  /* 深度联合定位：该 MD 处的套管 / 工具 / 地层 / 射孔 + 空间坐标 */
-  function whatIsAt(store, viewer, id, md) {
-    headerOf(store, id)
-    const out = { id, md: r1(md) }
-    const ap = absPoint(store, viewer, id, md)
-    if (ap) out.position = { easting: r1(ap.e), northing: r1(ap.n), tvdMsl: r1(ap.tvd) }
-
-    out.casingsHere = (store.get('casings', id) || [])
-      .filter((c) => md >= c.mdTopMsl && md <= c.mdBottomMsl)
-      .map((c) => ({ type: c.type, diameter: (c.properties && c.properties.Diameter) || null, mdTopMsl: c.mdTopMsl, mdBottomMsl: c.mdBottomMsl }))
-
-    const tools = store.get('completion-tools', id) || []
-    out.toolsHere = tools
-      .filter((t) => md >= t.mdTopMsl && md <= t.mdBottomMsl)
-      .map((t) => ({ name: t.name, category: t.category, mdTopMsl: t.mdTopMsl, mdBottomMsl: t.mdBottomMsl }))
-    out.toolsBelowWithin100m = tools
-      .filter((t) => t.mdTopMsl > md && t.mdTopMsl - md <= 100)
-      .map((t) => ({ name: t.name, category: t.category, distanceBelow: r1(t.mdTopMsl - md) }))
-
-    const fm = (store.get('formations', id) || []).find((f) => md >= f.mdTopMsl && md < f.mdBottomMsl)
-    out.formation = fm ? { name: fm.name, mdTopMsl: fm.mdTopMsl, mdBottomMsl: fm.mdBottomMsl } : null
-
-    out.perforationsHere = (store.get('perforations', id) || [])
-      .filter((x) => md >= x.mdTopMsl && md <= x.mdBottomMsl)
-      .map((x) => ({ mdTopMsl: x.mdTopMsl, mdBottomMsl: x.mdBottomMsl, status: x.status, phase: x.phase }))
-    return out
-  }
-
-  /* 数据体检：判定逻辑在代码，AI 只负责解读 */
-  function qcCheck(store, id) {
-    const issues = []
-    const pts = poslogPoints(store, id)
-    for (let i = 1; i < pts.length; i++) {
-      if (pts[i].md <= pts[i - 1].md) {
-        issues.push({ type: 'MD 非递增', md: r1(pts[i].md), severity: 'high', detail: `MD ${r1(pts[i - 1].md)} → ${r1(pts[i].md)}` })
+    function poslogPoints(store, id) {
+      const arr = store.get('position-logs', id)
+      if (!arr || !arr.length) throw new Error(`井 ${id} 缺少轨迹数据`)
+      const pts = []
+      for (let i = 0; i + 3 < arr.length; i += 4) {
+        pts.push({e: arr[i], tvd: arr[i + 1], n: arr[i + 2], md: arr[i + 3]})
       }
-      if ([pts[i].e, pts[i].tvd, pts[i].n].some((v) => !Number.isFinite(v))) {
-        issues.push({ type: '轨迹坐标非法值', md: r1(pts[i].md), severity: 'high', detail: 'NaN/Inf' })
-      }
+      return pts
     }
-    const { segs } = trajectorySegments(pts)
-    for (let i = 1; i < segs.length; i++) {
-      const dot = segs[i - 1].dir[0] * segs[i].dir[0] + segs[i - 1].dir[1] * segs[i].dir[1] + segs[i - 1].dir[2] * segs[i].dir[2]
-      const ang = Math.acos(Math.min(1, Math.max(-1, dot))) * DEG
-      const dls = ang / ((segs[i - 1].len + segs[i].len) / 2) * 30
-      if (dls > 5) issues.push({ type: '狗腿度偏高', md: r1(segs[i].md), severity: dls > 8 ? 'high' : 'medium', detail: `${r2(dls)}°/30m` })
-    }
-    const cas = (store.get('casings', id) || []).slice().sort((a, b) => a.mdBottomMsl - b.mdBottomMsl)
-    for (let i = 1; i < cas.length; i++) {
-      if (cas[i].mdBottomMsl <= cas[i - 1].mdBottomMsl) {
-        issues.push({ type: '套管底深未递增', severity: 'medium', detail: `${cas[i - 1].type} 底 ${cas[i - 1].mdBottomMsl}m，${cas[i].type} 底 ${cas[i].mdBottomMsl}m` })
-      }
-      if (cas[i].outerDiameter > cas[i - 1].outerDiameter + 1e-6) {
-        issues.push({ type: '套管外径倒挂', severity: 'medium', detail: `${cas[i].type} 外径大于 ${cas[i - 1].type}` })
-      }
-    }
-    const fms = store.get('formations', id) || []
-    fms.forEach((f) => {
-      if (f.mdBottomMsl <= f.mdTopMsl) issues.push({ type: '地层顶底倒挂', md: r1(f.mdTopMsl), severity: 'high', detail: f.name })
-    })
-    for (let i = 1; i < fms.length; i++) {
-      if (fms[i].mdTopMsl < fms[i - 1].mdTopMsl) issues.push({ type: '地层顶深乱序', md: r1(fms[i].mdTopMsl), severity: 'low', detail: fms[i].name })
-    }
-    return { id, issueCount: issues.length, issues: issues.slice(0, 50) }
-  }
 
-  /* 两井最近距离采样扫描（演示级算法） */
-  function closestApproach(store, viewer, idA, idB, step) {
-    const hA = headerOf(store, idA), hB = headerOf(store, idB)
-    const sample = (id, td) => {
-      const arr = []
-      for (let md = 0; md <= td; md += step) {
-        const p = absPoint(store, viewer, id, md)
-        if (p) arr.push({ md, p })
-      }
-      return arr
+    /* 库内轨迹曲线以各自井口为原点（渲染精度考虑），跨井几何计算需加回井口偏移还原绝对坐标 */
+    function absPoint(store, viewer, id, md) {
+      const h = store.get('wellbore-headers', id)
+      const p = viewer.getPointAtDepth(id, md, true)
+      if (!p) return null
+      return {e: p[0] + h.easting, tvd: -p[1], n: h.northing - p[2]}
     }
-    const ptsA = sample(idA, hA.depthMdMsl)
-    const ptsB = sample(idB, hB.depthMdMsl)
-    let best = null
-    for (const x of ptsA) {
-      for (const y of ptsB) {
-        const d = Math.hypot(x.p.e - y.p.e, x.p.tvd - y.p.tvd, x.p.n - y.p.n)
-        if (!best || d < best.distance) best = { distance: d, mdA: x.md, mdB: y.md }
-      }
-    }
-    if (!best) throw new Error('轨迹数据不足，无法计算')
-    return {
-      idA, idB, distance: r1(best.distance), mdA: r1(best.mdA), mdB: r1(best.mdB), step,
-      note: '采样扫描近似值；正式防碰分析需使用椭圆误差模型，结论请声明精度边界',
-    }
-  }
 
-  /* =====================================================================
-   * ui_run 事件处理器（action → handler）
-   * ===================================================================== */
-  const handlers = {
-    /* ---- 数据查询 ---- */
-    well_list: () => {
-      const v = w3()
-      return v.wellIds.map((id) => {
-        const h = v.store.get('wellbore-headers', id)
-        return { id, status: h.status, tdMsl: h.depthMdMsl, parent: h.parent || null }
-      })
-    },
-    well_info: (a) => { const v = w3(); return headerOf(v.store, reqId(a)) },
-    well_trajectory_stats: (a) => { const v = w3(); return trajectoryStats(v.store, reqId(a)) },
-    well_casings: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('casings', a.id) || [] },
-    well_completion: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('completion-tools', a.id) || [] },
-    well_perforations: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('perforations', a.id) || [] },
-    well_formations: (a) => { const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('formations', a.id) || [] },
-    well_at_depth: (a) => { const v = w3(); return whatIsAt(v.store, v.viewer, reqId(a), num(a.md, '--md')) },
-    well_formation_at: (a) => {
-      const v = w3(); const md = num(a.md, '--md')
-      const fm = (v.store.get('formations', reqId(a)) || []).find((f) => md >= f.mdTopMsl && md < f.mdBottomMsl)
-      return fm || { message: '该深度不在任何地层区间内' }
-    },
-    well_distance: (a) => {
-      const v = w3()
-      const idA = String(a['id-a'] || ''), idB = String(a['id-b'] || '')
-      headerOf(v.store, idA); headerOf(v.store, idB)
-      const mdA = num(a['md-a'], '--md-a'), mdB = num(a['md-b'], '--md-b')
-      const pA = absPoint(v.store, v.viewer, idA, mdA)
-      const pB = absPoint(v.store, v.viewer, idB, mdB)
-      if (!pA || !pB) throw new Error('深度超出轨迹范围')
+    /* 轨迹分段：方向向量 + 井斜角 + 狗腿度 */
+    function trajectorySegments(pts) {
+      const segs = []
+      for (let i = 1; i < pts.length; i++) {
+        const dE = pts[i].e - pts[i - 1].e
+        const dT = pts[i].tvd - pts[i - 1].tvd
+        const dN = pts[i].n - pts[i - 1].n
+        const len = Math.hypot(dE, dT, dN)
+        if (!len) continue
+        segs.push({
+          md: pts[i].md, len,
+          dir: [dE / len, dT / len, dN / len],
+          incl: Math.atan2(Math.hypot(dE, dN), dT) * DEG,
+        })
+      }
+      const doglegs = []
+      for (let i = 1; i < segs.length; i++) {
+        const dot = segs[i - 1].dir[0] * segs[i].dir[0] + segs[i - 1].dir[1] * segs[i].dir[1] + segs[i - 1].dir[2] * segs[i].dir[2]
+        const ang = Math.acos(Math.min(1, Math.max(-1, dot))) * DEG
+        const course = (segs[i - 1].len + segs[i].len) / 2
+        if (course > 0) doglegs.push({md: segs[i].md, dls: ang / course * 30})
+      }
+      return {segs, doglegs}
+    }
+
+    /* 轨迹形态统计：井型 / 造斜点 / 最大井斜 / 狗腿度 / 位移 */
+    function trajectoryStats(store, id) {
+      const pts = poslogPoints(store, id)
+      const h = headerOf(store, id)
+      const {segs, doglegs} = trajectorySegments(pts)
+
+      let maxIncl = 0, maxInclMd = 0
+      segs.forEach((s) => {if (s.incl > maxIncl) {maxIncl = s.incl; maxInclMd = s.md} })
+      let kop = null
+      for (const s of segs) {if (s.incl >= 3) {kop = s.md; break} }
+      const maxDog = doglegs.reduce((m, d) => (d.dls > (m ? m.dls : -1) ? d : m), null)
+      const avgDog = doglegs.length ? doglegs.reduce((a, d) => a + d.dls, 0) / doglegs.length : 0
+      const horizLen = segs.filter((s) => s.incl >= 80).reduce((a, s) => a + s.len, 0)
+      const first = pts[0], last = pts[pts.length - 1]
+      const disp = Math.hypot(last.e - first.e, last.n - first.n)
+      const dispAz = (Math.atan2(last.e - first.e, last.n - first.n) * DEG + 360) % 360
+      const wellType = maxIncl < 10 ? '直井' : maxIncl < 60 ? '定向井' : maxIncl < 80 ? '大位移定向井' : '水平井'
+
       return {
-        distance: r1(Math.hypot(pA.e - pB.e, pA.tvd - pB.tvd, pA.n - pB.n)),
-        pointA: { id: idA, md: mdA, easting: r1(pA.e), northing: r1(pA.n), tvdMsl: r1(pA.tvd) },
-        pointB: { id: idB, md: mdB, easting: r1(pB.e), northing: r1(pB.n), tvdMsl: r1(pB.tvd) },
+        id, wellType, status: h.status, parent: h.parent || null,
+        tdMsl: r1(last.md), tvdAtTd: r1(last.tvd),
+        kopMd: kop == null ? null : r1(kop),
+        maxInclDeg: r1(maxIncl), maxInclMd: r1(maxInclMd),
+        avgDoglegPer30m: r2(avgDog),
+        maxDoglegPer30m: maxDog ? r2(maxDog.dls) : 0,
+        maxDoglegMd: maxDog ? r1(maxDog.md) : null,
+        horizontalSectionLen: r1(horizLen),
+        totalDisplacement: r1(disp), displacementAzimuth: r1(dispAz),
+        stationCount: pts.length,
       }
-    },
-    well_closest_approach: (a) => {
-      const v = w3()
-      const step = a.step ? Math.max(5, num(a.step, '--step')) : 50
-      return closestApproach(v.store, v.viewer, String(a['id-a'] || ''), String(a['id-b'] || ''), step)
-    },
-    surface_list: () => {
-      const v = w3()
-      return v.surfaceIds.map((id) => {
-        const m = v.store.get('surface-meta', id)
-        return { id, name: m.name, minDepth: r1(m.min), maxDepth: r1(m.max), nx: m.header.nx, ny: m.header.ny, projection: m.projection }
+    }
+
+    /* 深度联合定位：该 MD 处的套管 / 工具 / 地层 / 射孔 + 空间坐标 */
+    function whatIsAt(store, viewer, id, md) {
+      headerOf(store, id)
+      const out = {id, md: r1(md)}
+      const ap = absPoint(store, viewer, id, md)
+      if (ap) out.position = {easting: r1(ap.e), northing: r1(ap.n), tvdMsl: r1(ap.tvd)}
+
+      out.casingsHere = (store.get('casings', id) || [])
+        .filter((c) => md >= c.mdTopMsl && md <= c.mdBottomMsl)
+        .map((c) => ({type: c.type, diameter: (c.properties && c.properties.Diameter) || null, mdTopMsl: c.mdTopMsl, mdBottomMsl: c.mdBottomMsl}))
+
+      const tools = store.get('completion-tools', id) || []
+      out.toolsHere = tools
+        .filter((t) => md >= t.mdTopMsl && md <= t.mdBottomMsl)
+        .map((t) => ({name: t.name, category: t.category, mdTopMsl: t.mdTopMsl, mdBottomMsl: t.mdBottomMsl}))
+      out.toolsBelowWithin100m = tools
+        .filter((t) => t.mdTopMsl > md && t.mdTopMsl - md <= 100)
+        .map((t) => ({name: t.name, category: t.category, distanceBelow: r1(t.mdTopMsl - md)}))
+
+      const fm = (store.get('formations', id) || []).find((f) => md >= f.mdTopMsl && md < f.mdBottomMsl)
+      out.formation = fm ? {name: fm.name, mdTopMsl: fm.mdTopMsl, mdBottomMsl: fm.mdBottomMsl} : null
+
+      out.perforationsHere = (store.get('perforations', id) || [])
+        .filter((x) => md >= x.mdTopMsl && md <= x.mdBottomMsl)
+        .map((x) => ({mdTopMsl: x.mdTopMsl, mdBottomMsl: x.mdBottomMsl, status: x.status, phase: x.phase}))
+      return out
+    }
+
+    /* 数据体检：判定逻辑在代码，AI 只负责解读 */
+    function qcCheck(store, id) {
+      const issues = []
+      const pts = poslogPoints(store, id)
+      for (let i = 1; i < pts.length; i++) {
+        if (pts[i].md <= pts[i - 1].md) {
+          issues.push({type: 'MD 非递增', md: r1(pts[i].md), severity: 'high', detail: `MD ${r1(pts[i - 1].md)} → ${r1(pts[i].md)}`})
+        }
+        if ([pts[i].e, pts[i].tvd, pts[i].n].some((v) => !Number.isFinite(v))) {
+          issues.push({type: '轨迹坐标非法值', md: r1(pts[i].md), severity: 'high', detail: 'NaN/Inf'})
+        }
+      }
+      const {segs} = trajectorySegments(pts)
+      for (let i = 1; i < segs.length; i++) {
+        const dot = segs[i - 1].dir[0] * segs[i].dir[0] + segs[i - 1].dir[1] * segs[i].dir[1] + segs[i - 1].dir[2] * segs[i].dir[2]
+        const ang = Math.acos(Math.min(1, Math.max(-1, dot))) * DEG
+        const dls = ang / ((segs[i - 1].len + segs[i].len) / 2) * 30
+        if (dls > 5) issues.push({type: '狗腿度偏高', md: r1(segs[i].md), severity: dls > 8 ? 'high' : 'medium', detail: `${r2(dls)}°/30m`})
+      }
+      const cas = (store.get('casings', id) || []).slice().sort((a, b) => a.mdBottomMsl - b.mdBottomMsl)
+      for (let i = 1; i < cas.length; i++) {
+        if (cas[i].mdBottomMsl <= cas[i - 1].mdBottomMsl) {
+          issues.push({type: '套管底深未递增', severity: 'medium', detail: `${cas[i - 1].type} 底 ${cas[i - 1].mdBottomMsl}m，${cas[i].type} 底 ${cas[i].mdBottomMsl}m`})
+        }
+        if (cas[i].outerDiameter > cas[i - 1].outerDiameter + 1e-6) {
+          issues.push({type: '套管外径倒挂', severity: 'medium', detail: `${cas[i].type} 外径大于 ${cas[i - 1].type}`})
+        }
+      }
+      const fms = store.get('formations', id) || []
+      fms.forEach((f) => {
+        if (f.mdBottomMsl <= f.mdTopMsl) issues.push({type: '地层顶底倒挂', md: r1(f.mdTopMsl), severity: 'high', detail: f.name})
       })
-    },
-    well_qc: (a) => { const v = w3(); return qcCheck(v.store, reqId(a)) },
+      for (let i = 1; i < fms.length; i++) {
+        if (fms[i].mdTopMsl < fms[i - 1].mdTopMsl) issues.push({type: '地层顶深乱序', md: r1(fms[i].mdTopMsl), severity: 'low', detail: fms[i].name})
+      }
+      return {id, issueCount: issues.length, issues: issues.slice(0, 50)}
+    }
 
-    /* ---- 视图联动 ---- */
-    well_select: (a) => {
-      const v = w3(); const id = reqId(a)
-      headerOf(v.store, id)
-      if (v.setSelected) v.setSelected(id)
-      if (v.viewer.focusWellbore) v.viewer.focusWellbore(id)
-      return { selected: id }
-    },
-    well_locate: (a) => {
-      const v = w3(); const id = reqId(a); const md = num(a.md, '--md')
-      headerOf(v.store, id)
-      const p = v.locateDepth ? v.locateDepth(id, md) : null
-      if (!p) throw new Error('深度超出轨迹范围')
-      const ap = absPoint(v.store, v.viewer, id, md)
-      return { id, md, position: ap ? { easting: r1(ap.e), northing: r1(ap.n), tvdMsl: r1(ap.tvd) } : null }
-    },
-    well_selected: () => {
-      const v = w3()
-      return { id: v.getSelectedId ? v.getSelectedId() : null }
-    },
-  }
+    /* 两井最近距离采样扫描（演示级算法） */
+    function closestApproach(store, viewer, idA, idB, step) {
+      const hA = headerOf(store, idA), hB = headerOf(store, idB)
+      const sample = (id, td) => {
+        const arr = []
+        for (let md = 0; md <= td; md += step) {
+          const p = absPoint(store, viewer, id, md)
+          if (p) arr.push({md, p})
+        }
+        return arr
+      }
+      const ptsA = sample(idA, hA.depthMdMsl)
+      const ptsB = sample(idB, hB.depthMdMsl)
+      let best = null
+      for (const x of ptsA) {
+        for (const y of ptsB) {
+          const d = Math.hypot(x.p.e - y.p.e, x.p.tvd - y.p.tvd, x.p.n - y.p.n)
+          if (!best || d < best.distance) best = {distance: d, mdA: x.md, mdB: y.md}
+        }
+      }
+      if (!best) throw new Error('轨迹数据不足，无法计算')
+      return {
+        idA, idB, distance: r1(best.distance), mdA: r1(best.mdA), mdB: r1(best.mdB), step,
+        note: '采样扫描近似值；正式防碰分析需使用椭圆误差模型，结论请声明精度边界',
+      }
+    }
 
-  /* 暴露到 window 便于调试（控制台可直接调用 window._w3Ai.well_list({}) 等） */
-  window._w3Ai = handlers
+    /* =====================================================================
+     * 页面指令处理器（action → handler）
+     * ===================================================================== */
+    const handlers = {
+      /* ---- 数据查询 ---- */
+      well_list: () => {
+        const v = w3()
+        return v.wellIds.map((id) => {
+          const h = v.store.get('wellbore-headers', id)
+          return {id, status: h.status, tdMsl: h.depthMdMsl, parent: h.parent || null}
+        })
+      },
+      well_info: (a) => {const v = w3(); return headerOf(v.store, reqId(a))},
+      well_trajectory_stats: (a) => {const v = w3(); return trajectoryStats(v.store, reqId(a))},
+      well_casings: (a) => {const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('casings', a.id) || []},
+      well_completion: (a) => {const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('completion-tools', a.id) || []},
+      well_perforations: (a) => {const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('perforations', a.id) || []},
+      well_formations: (a) => {const v = w3(); headerOf(v.store, reqId(a)); return v.store.get('formations', a.id) || []},
+      well_at_depth: (a) => {const v = w3(); return whatIsAt(v.store, v.viewer, reqId(a), num(a.md, '--md'))},
+      well_formation_at: (a) => {
+        const v = w3(); const md = num(a.md, '--md')
+        const fm = (v.store.get('formations', reqId(a)) || []).find((f) => md >= f.mdTopMsl && md < f.mdBottomMsl)
+        return fm || {message: '该深度不在任何地层区间内'}
+      },
+      well_distance: (a) => {
+        const v = w3()
+        const idA = String(a['id-a'] || ''), idB = String(a['id-b'] || '')
+        headerOf(v.store, idA); headerOf(v.store, idB)
+        const mdA = num(a['md-a'], '--md-a'), mdB = num(a['md-b'], '--md-b')
+        const pA = absPoint(v.store, v.viewer, idA, mdA)
+        const pB = absPoint(v.store, v.viewer, idB, mdB)
+        if (!pA || !pB) throw new Error('深度超出轨迹范围')
+        return {
+          distance: r1(Math.hypot(pA.e - pB.e, pA.tvd - pB.tvd, pA.n - pB.n)),
+          pointA: {id: idA, md: mdA, easting: r1(pA.e), northing: r1(pA.n), tvdMsl: r1(pA.tvd)},
+          pointB: {id: idB, md: mdB, easting: r1(pB.e), northing: r1(pB.n), tvdMsl: r1(pB.tvd)},
+        }
+      },
+      well_closest_approach: (a) => {
+        const v = w3()
+        const step = a.step ? Math.max(5, num(a.step, '--step')) : 50
+        return closestApproach(v.store, v.viewer, String(a['id-a'] || ''), String(a['id-b'] || ''), step)
+      },
+      surface_list: () => {
+        const v = w3()
+        return v.surfaceIds.map((id) => {
+          const m = v.store.get('surface-meta', id)
+          return {id, name: m.name, minDepth: r1(m.min), maxDepth: r1(m.max), nx: m.header.nx, ny: m.header.ny, projection: m.projection}
+        })
+      },
+      well_qc: (a) => {const v = w3(); return qcCheck(v.store, reqId(a))},
 
-  /* =====================================================================
-   * ui_run 事件订阅：s.{session_id}.ui_run.{action}
-   * session_id 由 ai-box 双向绑定产生，变化时整体重订阅
-   * ===================================================================== */
-  const subscribeAll = (sid) => {
-    clearUiSubs()
-    if (!sid || !$mod.$nc) return
-    const arr = []
-    Object.entries(handlers).forEach(([action, fn]) => {
-      try {
-        const sub = $mod.$nc.sub(`s.${sid}.ui_run.${action}`, async (err, msg) => {
+      /* ---- 视图联动 ---- */
+      well_select: (a) => {
+        const v = w3(); const id = reqId(a)
+        headerOf(v.store, id)
+        if (v.setSelected) v.setSelected(id)
+        if (v.viewer.focusWellbore) v.viewer.focusWellbore(id)
+        return {selected: id}
+      },
+      well_locate: (a) => {
+        const v = w3(); const id = reqId(a); const md = num(a.md, '--md')
+        headerOf(v.store, id)
+        const p = v.locateDepth ? v.locateDepth(id, md) : null
+        if (!p) throw new Error('深度超出轨迹范围')
+        const ap = absPoint(v.store, v.viewer, id, md)
+        return {id, md, position: ap ? {easting: r1(ap.e), northing: r1(ap.n), tvdMsl: r1(ap.tvd)} : null}
+      },
+      well_selected: () => {
+        const v = w3()
+        return {id: v.getSelectedId ? v.getSelectedId() : null}
+      },
+    }
+
+    /* 暴露到 window 便于调试（控制台可直接调用 window._w3Ai.well_list({}) 等） */
+    window._w3Ai = handlers
+
+    /* =====================================================================
+     * page_exec 指令注册：$mod.$page_exec(sid, commands)
+     * session_id 由 ai-box 双向绑定产生，变化时整体重注册
+     * ===================================================================== */
+    const subscribeAll = (sid) => {
+      clearUiSubs()
+      if (!sid || !$mod.$page_exec) return
+      // exec argv 原样透传（数组）→ 旧 args 对象（--key val / 位置参数）
+      const argvToArgs = (argv) => {
+        const args = {}
+        const pos = []
+        for (let i = 0; i < argv.length; i++) {
+          const a = String(argv[i])
+          if (a.startsWith('--') && i + 1 < argv.length) {
+            args[a.slice(2)] = argv[i + 1]
+            i++
+          } else {
+            pos.push(a)
+          }
+        }
+        pos.forEach((v, i) => { if (!(String(i) in args)) args[String(i)] = v })
+        return args
+      }
+      const cmds = Object.entries(handlers).map(([action, fn]) => ({
+        name: action,
+        description: 'well_talk 数据查询/视图联动指令（--id/--md 等参数）',
+        handler: async (argv) => {
           let out
           try {
-            if (err) throw err
-            const args = JSON.parse(msg.string() || '{}')
-            out = { ok: true, data: await fn(args) }
+            const args = argvToArgs(argv)
+            out = {ok: true, data: await fn(args)}
           } catch (e) {
-            out = { ok: false, error: String((e && e.message) || e) }
+            out = {ok: false, error: String((e && e.message) || e)}
           }
-          try { msg.respond(JSON.stringify(out)) } catch (e2) {}
-        })
-        arr.push(sub)
-      } catch (e) {
-        console.error('[ai-panel] 订阅失败:', action, e)
-      }
+          return {content: JSON.stringify(out)}
+        },
+      }))
+      pe = $mod.$page_exec(sid, cmds)
+      pe.start()
+      console.log(`[ai-panel] 已注册 ${cmds.length} 个页面指令，session=${sid}`)
+    }
+
+    $watch(() => sessionId, (sid) => {
+      /* 会话变更：同步浏览器缓存（新会话写缓存、清空会话删缓存） */
+      $router.setQuery({session_id: sid})
+      subscribeAll(sid)
     })
-    $mod._w3UiSubs = arr
-    console.log(`[ai-panel] 已订阅 ${arr.length} 个 ui_run 事件，session=${sid}`)
-  }
 
-  $watch(() => sessionId, (sid) => {
-    /* 会话变更：同步浏览器缓存（新会话写缓存、清空会话删缓存） */
-    try {
-      if (sid) localStorage.setItem(lsKey, sid)
-      else localStorage.removeItem(lsKey)
-    } catch (e) {}
-    /* 重订阅：subscribeAll 内部会先 clearUiSubs() 取消上一会话的全部监听 */
-    subscribeAll(sid)
-  })
+    /* 页面刷新恢复缓存会话时 $watch 不会以初始值触发，需手动补一次订阅 */
+    if (sessionId) subscribeAll(sessionId)
+  </script>
 
-  /* 页面刷新恢复缓存会话时 $watch 不会以初始值触发，需手动补一次订阅 */
-  if (sessionId) subscribeAll(sessionId)
-</script>
-
-<script dispose>
-  clearUiSubs()
-  window._w3Ai = null
-</script>
+  <script dispose>
+    clearUiSubs()
+    window._w3Ai = null
+  </script>
 </body>
+
 </html>
