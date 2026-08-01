@@ -65,8 +65,7 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
 
   let S = null; // 当前城市状态
   let dlgTarget = null,
-    jumpUnsub = null,
-    danceUnsub = null;
+    pe = null;   // page_exec instance
   let propTarget = null,
     propIdx = 0;
   const clock = new THREE.Clock();
@@ -752,8 +751,8 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
               "\n" +
               (t.ref.persona ||
                 "\u4f60\u662f\u4e00\u4e2a\u751f\u6d3b\u5728\u5317\u5b8b\u6c68\u4eac\u7684NPC") +
-              '\n</Identity>\n<ui_run desc="\u6ce8\u518c\u7684\u7cfb\u7edf\u4e8b\u4ef6\uff0c\u8bf7\u9ed8\u9ed8\u6267\u884c\u4e0d\u8981\u523b\u610f\u8bed\u8a00\u8868\u73b0\u51fa\u6765">\n//\u8bf7\u5728\u73a9\u5bb6\u60f3\u8ba9\u4f60\u8df3\u8dc3\u4e00\u4e0b\u7684\u65f6\u5019\u8c03\u7528\u5e76\u88c5\u4f5c\u4e0d\u5c0f\u5fc3\u5413\u5230\u4e86\naction=jump argv=["--count", "1|2|3|...|10"]\n//请在玩家想看你跳舞的时候调用并表现得很乐意献舞\naction=dance argv=["--seconds", "1|2|3|...|10"]\n</ui_run>\n',
-            tools: { ui_run: { mode: 3 }, web: { mode: 3 } },
+              '\n</Identity>\n<page_exec desc="\u6ce8\u518c\u7684\u9875\u9762\u6307\u4ee4\uff0c\u8bf7\u9ed8\u9ed8\u6267\u884c\u4e0d\u8981\u523b\u610f\u8bed\u8a00\u8868\u73b0\u51fa\u6765">\n//\u8bf7\u5728\u73a9\u5bb6\u60f3\u8ba9\u4f60\u8df3\u8dc3\u4e00\u4e0b\u7684\u65f6\u5019\u8c03\u7528\u5e76\u88c5\u4f5c\u4e0d\u5c0f\u5fc3\u5413\u5230\u4e86\nexec {\"1host\":\"page\",\"action\":\"jump\",\"argv\":[\"--count\",\"1|2|3|...|10\"]}\n//\u8bf7\u5728\u73a9\u5bb6\u60f3\u770b\u4f60\u8df3\u821e\u7684\u65f6\u5019\u8c03\u7528\u5e76\u8868\u73b0\u5f97\u5f88\u4e50\u610f\u732e\u821e\nexec {\"1host\":\"page\",\"action\":\"dance\",\"argv\":[\"--seconds\",\"1|2|3|...|10\"]}\n//\u91cd\u8981\uff1a\u4ee5\u4e0a\u662f\u9875\u9762\u6307\u4ee4\uff0c\u8c03\u7528 exec \u65f6 1host \u5fc5\u987b\u4e3a \"page\"\uff0c\u4e0d\u5f97\u4f7f\u7528 cloud\uff01\u8bef\u7528 cloud \u4f1a\u88ab\u62d2\u7edd\uff08not enabled by caps\uff09\uff0c\u65e0\u6cd5\u5b8c\u6210\u52a8\u4f5c\u3002\n</page_exec>\n',
+            tools: { exec: { mode: 3, caps: { "page": "*" } }, web: { mode: 3 } },
           },
         });
         sid = cr.id;
@@ -763,26 +762,39 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
       closeDialog();
       return;
     }
-    if ($mod.$nc) {
-      jumpUnsub = $mod.$nc.sub("s." + sid + ".ui_run.jump", function (_, msg) {
-        msg.respond("ok");
-        let count = 1;
-        try {
-          count = JSON.parse(msg.string()).count;
-        } catch (e) {}
-        t.ref._jump = Math.min(count || 1, 10);
-      });
-      danceUnsub = $mod.$nc.sub(
-        "s." + sid + ".ui_run.dance",
-        function (_, msg) {
-          msg.respond("ok");
-          let secs = 3;
-          try {
-            secs = JSON.parse(msg.string()).seconds;
-          } catch (e) {}
-          t.ref._dance = Math.min(secs || 3, 10);
+    if ($mod.$page_exec) {
+      const argOf = (argv, key, dft) => {
+        const i = argv.indexOf("--" + key);
+        if (i >= 0 && argv[i + 1] !== undefined) return String(argv[i + 1]);
+        return dft;
+      };
+      pe = $mod.$page_exec(sid, [
+        {
+          name: "jump",
+          description: "make the character jump (--count 1-10)",
+          handler: async (argv) => {
+            let count = 1;
+            try {
+              count = parseInt(argOf(argv, "count", "1"), 10);
+            } catch (e) {}
+            t.ref._jump = Math.min(count || 1, 10);
+            return "ok";
+          },
         },
-      );
+        {
+          name: "dance",
+          description: "make the character dance (--seconds 1-10)",
+          handler: async (argv) => {
+            let secs = 3;
+            try {
+              secs = parseInt(argOf(argv, "seconds", "3"), 10);
+            } catch (e) {}
+            t.ref._dance = Math.min(secs || 3, 10);
+            return "ok";
+          },
+        },
+      ]);
+      pe.start();
     }
     if (window.__openDlg__) window.__openDlg__(sid, t.ref.name, t.ref.user_id);
     requestAnimationFrame(() => {
@@ -795,13 +807,9 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
   }
 
   function closeDialog() {
-    if (jumpUnsub) {
-      jumpUnsub();
-      jumpUnsub = null;
-    }
-    if (danceUnsub) {
-      danceUnsub();
-      danceUnsub = null;
+    if (pe) {
+      pe.stop();
+      pe = null;
     }
     if (dlgTarget && dlgTarget.kind === "npc") dlgTarget.ref.talking = false;
     dlgTarget = null;

@@ -213,13 +213,13 @@ action=add, table=Npc, record={
 
 ---
 
-## 八、可用 ui_run 事件（对话中）
+## 八、可用 page_exec 指令（对话中）
 
-NPC 对话会话注册了 `ui_run` 工具。可用动作：
+NPC 对话会话注册了页面指令（用 `exec` 工具，1host=page 调用）。可用动作：
 
 ```
-action=jump   argv=["--count", "3"]     // 跳跃，count 1~10 次
-action=dance  argv=["--seconds", "5"]   // 起舞，seconds 1~10 秒
+exec {"1host":"page","action":"jump","argv":["--count","3"]}   // 跳跃，count 1~10 次
+exec {"1host":"page","action":"dance","argv":["--seconds","5"]} // 起舞，seconds 1~10 秒
 ```
 
 玩家想让 NPC 跳一下时用 `jump`（可配合俏皮台词，如装作被吓到）；想让 NPC 跳舞时用 `dance`（应表现得很乐意献舞，舞毕可吟一句诗助兴）。
