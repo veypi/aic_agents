@@ -791,15 +791,13 @@
     scanInfo = '';
     refreshSessFiles = async () => {
       if (!sid) {sessFiles = []; scanInfo = '会话尚未连接'; return;}
-      if (typeof $mod.fs_get !== 'function') {sessFiles = []; scanInfo = '环境缺少 $mod.fs_get，无法列出文件'; return;}
+      if (!$mod.$cloud_fs) {sessFiles = []; scanInfo = '环境缺少 $mod.$cloud_fs，无法列出文件'; return;}
       sessLoading = true;
       const out = [];
       let dirs = 0, errs = 0;
       const readDir = async (dir) => {
-        let node = await $mod.fs_get(dir);
-        if (node && typeof node.json === 'function') node = await node.json();
-        if (typeof node === 'string') {try {node = JSON.parse(node);} catch (_) {node = null;} }
-        return node;
+        // $cloud_fs.get 目录 → {ok:true, dir:true, items:[{name,path,dir,size,mod_time}]}
+        return await $mod.$cloud_fs.get(dir);
       };
       const walk = async (dir, prefix) => {
         dirs++;
@@ -811,7 +809,7 @@
           console.warn('[Files] 目录读取失败:', dir, (e && e.message) || e);
           return;
         }
-        if (!node || !node.dir || !Array.isArray(node.items)) {
+        if (!node || !node.ok || !node.dir || !Array.isArray(node.items)) {
           errs++;
           console.warn('[Files] 目录响应异常:', dir, node);
           return;
@@ -833,10 +831,9 @@
     loadSessFile = async (path) => {
       showFiles = false;
       try {
-        const resp = await $mod.fs_get(`/sessions/${sid}/${path}`);
-        console.log(resp)
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        await bv?.run(await resp.text());
+        const r = await $mod.$cloud_fs.get(`/sessions/${sid}/${path}`);
+        const code = typeof r.content === 'string' ? r.content : await r.content.text();
+        await bv?.run(code);
       } catch (e) {
         $message.error('文件加载失败：' + (e?.message || e));
       }
@@ -854,9 +851,9 @@
     const agentId = String($mod.scoped || '').split('/')[3]; // /aic/agents/{id} → {id}
     loadExample = async (name) => {
       try {
-        const resp = await $mod.fs_get(`/agents/${agentId}/examples/${name}.js`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await bv?.run(await resp.text());
+        const r = await $mod.$cloud_fs.get(`/agents/${agentId}/examples/${name}.js`);
+        const code = typeof r.content === 'string' ? r.content : await r.content.text();
+        return await bv?.run(code);
       } catch (e) {
         console.warn('[案例] 加载失败:', e.message);
         $message.error('案例加载失败：' + (e?.message || e));
@@ -907,41 +904,53 @@
       } catch (_) { }
     };
 
-    // ---------- nc 事件：按 sid 动态绑定 / 解绑 ----------
-    unsubs = [];
-    unsubAll = () => {
-      for (const u of unsubs) {
-        try {typeof u === 'function' ? u() : u?.unsubscribe?.();} catch (_) { }
-      }
-      unsubs = [];
-    };
+    // ---------- page_exec：按 sid 动态绑定 / 解绑 ----------
+    pe = null;
+    // handler 统一返回 {content: JSON.stringify(result)}：Agent 收到后 JSON.parse 看 success/stats
     bindSession = (id) => {
-      unsubAll();
-      if (!id || !$mod.$nc) return;
-      // run_code：直接执行代码字符串
-      unsubs.push($mod.$nc.sub(`s.${id}.ui_run.run_code`, async (err, msg) => {
-        const code = JSON.parse(msg.string()).code;
-        return await bv?.run(code);
-      }));
-      // run_file：执行 UFS 代码文件（全局路径，支持 sessions/ home/ agents/ 三个根目录）
-      // 用法：ui_run action=run_file argv=["--path", "sessions/{sid}/models/x.js"]
-      unsubs.push($mod.$nc.sub(`s.${id}.ui_run.run_file`, async (err, msg) => {
-        try {
-          const data = JSON.parse(msg.string());
-          const path = String(data.path || data.file || '').replace(/^\/+/, '');
-          if (!path || path.includes('..')) {
-            return {success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（UFS 全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）'};
-          }
-          const resp = await $mod.fs_get(`${path}`); // 必须用 window.fetch：$mod.fetch 会自动拼路由前缀
-          if (!resp.ok) {
-            return {success: false, code: 'FILE_NOT_FOUND', message: `文件读取失败（HTTP ${resp.status}）：${path}`};
-          }
-          return await bv?.run(await resp.text());
-        } catch (e) {
-          return {success: false, code: 'RUN_FILE_ERROR', message: String((e && e.message) || e)};
-        }
-      }));
-      console.log(`[BrepView] nc 已绑定会话: ${id}`);
+      pe?.stop();
+      pe = null;
+      if (!id || !$mod.$page_exec) return;
+      pe = $mod.$page_exec(id, [
+        {
+          // run_code：直接执行代码字符串
+          name: 'run_code',
+          description: '执行一段 3D 建模代码（BrepView 沙盒），返回模型统计 JSON',
+          handler: async (argv) => {
+            const i = argv.indexOf('--code');
+            const code = i >= 0 ? argv[i + 1] : argv[0];
+            if (!code) {
+              return {content: JSON.stringify({success: false, code: 'NO_CODE', message: 'run_code 需要 --code 参数（或 argv[0]）'})};
+            }
+            const r = await bv?.run(code);
+            return {content: JSON.stringify(r || {success: false, message: '页面引擎未就绪'})};
+          },
+        },
+        {
+          // run_file：执行 UFS 代码文件（全局路径，支持 sessions/ home/ agents/ 三个根目录）
+          // 用法：exec {"1host":"page","action":"run_file","argv":["--path","sessions/{sid}/models/x.js"]}
+          name: 'run_file',
+          description: '执行 UFS 中的建模代码文件（--path 为全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）',
+          handler: async (argv) => {
+            try {
+              const i = argv.indexOf('--path');
+              const raw = i >= 0 ? argv[i + 1] : argv[0];
+              const path = String(raw || '').replace(/^\/+/, '');
+              if (!path || path.includes('..')) {
+                return {content: JSON.stringify({success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）'})};
+              }
+              const r = await $mod.$cloud_fs.get('/' + path);
+              const code = typeof r.content === 'string' ? r.content : await r.content.text();
+              const res = await bv?.run(code);
+              return {content: JSON.stringify(res || {success: false, message: '页面引擎未就绪'})};
+            } catch (e) {
+              return {content: JSON.stringify({success: false, code: 'RUN_FILE_ERROR', message: String((e && e.message) || e)})};
+            }
+          },
+        },
+      ]);
+      pe.start();
+      console.log(`[BrepView] page_exec 已绑定会话: ${id}`);
     };
     // ai-box 的 ID 变化 → 解绑旧会话 nc 事件，绑定新会话
     $watch(() => sid, (nv, ov) => {
@@ -1034,7 +1043,7 @@
   <script dispose>
     ($data.bvCleanups || []).forEach((f) => {try {f();} catch (_) { } });
     $data.bvCleanups = [];
-    unsubAll();
+    pe?.stop();
     bv?.dispose();
     bv = null;
   </script>

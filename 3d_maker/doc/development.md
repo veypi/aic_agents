@@ -32,8 +32,8 @@ $AGENT/
 ## 3. 总体架构
 
 ```
-Agent (ui_run run_code, mode=sync)
-   │  发布 NATS 消息到  s.{sid}.ui_run.run_code
+Agent (exec 1host=page action=run_code)
+   │  NATS req-reply → s.{sid}.h.page.exec.req（queue group page-{sid}，恰好一个可见 tab 执行）
    ▼
 index.html 订阅回调 ──► viewer.run(code)
    │                      │
@@ -157,36 +157,44 @@ run(code, opts)
 
 ```js
 let sid = $router.query.sid || 'default';   // 从 URL 查询参数获取订阅 ID
-// run_code：直接执行代码字符串
-let unsubCode = $mod.$nc.sub(`s.${sid}.ui_run.run_code`, async (err, msg) => {
-  var code = JSON.parse(msg.string()).code;
-  return await viewer.run(code);            // 返回值作为消息应答
-});
-// run_file：执行 UFS 代码文件
-let unsubFile = $mod.$nc.sub(`s.${sid}.ui_run.run_file`, async (err, msg) => { ... });
+// page_exec 工厂：注册 run_code/run_file 两个页面指令并启动监听
+let pe = $mod.$page_exec(sid, [
+  {
+    name: 'run_code',
+    description: '执行一段 3D 建模代码，返回模型统计 JSON',
+    handler: async (argv) => {
+      const i = argv.indexOf('--code');
+      var code = i >= 0 ? argv[i + 1] : argv[0];
+      return {content: JSON.stringify(await viewer.run(code))};
+    },
+  },
+  { name: 'run_file', description: '执行 UFS 中的建模代码文件（--path 全局路径）', handler: async (argv) => { ... } },
+]);
+pe.start();   // 订阅 exec.req（tab visible 自动进 queue group page-{sid}）
+// 会话切换：pe.stop() 后按新 sid 重建
 ```
 
 - 页面地址：`/a/{agent_id}/i?sid={session_id}`
-- **sid 与会话绑定**：`ui_run` 工具固定发布到 `s.{当前会话ID}.ui_run.{action}`，
-  因此页面必须用 `?sid={会话ID}` 打开才能收到该会话的建模指令。
-  不同会话的页面用不同 sid 打开，互不干扰（避免队列订阅串台）。
-- 订阅是**队列语义**：同一主题多个订阅者时，每条消息只路由给一个订阅者。
+- **sid 与会话绑定**：`exec 1host=page` 固定发布到 `s.{当前会话ID}.h.page.exec.req`（queue group `page-{sid}`），
+  因此页面必须用 `?sid={会话ID}` 打开（且 tab 可见）才能收到该会话的建模指令。
+  不同会话的页面用不同 sid 打开，互不干扰。
+- 投递是**队列语义 + 可见性**：同一 queue group 多个订阅者时每条消息只路由一个；hidden tab 退组不接收。
 
 ### 6.2 run_code：直接执行代码
 
 ```
-ui_run action=run_code argv=["--code", "return box(20,15,10);"] mode=sync
+exec {"1host":"page", "action":"run_code", "argv":["--code", "return box(20,15,10);"]}
 ```
 
-sync 模式阻塞等待页面执行完毕并返回 JSON（最长约 180s）。
+同步 req-reply，等待页面执行完毕并返回 JSON（最长约 180s）。
 
 ### 6.3 run_file：执行 UFS 代码文件
 
 ```
-ui_run action=run_file argv=["--path", "agents/{agent_id}/examples/gear.js"] mode=sync
+exec {"1host":"page", "action":"run_file", "argv":["--path", "agents/{agent_id}/examples/gear.js"]}
 ```
 
-Agent 先用 `ufs write` 将建模代码写入任意 UFS 目录，再通过 run_file 让页面加载执行：
+Agent 先用 `fs write` 将建模代码写入任意 UFS 目录，再通过 run_file 让页面加载执行：
 
 | path 示例 | 对应 UFS 位置 |
 |---|---|

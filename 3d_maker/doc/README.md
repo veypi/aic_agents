@@ -56,9 +56,9 @@ viewer.options.kernel = await createOCCTKernel();
 ## Agent 通信
 
 - 页面入口：`/a/{agent_id}/i?sid={session_id}`（sid 绑定会话，默认 default）
-- 订阅主题：`s.{sid}.ui_run.run_code`（队列语义，每消息路由一个订阅者）
-- 同步执行：`ui_run action=run_code argv=["--code", "..."] mode=sync`
-- 文件管理：`$AGENT/ui/` 目录，UFS 路径 `/aic/fs/agents/{id}/ui/`
+- 页面指令：`run_code` / `run_file`（经 `$mod.$page_exec(sid, [...])` 注册，Agent 用 `exec 1host=page` 调用）
+- 同步执行：`exec {"1host":"page", "action":"run_code", "argv":["--code", "..."]}`
+- 文件管理：`$AGENT/ui/` 目录，UFS 路径 `/aic/fs/agents/{id}/ui/`（前端读写用 `$mod.$cloud_fs`）
 
 ## OCCT 适配验证状态（v1.2 全量实测）
 
@@ -84,7 +84,7 @@ viewer.options.kernel = await createOCCTKernel();
 1. **run() 返回值优化** — 剥离坐标数据，AI 友好的 stats/parts 结构
 2. **_normalizeResult() 鸭子类型** — 同时支持内置 Shape 和 OCCTShape
 3. **OCCT WASM 适配器** — 完整封装 CDN 加载 + API 映射
-4. **Agent 通信** — `ui_run` 同步执行 + `?sid=` 动态会话绑定
+4. **Agent 通信** — page exec（run_code/run_file）同步执行 + `?sid=` 动态会话绑定
 5. **全量内核测试** — 内置 21 项 + OCCT 25 项，修复 7 处适配器缺陷（v1.2）
 6. **页面美化** — index.html 适配宿主主题（去除全局 reset/背景，圆角+阴影嵌入）
 
