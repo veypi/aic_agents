@@ -1,0 +1,78 @@
+{
+  "title": "项目",
+  "description": "项目：绑定 git 仓库与需求文档，是全库数据的作用域根",
+  "fields": [
+    {
+      "name": "code",
+      "type": "string",
+      "title": "项目码",
+      "description": "项目码，如 UAV-NAV，全库外键",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "项目名",
+      "description": "项目名称",
+      "required": true
+    },
+    {
+      "name": "repo_url",
+      "type": "string",
+      "title": "仓库URL",
+      "description": "仓库地址；本地仓填 local:// 前缀"
+    },
+    {
+      "name": "repo_path",
+      "type": "string",
+      "title": "本地仓库路径",
+      "description": "本地路径 $USER/repos/{host}/{path}"
+    },
+    {
+      "name": "branch",
+      "type": "string",
+      "title": "分支",
+      "description": "跟踪分支",
+      "default": "main"
+    },
+    {
+      "name": "doc_paths",
+      "type": "string",
+      "title": "需求文档路径",
+      "description": "需求文档路径模式，逗号分隔，如 docs/srs/*.md"
+    },
+    {
+      "name": "id_pattern",
+      "type": "string",
+      "title": "需求ID正则",
+      "description": "需求 ID 正则，如 SR-[A-Z]+-[0-9]+"
+    },
+    {
+      "name": "last_commit",
+      "type": "string",
+      "title": "已同步commit",
+      "description": "已同步到的 commit hash"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "description": "活跃/归档",
+      "default": "活跃"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "title": "描述",
+      "description": "项目说明"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "code"
+      ],
+      "unique": true
+    }
+  ]
+}

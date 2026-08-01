@@ -1,0 +1,49 @@
+{
+  "title": "ICD 接口",
+  "description": "接口需求模型：组件间接口定义与时序约束",
+  "fields": [
+    {
+      "name": "if_id",
+      "type": "string",
+      "title": "接口编号",
+      "description": "形如 IF-NAV-021",
+      "required": true
+    },
+    {
+      "name": "provider",
+      "type": "string",
+      "title": "提供方"
+    },
+    {
+      "name": "consumer",
+      "type": "string",
+      "title": "消费方"
+    },
+    {
+      "name": "constraint_desc",
+      "type": "string",
+      "title": "时序/协议约束"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "校验状态",
+      "default": "\"通过\""
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "if_id"
+      ],
+      "unique": true
+    }
+  ],
+  "max_records_per_user": 0
+}

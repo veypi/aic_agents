@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="ReqVerif 项目管理：git 仓库 + 需求文档 + 解析规则" />
+  <title>项目管理</title>
+</head>
+<style>
+  .prj-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:1200px){.prj-grid{grid-template-columns:1fr}}
+  .prj-card{background:var(--bg-color-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow-sm)}
+  .prj-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .prj-code{font-family:'Chakra Petch',var(--font-mono);font-weight:700;font-size:15px;color:var(--color-primary)}
+  .prj-name{font-size:13px;color:var(--text-color);font-weight:600}
+  .prj-meta{font-size:11.5px;color:var(--text-color-tertiary);line-height:1.9;font-family:var(--font-mono);word-break:break-all}
+  .prj-stats{display:flex;gap:22px;margin:10px 0;padding:10px 2px;border-top:1px dashed var(--border-color);border-bottom:1px dashed var(--border-color)}
+  .prj-stat b{font-family:'Chakra Petch',sans-serif;font-size:18px;display:block;color:var(--text-color)}
+  .prj-stat span{font-size:10.5px;color:var(--text-color-tertiary)}
+  .prj-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+</style>
+<body>
+  <local-app-menu page="projects">
+    <div class="rv-crumb">项目管理</div>
+    <div class="rv-titlebar">
+      <h2>项目管理</h2>
+      <span class="rv-desc">项目 = git 仓库 + 需求文档 + 解析规则 · Agent 克隆分析，DB 为仓库投影</span>
+      <span class="spacer"></span>
+      <button class="rv-btn" @click="addOpen = true">＋ 接入项目</button>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在加载项目…</div></div>
+    <div v-else class="prj-grid">
+      <div class="prj-card" v-for="p in rows" :key="p.id">
+        <div class="prj-head">
+          <span class="prj-code">{{ p.code }}</span>
+          <span class="prj-name">{{ p.name }}</span>
+          <span class="spacer"></span>
+          <span class="rv-tag" :class="p.status === '活跃' ? 't-ok' : 't-gray'"><i></i>{{ p.status }}</span>
+        </div>
+        <div class="prj-meta">
+          <div>仓库　{{ p.repo_url }}</div>
+          <div>路径　{{ p.repo_path }}</div>
+          <div>分支　{{ p.branch }} · HEAD {{ p.last_commit || '—' }}</div>
+          <div>文档　{{ p.doc_paths }} · ID 规则 {{ p.id_pattern }}</div>
+        </div>
+        <div class="prj-stats">
+          <div class="prj-stat"><b>{{ statOf(p.code, 'req') }}</b><span>需求</span></div>
+          <div class="prj-stat"><b>{{ statOf(p.code, 'comp') }}</b><span>组件</span></div>
+          <div class="prj-stat"><b>{{ statOf(p.code, 'case') }}</b><span>用例</span></div>
+          <div class="prj-stat"><b>{{ statOf(p.code, 'link') }}</b><span>追踪链接</span></div>
+        </div>
+        <div class="prj-actions">
+          <button class="rv-btn ghost sm" :disabled="busy === p.code + ':sync'" @click="doTask(p, 'sync')">⟳ 同步仓库</button>
+          <button class="rv-btn ghost sm" :disabled="busy === p.code + ':parse'" @click="doTask(p, 'parse')">⇪ 重新解析</button>
+          <button class="rv-btn ghost sm" :disabled="busy === p.code + ':code'" @click="doTask(p, 'code')">⌗ 代码分析</button>
+        </div>
+      </div>
+    </div>
+
+    <local-dialog-shell :show="addOpen" @close="addOpen = false" title="接入项目 · Agent 任务">
+      <div class="rv-form-grid">
+        <label class="rv-form-item"><span>仓库 URL（https 或 local:// 本地仓）</span><input class="rv-input mono" v:value="f.repo" placeholder="https://github.com/org/repo.git" /></label>
+        <label class="rv-form-item"><span>项目码（全库唯一）</span><input class="rv-input mono" v:value="f.code" placeholder="UAV-NAV" /></label>
+        <label class="rv-form-item"><span>项目名</span><input class="rv-input" v:value="f.name" /></label>
+        <label class="rv-form-item"><span>分支</span><input class="rv-input mono" v:value="f.branch" /></label>
+        <label class="rv-form-item"><span>需求文档路径（逗号分隔）</span><input class="rv-input mono" v:value="f.docs" placeholder="docs/srs/*.md" /></label>
+        <label class="rv-form-item"><span>需求 ID 正则</span><input class="rv-input mono" v:value="f.pat" placeholder="SR-[A-Z]+-[0-9]+" /></label>
+      </div>
+      <div class="rv-form-foot">
+        <button class="rv-btn ghost" @click="addOpen = false">取消</button>
+        <button class="rv-btn" :disabled="busyAdd" @click="submitAdd">{{ busyAdd ? '创建中…' : '创建接入任务' }}</button>
+      </div>
+    </local-dialog-shell>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  rows = []
+  stats = {}
+  busy = ''
+  addOpen = false
+  busyAdd = false
+  f = { repo: '', code: '', name: '', branch: 'main', docs: 'docs/srs/*.md', pat: 'SR-[A-Z]+-[0-9]+' }
+
+  q = (t, p) => $mod.$fetch('/tables/' + t, { params: p })
+  statOf = (code, k) => (stats[code] && stats[code][k] != null ? stats[code][k] : '—')
+
+  loadStats = async (code) => {
+    try {
+      const [r, c, cs, lk] = await Promise.all([
+        q('requirements', { size: 1, filters: JSON.stringify({ project_code: code }) }),
+        q('components', { size: 1, filters: JSON.stringify({ project_code: code }) }),
+        q('test_cases', { size: 1, filters: JSON.stringify({ project_code: code }) }),
+        q('trace_links', { size: 1 }),
+      ])
+      stats = Object.assign({}, stats, { [code]: { req: r.total, comp: c.total, case: cs.total, link: lk.total } })
+    } catch (e) { /* 统计缺失不阻塞 */ }
+  }
+
+  load = async () => {
+    try {
+      const d = await q('projects', { size: 50 })
+      rows = d.items || []
+      rows.forEach((p) => loadStats(p.code))
+    } catch (e) {
+      $message.error('项目加载失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+
+  /* Agent 任务：repo-sync / req-parse / code-analyze */
+  doTask = async (p, kind) => {
+    const meta = {
+      sync: {
+        t: '同步仓库 ' + p.code,
+        g: '【repo-sync】同步 ReqVerif 项目 ' + p.code + '（仓库 ' + p.repo_path + '，分支 ' + p.branch + '，last_commit=' + (p.last_commit || '无') + '）：git pull 并 diff 驱动变更级联。按核心 prompt 中【repo-sync】规范执行。',
+        s: '1. pull + diff last_commit..HEAD；2. 文档变更走 req-parse 流程；3. 代码变更级联标记 need_reverify 并更新 last_commit',
+        c: '写 change_events / trace_links(need_reverify) / todo_items / projects.last_commit；其余只读',
+      },
+      parse: {
+        t: '重新解析需求文档 ' + p.code,
+        g: '【req-parse】解析 ReqVerif 项目 ' + p.code + ' 需求文档（' + (p.doc_paths || '') + '，ID 规则 ' + (p.id_pattern || '') + '，仓库 ' + p.repo_path + '），入库/更新 requirements 并完成溯源。按核心 prompt 中【req-parse】规范执行。',
+        s: '1. 读文档按标题+ID规则切分条目；2. 与 DB 比对：新增/更新/废弃；3. 级联标记并汇报',
+        c: '幂等（同一 commit 零变更）；写 requirements / change_events / trace_links(need_reverify)',
+      },
+      code: {
+        t: '代码分析与追踪构建 ' + p.code,
+        g: '【code-analyze】分析 ReqVerif 项目 ' + p.code + ' 代码（仓库 ' + p.repo_path + '）：识别组件、检索 @req/@req-partial 引用、重建 trace_links（含 evidence）并回写需求实现状态。按核心 prompt 中【code-analyze】规范执行。',
+        s: '1. 扫描源码识别组件 upsert components；2. 检索引用标签生成证据；3. upsert trace_links 并回写 requirements.impl_components/impl_status',
+        c: '幂等；写 components / trace_links / requirements(impl_components, impl_status)',
+      },
+    }[kind]
+    busy = p.code + ':' + kind
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: { title: meta.t, goal: meta.g, steps: meta.s, constraints: meta.c } })
+      $message.success('任务已创建（' + ((td.task && td.task.id) || '') + '），完成后刷新查看')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    } finally {
+      busy = ''
+    }
+  }
+
+  submitAdd = async () => {
+    if (!(f.repo || '').trim() || !(f.code || '').trim()) { $message.error('请填写仓库 URL 与项目码'); return }
+    busyAdd = true
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: {
+        title: '接入项目 ' + f.code,
+        goal: '【project-init】接入 ReqVerif 项目：仓库 ' + f.repo + '（分支 ' + (f.branch || 'main') + '），项目码 ' + f.code + '，项目名「' + (f.name || f.code) + '」，需求文档路径提示 ' + (f.docs || '自动探测') + '，ID 正则 ' + (f.pat || '自动识别') + '。按核心 prompt 中【project-init】规范执行：克隆（目录不存在）→ 扫描定位需求文档 → 注册 projects 记录。',
+        steps: '1. clone/pull 仓库到 $USER/repos/{host}/{path}；2. 扫描分类文件并定位需求文档；3. upsert projects 并汇报',
+        constraints: '只写 projects 表；需求文档限文本格式，docx/pdf 提示用户先转换',
+      } })
+      addOpen = false
+      $message.success('项目接入任务已创建（' + ((td.task && td.task.id) || '') + '），Agent 完成后项目将出现在列表中')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    } finally {
+      busyAdd = false
+    }
+  }
+</script>
+<script>
+  load()
+</script>
+</html>

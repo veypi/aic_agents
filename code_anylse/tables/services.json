@@ -1,0 +1,48 @@
+{
+  "title": "微服务",
+  "description": "验证平台微服务实例与运行指标",
+  "fields": [
+    {
+      "name": "svc_name",
+      "type": "string",
+      "title": "微服务",
+      "description": "形如 req-parser",
+      "required": true
+    },
+    {
+      "name": "duty",
+      "type": "string",
+      "title": "职责"
+    },
+    {
+      "name": "instances",
+      "type": "int",
+      "title": "实例数",
+      "default": 0
+    },
+    {
+      "name": "cpu_pct",
+      "type": "number",
+      "title": "CPU 占用 %"
+    },
+    {
+      "name": "p99",
+      "type": "string",
+      "title": "P99 延迟"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "svc_name"
+      ],
+      "unique": true
+    }
+  ],
+  "max_records_per_user": 0
+}

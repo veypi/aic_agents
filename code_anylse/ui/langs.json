@@ -1,0 +1,10 @@
+{
+  "zh-CN": {
+    "app.name": "ReqVerif",
+    "app.sub": "需求符合性验证平台"
+  },
+  "en-US": {
+    "app.name": "ReqVerif",
+    "app.sub": "Requirement Compliance Verification"
+  }
+}

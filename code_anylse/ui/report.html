@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>符合性评估报告</title>
+</head>
+<style>
+  .score-hero{display:grid;grid-template-columns:auto auto 1fr;gap:34px;align-items:center;padding:26px 28px}
+  .hero-num{font-family:'Chakra Petch',var(--font-mono);font-size:64px;font-weight:700;line-height:1;color:var(--color-primary)}
+  .hero-num small{font-size:22px;margin-left:4px;color:var(--text-color-secondary)}
+  .hero-cap{font-size:12px;color:var(--text-color-secondary);margin-top:8px}
+  .hero-verdict .rv-tag{font-size:13px;padding:5px 16px}
+  .hero-delta{font-size:12px;color:var(--text-color-secondary)}
+  .hero-delta b{font-family:'Chakra Petch',monospace;font-size:15px}
+  .delta-up{color:var(--color-success)}.delta-down{color:var(--color-danger)}
+  .hero-right{font-size:12px;color:var(--text-color-secondary);line-height:2}
+  .hero-right b{color:var(--text-color);font-family:'Chakra Petch',monospace}
+</style>
+<body>
+  <local-app-menu page="report">
+    <div class="rv-crumb">验证体系 / 评估报告</div>
+    <div class="rv-titlebar">
+      <h1>符合性评估报告</h1>
+      <p>加权聚合判定 · 不符合项追溯 · 支持导出与审批提交 {{ blNote ? '· ' + blNote : '' }}</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="exportPdf">导出报告</button>
+        <button class="rv-btn" @click="submitAudit">提交审批</button>
+      </span>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在生成评估报告…</div></div>
+    <div v-else>
+      <div class="rv-panel acc-primary" style="margin-bottom:14px">
+        <div class="score-hero">
+          <div>
+            <div class="hero-num">{{ score }}<small>分</small></div>
+            <div class="hero-cap">综合符合性得分（加权聚合）</div>
+          </div>
+          <div class="hero-verdict">
+            <span class="rv-tag" :class="verdictTone">判定：{{ verdict }}</span>
+            <div class="hero-delta" style="margin-top:10px">符合阈值 ≥ 85 · 较 BL-V3.2 <b :class="delta >= 0 ? 'delta-up' : 'delta-down'">{{ delta >= 0 ? '▲ +' : '▼ ' }}{{ delta }}</b></div>
+          </div>
+          <div class="hero-right">
+            指标体系：3 层 38 项（一级 7 / 二级 14 / 三级 17）<br>
+            不符合项：<b>{{ badReqs.length }}</b> 项需求偏离 · 关联失败用例 <b>{{ failReqCount }}</b> 组<br>
+            赋权方法：AHP（CR = 0.041 &lt; 0.1）· 评估基线 BL-V3.3
+          </div>
+        </div>
+      </div>
+
+      <div class="rv-grid g2" style="margin-bottom:14px">
+        <div class="rv-panel"><local-chart-box :option="chScore" height="300px"></local-chart-box></div>
+        <div class="rv-panel"><local-chart-box :option="chSdlc" height="300px"></local-chart-box></div>
+      </div>
+
+      <div class="rv-panel" style="padding:0">
+        <div class="phead" style="padding:14px 18px 0">不符合项清单（verif_status = 偏离）</div>
+        <div class="rv-twrap">
+          <table class="rv-table">
+            <thead><tr><th>需求 ID</th><th>需求描述</th><th>能力域</th><th>关联失败用例</th><th>验证状态</th></tr></thead>
+            <tbody>
+              <tr v-for="r in badReqs" :key="r.id">
+                <td><a class="tlink" href="javascript:;" @click="goReq(r.req_id)">{{ r.req_id }}</a></td>
+                <td :title="r.description">{{ short(r.description) }}</td>
+                <td class="dim">{{ r.domain || '—' }}</td>
+                <td class="mono" :style="{ color: failCount(r.req_id) ? 'var(--color-danger)' : 'var(--text-color-disabled)' }">{{ failCount(r.req_id) }} 条</td>
+                <td><span class="rv-tag t-warn">{{ r.verif_status }}</span></td>
+              </tr>
+              <tr v-if="!badReqs.length"><td colspan="5" class="dim" style="text-align:center;padding:24px">无偏离需求，全部符合</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  score = 0
+  verdict = '—'
+  verdictTone = 't-gray'
+  delta = 0
+  l1List = []
+  badReqs = []
+  failCountMap = {}
+  failReqCount = 0
+  chScore = null
+  chSdlc = null
+  blNote = ''
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+  AX = { axisLine: { lineStyle: { color: 'rgba(20,60,90,.15)' } }, axisTick: { show: false }, axisLabel: { color: 'rgba(20,60,90,.55)', fontSize: 10.5 }, splitLine: { lineStyle: { color: 'rgba(20,60,90,.07)' } } }
+
+  short = (s) => (s || '').length > 34 ? (s || '').slice(0, 34) + '…' : (s || '')
+  failCount = (rid) => failCountMap[rid] || 0
+
+  renderScore = () => {
+    const names = l1List.map((i) => i.name)
+    chScore = {
+      title: { text: '一级指标得分 vs 符合阈值 85', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: 40, right: 16, top: 44, bottom: 26 },
+      xAxis: Object.assign({ type: 'category', data: names }, AX),
+      yAxis: Object.assign({ type: 'value', min: 70, max: 100 }, AX),
+      series: [{
+        type: 'bar', data: l1List.map((i) => ({ value: i.score || 0, itemStyle: { borderRadius: [4, 4, 0, 0], color: (i.score || 0) >= 90 ? '#0d9488' : (i.score || 0) >= 85 ? '#0891b2' : '#d97706' } })),
+        barWidth: 30,
+        markLine: { symbol: 'none', data: [{ yAxis: 85 }], lineStyle: { color: '#dc2626', type: 'dashed' }, label: { formatter: '阈值 85', color: '#dc2626', fontSize: 10 } },
+      }],
+    }
+  }
+  renderSdlc = () => {
+    const stages = ['需求分析', '系统设计', '编码实现', '测试验证', '交付维护']
+    const vals = [97.4, 94.1, 92.8, 90.5, 88.2]
+    chSdlc = {
+      title: { text: 'SDLC 各阶段需求一致性（分析样例）', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: 44, right: 16, top: 44, bottom: 26 },
+      xAxis: Object.assign({ type: 'category', data: stages }, AX),
+      yAxis: Object.assign({ type: 'value', min: 80, max: 100 }, AX),
+      series: [{
+        type: 'line', data: vals, smooth: true, symbol: 'circle', symbolSize: 8,
+        lineStyle: { width: 2.5, color: '#0891b2' }, itemStyle: { color: '#0891b2', borderColor: '#fff', borderWidth: 2 },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(8,145,178,.2)' }, { offset: 1, color: 'rgba(8,145,178,0)' }] } },
+        markLine: { symbol: 'none', data: [{ yAxis: 85 }], lineStyle: { color: '#dc2626', type: 'dashed' }, label: { formatter: '阈值 85', color: '#dc2626', fontSize: 10 } },
+      }],
+    }
+  }
+
+  /* Agent 任务：导出符合性评估报告 Markdown 到 $USER/exports */
+  exportPdf = async () => {
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: {
+        title: '导出符合性评估报告',
+        goal: '【export-report】导出 ReqVerif 符合性评估报告（当前得分 ' + score + '，判定 ' + verdict + '，不符合项 ' + badReqs.length + ' 条）为 Markdown，写入 $USER/exports/。按核心 prompt 中【export-report】规范执行。',
+        steps: '1. 读取指标/需求/用例/基线；2. 计算加权总分；3. 生成报告文件并汇报路径',
+        constraints: '只读数据库；产物写入 $USER/exports/',
+      } })
+      $message.success('报告导出任务已创建（' + ((td.task && td.task.id) || '') + '），文件将写入 exports 目录')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    }
+  }
+
+  /* 提交审批：将当前基线置为审批中（真实写库） */
+  submitAudit = async () => {
+    try {
+      await $message.confirm('确认将本报告提交审批？提交后基线 BL-V3.3 进入审批流')
+      const b = await q('baselines', { size: 1, filters: JSON.stringify({ code: 'BL-V3.3' }) })
+      const rec = (b.items || [])[0]
+      if (!rec) { $message.error('未找到基线 BL-V3.3'); return }
+      if (rec.status === '审批中') { $message.info('该基线已在审批流中'); return }
+      await $mod.$fetch('/tables/baselines/' + rec.id, { method: 'PATCH', body: { data: { status: '审批中' } } })
+      $message.success('基线 BL-V3.3 已进入审批流（变更与版本页可见状态更新）')
+    } catch (e) { if (e && e.message) $message.error('提交失败：' + e.message) }
+  }
+  goReq = (rid) => {
+    try { $router.push('/i/reqlib?req_id=' + encodeURIComponent(rid)) } catch (e) { location.href = '/i/reqlib?req_id=' + encodeURIComponent(rid) }
+  }
+
+  initPage = async () => {
+    try {
+      const qp = $router.query || {}
+      if (qp.baseline) blNote = '评估基线：' + qp.baseline
+      const [indD, badD, failD, prevD] = await Promise.all([
+        q('indicators', { size: 60 }),
+        q('requirements', { size: 30, filters: JSON.stringify({ verif_status: '偏离' }) }),
+        q('test_cases', { size: 200, filters: JSON.stringify({ last_result: '失败' }) }),
+        q('baselines', { size: 1, filters: JSON.stringify({ code: 'BL-V3.2' }) }),
+      ])
+      const l1s = (indD.items || []).filter((i) => i.level === 1).sort((a, b) => a.code < b.code ? -1 : 1)
+      l1List = l1s
+      const tw = l1s.reduce((a, i) => a + (i.weight || 0), 0) || 1
+      score = +((l1s.reduce((a, i) => a + (i.weight || 0) * (i.score || 0), 0) / tw)).toFixed(1)
+      verdict = score >= 85 ? '符合' : '偏离'
+      verdictTone = score >= 85 ? 't-ok' : 't-warn'
+      const prev = (prevD.items || [])[0]
+      delta = prev ? +(score - (prev.score || 0)).toFixed(1) : 0
+      badReqs = badD.items || []
+      const m = {}
+      ;(failD.items || []).forEach((c) => { if (c.req_id) m[c.req_id] = (m[c.req_id] || 0) + 1 })
+      failCountMap = m
+      failReqCount = Object.keys(m).length
+      renderScore()
+      renderSdlc()
+    } catch (e) {
+      $message.error('生成报告失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+</html>

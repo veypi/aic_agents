@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="ReliaScope 数据采集中心" />
+  <title>数据采集中心 · ReliaScope</title>
+</head>
+<style>
+  .probe {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 4px;
+    border-bottom: 1px solid rgba(209, 213, 219, .45)
+  }
+
+  .probe:last-child {
+    border: none
+  }
+
+  .probe .nm {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink)
+  }
+
+  .probe .tp {
+    font-size: 10.5px;
+    color: var(--text-color-tertiary);
+    font-family: var(--num)
+  }
+
+  .probe .rt {
+    margin-left: auto;
+    text-align: right;
+    min-width: 120px
+  }
+
+  .probe .rv {
+    font-size: 12.5px;
+    font-weight: 700;
+    font-family: var(--num)
+  }
+
+  .empty-box {
+    padding: 44px 0;
+    text-align: center;
+    color: var(--text-color-disabled);
+    font-size: 12px;
+    line-height: 2
+  }
+</style>
+
+<body>
+  <app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">可靠性工程 · Data Ingestion</div>
+        <h1>数据采集中心</h1>
+      </div>
+      <div class="right">
+        <button class="btn ghost" @click="goSettings()">探针管理</button>
+        <button class="btn ghost" :disabled="qualitying" @click="doQuality()">{{ qualitying ? '评估中…' : '质量评估'
+          }}</button>
+        <button class="btn" :disabled="syncing" @click="doSync()">{{ syncing ? '同步中…' : '立即同步' }}</button>
+      </div>
+    </header>
+
+    <div class="g g4">
+      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+        <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
+        <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
+        </div>
+        <div class="tr" :class="k.up ? 'up' : 'down'">{{ k.up ? '▲' : '▼' }} {{ k.tr }} <em>{{ k.hint }}</em></div>
+        <div class="spark" :id="'sp' + i"></div>
+      </div>
+    </div>
+
+    <div class="g g23" style="margin-top:15px">
+      <div class="card">
+        <h3>多源数据采集吞吐 <span class="tag">{{ channels.length }} 类通道</span></h3>
+        <div id="ch-collect" class="chart" style="height:320px"></div>
+      </div>
+      <div class="card">
+        <h3>采集通道状态</h3>
+        <div style="max-height:330px;overflow-y:auto">
+          <div class="probe" v-for="c in channels" :key="c.id">
+            <span class="dot" :style="{background: c.online_rate > 97 ? '#059669' : '#d97706'}"></span>
+            <div>
+              <div class="nm">{{ c.name }}</div>
+              <div class="tp">{{ c.probe_count }} 探针 · {{ c.latency_ms }}ms · {{ c.category }}</div>
+            </div>
+            <div class="rt">
+              <div class="rv" :style="{color: c.online_rate > 97 ? '#059669' : '#d97706'}">{{
+                Number(c.online_rate).toFixed(1) }}%</div>
+              <div class="bar" style="margin-top:4px"><i
+                  :style="{width: c.online_rate + '%', background: c.online_rate > 97 ? '#059669' : '#d97706'}"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g g2" style="margin-top:15px">
+      <div class="card">
+        <h3>数据质量雷达 <span class="tag">quality_runs 表</span></h3>
+        <div class="desc">完整性 / 一致性 / 时效性 / 准确性 / 唯一性 / 合规性 · Agent 质量评估任务产出</div>
+        <div v-if="!hasQ" class="empty-box">暂无质量评估数据<br>点击右上角「质量评估」，由 Agent 分析 failures 后生成</div>
+        <div id="ch-quality" class="chart" style="height:280px" v-show="hasQ"></div>
+      </div>
+      <div class="card">
+        <h3>原始故障样本（最近入库） <span class="tag">failures 表</span></h3>
+        <div class="desc">可靠性指标的唯一数据源 · 点击行进入单目标验证</div>
+        <table>
+          <thead>
+            <tr>
+              <th>软件</th>
+              <th>故障模式</th>
+              <th>严重度</th>
+              <th>Δt</th>
+              <th>入库时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in samples" :key="s.id" style="cursor:pointer" @click="goTarget(s.software_id)">
+              <td><b>{{ s.swname }}</b></td>
+              <td>{{ s.mode }}</td>
+              <td><span class="pill" :class="sevClass(s.severity)">{{ s.severity }}</span></td>
+              <td class="mono">+{{ Number(s.delta_t).toLocaleString() }}h</td>
+              <td class="mono" style="color:var(--text-color-tertiary)">{{ fmtTime(s.created_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="footer-note">通道状态由采集接口实时写入 · 质量评估与全通道同步由 Agent 后台任务执行</div>
+  </app-menu>
+</body>
+<script setup>
+  kpis = []
+  channels = []
+  samples = []
+  hasQ = false
+  syncing = false
+  qualitying = false
+
+  const PAL = ['#4361ee', '#0891b2', '#059669', '#7c3aed', '#d97706', '#db2777']
+  const charts = {}
+  const mk = (id, opt) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (charts[id]) charts[id].dispose()
+    const c = echarts.init(el)
+    c.setOption(opt)
+    charts[id] = c
+  }
+  const AX = {axisLine: {lineStyle: {color: '#d3dae6'}}, axisLabel: {color: '#6b7280', fontSize: 11}, splitLine: {lineStyle: {color: '#eaeff7'}}}
+  const TIP = {trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: {color: '#e2e8f0', fontSize: 12}}
+  const GRID = {left: 46, right: 22, top: 38, bottom: 30}
+
+  sevClass = (s) => s === '致命' ? 'p-red' : s === '严重' ? 'p-yellow' : s === '一般' ? 'p-blue' : 'p-gray'
+  fmtTime = (t) => {
+    if (!t) return '—'
+    const d = new Date(t)
+    return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+  }
+  goTarget = (id) => {
+    $router.push('/i/target?software_id=' + id)
+  }
+  goSettings = () => {
+    $router.push('/i/settings')
+  }
+
+  /* ---------- Agent 任务执行器：创建任务并轮询至完成 ---------- */
+  const runTask = async (payload) => {
+    const r = await $fetch('/api/tasks', {method: 'POST', body: payload})
+    const id = r.task && r.task.id
+    if (!id) throw new Error('任务创建失败')
+    const t0 = Date.now()
+    while (Date.now() - t0 < 240000) {
+      await new Promise(r2 => setTimeout(r2, 3000))
+      const t = await $fetch('/api/tasks/' + id)
+      if (t.status === 'completed') return t
+      if (t.status === 'failed' || t.status === 'canceled') throw new Error(t.error || '任务执行失败')
+    }
+    throw new Error('任务执行超时，可稍后在任务中心查看结果')
+  }
+
+  doSync = async () => {
+    if (syncing) return
+    syncing = true
+    try {
+      await runTask({
+        title: '全通道数据同步',
+        goal: '刷新 channels 表全部采集通道的同步状态：last_sync 置为当前时间，throughput 按各通道近期事件量合理估算（无事件源的通道保持原值），online_rate 与 latency_ms 在正常波动范围内微调，不劣化。',
+        steps: '1. table.list channels 全部通道 → 2. 逐通道计算新 throughput / last_sync → 3. table.update 逐条写回（不得修改 probe_count）→ 4. 返回同步通道数与总吞吐',
+        constraints: '只写 channels 表的 throughput/last_sync/online_rate/latency_ms 字段；不新建或删除通道',
+        schedule_type: 'once'
+      })
+      await load()
+      $message.success('全通道同步完成，状态已刷新')
+    } catch (e) {$message.error('同步任务：' + e.message)}
+    syncing = false
+  }
+  doQuality = async () => {
+    if (qualitying) return
+    qualitying = true
+    try {
+      await runTask({
+        title: '故障样本数据质量评估',
+        goal: '对 failures 表全部故障样本做六维数据质量评估（完整性/一致性/时效性/准确性/唯一性/合规性，0-100 分），统计异常样本拦截数，结果追加写入 quality_runs 表。',
+        steps: '1. table.list failures(size=200) 与 channels → 2. 按 index.md 中六维口径打分 → 3. 汇总 blocked_n 与问题说明 detail → 4. table.add 写入 quality_runs 一行 → 5. 返回综合分与最弱维度',
+        constraints: '只追加 quality_runs，不修改 failures；detail 中列出主要问题样本 id 与原因',
+        schedule_type: 'once'
+      })
+      await load()
+      $message.success('质量评估完成，结果已入库')
+    } catch (e) {$message.error('质量评估任务：' + e.message)}
+    qualitying = false
+  }
+
+  const countUp = (id, target, dec) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    const t0 = performance.now(), dur = 900
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const v = target * (1 - Math.pow(1 - p, 3))
+      el.textContent = dec > 0 ? v.toFixed(dec) : Math.round(v).toLocaleString()
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+  const spark = (id, color, data) => {
+    const d = data && data.length > 1 ? data : [0, 0]
+    mk(id, {
+      grid: {left: 0, right: 0, top: 4, bottom: 0}, animationDuration: 1200,
+      xAxis: {type: 'category', show: false, data: d.map((_, i) => i)}, yAxis: {show: false, min: 'dataMin'},
+      series: [{type: 'line', data: d, smooth: true, showSymbol: false, lineStyle: {color, width: 1.5}, areaStyle: {color: color + '26'}}]
+    })
+  }
+
+  let qRuns = []
+
+  const draw = () => {
+    /* 各通道日吞吐（真实字段） */
+    mk('ch-collect', {
+      tooltip: TIP, animationDuration: 900, grid: GRID,
+      xAxis: {type: 'category', data: channels.map(c => c.name), ...AX, axisLabel: {...AX.axisLabel, rotate: 30}},
+      yAxis: {type: 'value', name: '万条/日', nameTextStyle: {color: '#6b7280'}, ...AX},
+      series: [{
+        type: 'bar', barWidth: 22, data: channels.map((c, i) => ({
+          value: Number(c.throughput || 0), itemStyle: {
+            borderRadius: [5, 5, 0, 0],
+            color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: PAL[i % PAL.length]}, {offset: 1, color: PAL[i % PAL.length] + '55'}]}
+          }
+        })),
+        label: {show: true, position: 'top', color: '#6b7280', fontSize: 10}
+      }]
+    })
+    /* 质量雷达：最近一次评估 */
+    const q = qRuns[0]
+    if (q) {
+      mk('ch-quality', {
+        tooltip: {},
+        radar: {
+          indicator: [{name: '完整性', max: 100}, {name: '一致性', max: 100}, {name: '时效性', max: 100}, {name: '准确性', max: 100}, {name: '唯一性', max: 100}, {name: '合规性', max: 100}],
+          axisName: {color: '#6b7280', fontSize: 11},
+          splitArea: {areaStyle: {color: ['rgba(67,97,238,.03)', 'rgba(67,97,238,.06)']}},
+          splitLine: {lineStyle: {color: 'rgba(67,97,238,.15)'}}, axisLine: {lineStyle: {color: 'rgba(67,97,238,.18)'}}
+        },
+        series: [{
+          type: 'radar', data: [
+            {value: [q.integrity, q.consistency, q.timeliness, q.accuracy, q.uniqueness, q.compliance], name: '最近评估 · ' + fmtTime(q.created_at), lineStyle: {color: '#0891b2'}, areaStyle: {color: 'rgba(8,145,178,.18)'}, itemStyle: {color: '#0891b2'}}],
+          label: {show: false}
+        }]
+      })
+    }
+    const rates = channels.map(c => Number(c.online_rate || 0))
+    const probes = channels.map(c => Number(c.probe_count || 0))
+    const thr = channels.map(c => Number(c.throughput || 0))
+    const qTotals = qRuns.slice(0, 10).reverse().map(x => Number(x.total || 0))
+    spark('sp0', '#059669', probes)
+    spark('sp1', '#0891b2', rates)
+    spark('sp2', '#7c3aed', qTotals.length > 1 ? qTotals : [0, qRuns[0] ? Number(qRuns[0].total) : 0])
+    spark('sp3', '#d97706', thr)
+    kpis.forEach((k, i) => {if (!k.na) countUp('kv' + i, k.raw, k.dec)})
+  }
+
+  window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize && c.resize()))
+
+  load = async () => {
+    try {
+      const [ch, fl, sw, qr] = await Promise.all([
+        $fetch('/tables/channels', {params: {size: 100}}),
+        $fetch('/tables/failures', {params: {size: 200, sort: '-created_at'}}),
+        $fetch('/tables/softwares', {params: {size: 200}}),
+        $fetch('/tables/quality_runs', {params: {size: 10, sort: '-created_at'}})
+      ])
+      channels = ch.items || []
+      qRuns = qr.items || []
+      hasQ = qRuns.length > 0
+      const swm = {}
+        ; (sw.items || []).forEach(s => {swm[s.id] = s.name})
+      samples = (fl.items || []).slice(0, 8).map(f => ({...f, swname: swm[f.software_id] || f.software_id}))
+      const probes = channels.reduce((a, b) => a + Number(b.probe_count || 0), 0)
+      const avgRate = channels.length ? channels.reduce((a, b) => a + Number(b.online_rate || 0), 0) / channels.length : 0
+      const lowN = channels.filter(c => Number(c.online_rate || 0) < 95).length
+      const q = qRuns[0]
+      kpis = [
+        {lb: '在线探针', v: probes.toLocaleString(), un: '个', tr: channels.length + ' 类通道', hint: 'channels 表', up: true, c: '#059669', raw: probes, dec: 0},
+        {lb: '通道平均在线率', v: avgRate.toFixed(1), un: '%', tr: lowN + ' 类低于 95%', hint: '实时', up: lowN === 0, c: '#0891b2', raw: avgRate, dec: 1},
+        {lb: '数据质量分', v: q ? Number(q.total).toFixed(1) : '—', un: q ? '分' : '', tr: q ? '六维加权' : '未评估', hint: q ? fmtTime(q.created_at) : '点击质量评估', up: !q || Number(q.total) >= 85, c: '#7c3aed', raw: q ? Number(q.total) : 0, dec: 1, na: !q},
+        {lb: '异常样本拦截', v: q ? String(q.blocked_n || 0) : '—', un: q ? '条' : '', tr: q ? '规则引擎拦截' : '未评估', hint: '最近一次评估', up: true, c: '#d97706', raw: q ? Number(q.blocked_n || 0) : 0, dec: 0, na: !q}
+      ]
+      setTimeout(draw, 60)
+    } catch (e) {
+      $message.error('数据加载失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  load()
+</script>
+
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="ReliaScope 可靠性分析" />
+  <title>可靠性分析 · ReliaScope</title>
+</head>
+
+<body>
+  <app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">可靠性工程 · Analysis</div>
+        <h1>可靠性分析</h1>
+      </div>
+      <div class="right">
+        <button class="btn ghost" @click="exportCsv()">导出分析快照 CSV</button>
+      </div>
+    </header>
+
+    <div class="g g4">
+      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+        <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
+        <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
+        </div>
+        <div class="tr" :class="k.up ? 'up' : 'down'">{{ k.up ? '▲' : '▼' }} {{ k.tr }} <em>{{ k.hint }}</em></div>
+        <div class="spark" :id="'sp' + i"></div>
+      </div>
+    </div>
+
+    <div class="g g23" style="margin-top:15px">
+      <div class="card">
+        <h3>可靠性增长曲线（Duane / Crow-AMSAA）</h3>
+        <div class="desc">累计 MTBF 随测试时间增长 · 拟合增长率 α = {{ fitA.toFixed(3) }} · R² = {{ fitR2.toFixed(3) }}</div>
+        <div id="ch-growth" class="chart" style="height:320px"></div>
+      </div>
+      <div class="card">
+        <h3>Weibull 失效分布</h3>
+        <div class="desc">β = {{ wBeta.toFixed(2) }} · η = {{ Math.round(wEta) }}h（失效间隔中位秩回归）</div>
+        <div id="ch-weibull" class="chart" style="height:320px"></div>
+      </div>
+    </div>
+
+    <div class="g g3" style="margin-top:15px">
+      <div class="card">
+        <h3>失效模式帕累托 <span class="tag">FMECA</span></h3>
+        <div class="desc">Top 故障模式占比</div>
+        <div id="ch-pareto" class="chart" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <h3>软件 × 构建 失效热力图</h3>
+        <div class="desc">各对象不同构建版本的失效计数</div>
+        <div id="ch-heat" class="chart" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <h3>失效率演化（滑动窗口）</h3>
+        <div class="desc">每 5 个失效为窗口的观测 λ 演化</div>
+        <div id="ch-bathtub" class="chart" style="height:280px"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:15px">
+      <h3>软件可靠度计算明细 <span class="tag">数据驱动</span></h3>
+      <div class="desc">λ̂ = n/T · R(720h) = e^(−λ̂·720) · 点击行进入单目标验证</div>
+      <table>
+        <thead>
+          <tr>
+            <th>软件名称</th>
+            <th>类型</th>
+            <th>λ̂ (/kh)</th>
+            <th>MTBF (h)</th>
+            <th>R(720h)</th>
+            <th>可用度 A</th>
+            <th>置信下限</th>
+            <th>评估结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in rows" :key="r.id" style="cursor:pointer" @click="goTarget(r.id)">
+            <td><b>{{ r.name }}</b>
+              <div style="color:var(--text-color-disabled);font-size:11px">{{ r.version }} · n={{ r.n }}</div>
+            </td>
+            <td>{{ r.stype }}</td>
+            <td class="mono">{{ r.lamObs.toFixed(3) }}</td>
+            <td class="mono">{{ Math.round(r.mtbf).toLocaleString() }}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="bar" style="width:90px"><i
+                    :style="{width: (r.R * 100) + '%', background: r.R >= thR ? '#059669' : r.R >= thR - 0.1 ? '#d97706' : '#dc2626'}"></i>
+                </div>
+                <span class="mono">{{ r.R.toFixed(4) }}</span>
+              </div>
+            </td>
+            <td class="mono">{{ (r.A * 100).toFixed(3) }}%</td>
+            <td class="mono" style="color:var(--text-color-tertiary)">{{ r.Rlo.toFixed(4) }}</td>
+            <td><span class="pill" :class="r.pass ? 'p-green' : r.fatal > thFatal ? 'p-red' : 'p-yellow'">{{ r.pass ?
+                '通过' : r.fatal > thFatal ? '整改' : '观察' }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="footer-note">分析结果每次进入页面时基于最新故障样本重新计算</div>
+  </app-menu>
+</body>
+<script setup>
+  kpis = []
+  rows = []
+  fitA = 0.5
+  fitR2 = 0
+  wBeta = 1
+  wEta = 1000
+  thR = 0.95
+  thFatal = 0
+
+  const PAL = ['#4361ee', '#0891b2', '#059669', '#7c3aed', '#d97706', '#db2777', '#ea580c', '#0d9488']
+  const charts = {}
+  const mk = (id, opt) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (charts[id]) charts[id].dispose()
+    const c = echarts.init(el)
+    c.setOption(opt)
+    charts[id] = c
+  }
+  const AX = {axisLine: {lineStyle: {color: '#d3dae6'}}, axisLabel: {color: '#6b7280', fontSize: 11}, splitLine: {lineStyle: {color: '#eaeff7'}}}
+  const TIP = {trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: {color: '#e2e8f0', fontSize: 12}}
+  const GRID = {left: 52, right: 22, top: 38, bottom: 30}
+
+  goTarget = (id) => {
+    $router.push('/i/target?software_id=' + id)
+  }
+
+  /* ---------- CSV 导出 ---------- */
+  const csvCell = (v) => {
+    const s = String(v == null ? '' : v)
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  exportCsv = () => {
+    const rows2 = [
+      ['ReliaScope 可靠性分析快照', new Date().toLocaleString('zh-CN')],
+      ['增长率 α(Duane)', fitA.toFixed(3), 'R²', fitR2.toFixed(3), 'Weibull β', wBeta.toFixed(2), 'η(h)', Math.round(wEta)],
+      [],
+      ['软件名称', '类型', '版本', '失效数n', '累计T(h)', 'λ̂(/kh)', 'MTBF(h)', 'R(720h)', '可用度A', 'R置信下限', '致命数', '结论'],
+      ...rows.map(r => [r.name, r.stype, r.version, r.n, r.T, r.lamObs.toFixed(3), Math.round(r.mtbf), r.R.toFixed(4), (r.A * 100).toFixed(3) + '%', r.Rlo.toFixed(4), r.fatal, r.pass ? '通过' : r.fatal > thFatal ? '整改' : '观察'])
+    ]
+    const blob = new Blob(['\ufeff' + rows2.map(r => r.map(csvCell).join(',')).join('\r\n')], {type: 'text/csv;charset=utf-8'})
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'ReliaScope_可靠性分析快照_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    $message.success('分析快照 CSV 已导出（' + rows.length + ' 个对象）')
+  }
+
+  const countUp = (id, target, dec) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    const t0 = performance.now(), dur = 900
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const v = target * (1 - Math.pow(1 - p, 3))
+      el.textContent = dec > 0 ? v.toFixed(dec) : Math.round(v).toLocaleString()
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+  const spark = (id, color, data) => {
+    const d = data && data.length > 1 ? data : [0, 0]
+    mk(id, {
+      grid: {left: 0, right: 0, top: 4, bottom: 0}, animationDuration: 1200,
+      xAxis: {type: 'category', show: false, data: d.map((_, i) => i)}, yAxis: {show: false, min: 'dataMin'},
+      series: [{type: 'line', data: d, smooth: true, showSymbol: false, lineStyle: {color, width: 1.5}, areaStyle: {color: color + '26'}}]
+    })
+  }
+
+  /* ---------- 最小二乘 ---------- */
+  const lsq = (xs, ys) => {
+    const n = xs.length
+    if (n < 2) return {a: 0, b: 1, r2: 0}
+    const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n
+    let sxy = 0, sxx = 0, syy = 0
+    for (let i = 0; i < n; i++) {const dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy}
+    const b = sxx > 0 ? sxy / sxx : 1
+    const a = my - b * mx
+    const r2 = sxx > 0 && syy > 0 ? (sxy * sxy) / (sxx * syy) : 0
+    return {a, b, r2}
+  }
+
+  let paretoData = []
+  let thMtbf = 500
+
+  const draw = (pts, winLam, duaneA) => {
+    /* 增长曲线：实测点 + Duane 拟合线 */
+    const maxT = pts.length ? pts[pts.length - 1].T : 1000
+    mk('ch-growth', {
+      tooltip: TIP, animationDuration: 900,
+      legend: {textStyle: {color: '#6b7280'}, top: 0}, grid: GRID,
+      xAxis: {type: 'value', name: '累计测试时间(h)', nameTextStyle: {color: '#6b7280'}, ...AX},
+      yAxis: {type: 'log', name: '累计MTBF(h)', logBase: 10, nameTextStyle: {color: '#6b7280'}, ...AX},
+      series: [
+        {name: '实测点', type: 'scatter', symbolSize: 8, itemStyle: {color: '#d97706'}, data: pts.map(p => [p.T, +(p.T / p.n).toFixed(1)])},
+        {
+          name: 'Duane 拟合', type: 'line', showSymbol: false, smooth: true, lineStyle: {color: '#0891b2', width: 2.5},
+          data: Array.from({length: 40}, (_, i) => {const t = (i + 1) * maxT / 40; return [Math.round(t), +(duaneA * Math.pow(t, fitA)).toFixed(1)]})
+        },
+        {name: '目标线 MTBF≥' + thMtbf, type: 'line', showSymbol: false, lineStyle: {color: '#dc2626', type: 'dashed'}, data: [[1, thMtbf], [maxT, thMtbf]]}
+      ]
+    })
+    /* Weibull：f(t) 与 R(t) */
+    const wbMax = Math.max(wEta * 2.2, 500)
+    mk('ch-weibull', {
+      tooltip: TIP, legend: {textStyle: {color: '#6b7280'}, top: 0}, grid: GRID,
+      xAxis: {type: 'value', name: '寿命 t (h)', nameTextStyle: {color: '#6b7280'}, ...AX}, yAxis: {type: 'value', ...AX},
+      series: [
+        {
+          name: '失效密度 f(t)×10³', type: 'line', smooth: true, showSymbol: false, lineStyle: {color: '#db2777', width: 2.5}, areaStyle: {color: 'rgba(219,39,119,.1)'},
+          data: Array.from({length: 80}, (_, i) => {const t = (i + 1) * wbMax / 80; const z = t / wEta; return [Math.round(t), +(wBeta / wEta * Math.pow(z, wBeta - 1) * Math.exp(-Math.pow(z, wBeta)) * 1000).toFixed(3)]})
+        },
+        {
+          name: '可靠度 R(t)', type: 'line', smooth: true, showSymbol: false, lineStyle: {color: '#059669', width: 2},
+          data: Array.from({length: 80}, (_, i) => {const t = (i + 1) * wbMax / 80; return [Math.round(t), +Math.exp(-Math.pow(t / wEta, wBeta)).toFixed(3)]})
+        }
+      ]
+    })
+    /* 帕累托（真实聚合） */
+    const modes = paretoData.map(d => d.name)
+    const total = paretoData.reduce((a, b) => a + b.value, 0)
+    let acc = 0
+    const cum = paretoData.map(d => {acc += d.value; return +(acc / total * 100).toFixed(1)})
+    mk('ch-pareto', {
+      tooltip: TIP, grid: GRID,
+      xAxis: {type: 'category', data: modes, axisLabel: {...AX.axisLabel, rotate: 34}, axisLine: AX.axisLine, axisTick: {show: false}},
+      yAxis: [{type: 'value', ...AX}, {type: 'value', max: 100, axisLabel: {color: '#0891b2', formatter: '{value}%'}, splitLine: {show: false}, axisLine: AX.axisLine}],
+      series: [
+        {name: '故障数', type: 'bar', barWidth: 16, itemStyle: {color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: '#4361ee'}, {offset: 1, color: 'rgba(67,97,238,.25)'}]}, borderRadius: [5, 5, 0, 0]}, data: paretoData.map(d => d.value)},
+        {name: '累计占比', type: 'line', yAxisIndex: 1, smooth: true, lineStyle: {color: '#0891b2', width: 2}, itemStyle: {color: '#0891b2'}, data: cum}
+      ]
+    })
+    /* 热力图：软件 × 构建（真实计数） */
+    const builds = [...new Set(RAWF.map(f => f.build).filter(Boolean))].sort()
+    const swCnt = {}
+    RAWF.forEach(f => {swCnt[f.software_id] = (swCnt[f.software_id] || 0) + 1})
+    const topSw = Object.keys(swCnt).sort((a, b) => swCnt[b] - swCnt[a]).slice(0, 8)
+    const swNm = (id) => (RAWS.find(s => s.id === id) || {}).name || id
+    const heatData = []
+    topSw.forEach((sid, i) => builds.forEach((b, j) => {
+      heatData.push([j, i, RAWF.filter(f => f.software_id === sid && f.build === b).length])
+    }))
+    mk('ch-heat', {
+      tooltip: {position: 'top', formatter: (p) => swNm(topSw[p.data[1]]) + ' · ' + builds[p.data[0]] + '\u003cbr/>失效 ' + p.data[2] + ' 个'},
+      grid: {left: 110, right: 20, top: 10, bottom: 62},
+      xAxis: {type: 'category', data: builds, ...AX}, yAxis: {type: 'category', data: topSw.map(s => swNm(s).slice(0, 10)), ...AX},
+      visualMap: {
+        min: 0, max: Math.max(3, ...heatData.map(d => d[2])), calculable: true, orient: 'horizontal', left: 'center', bottom: 0, textStyle: {color: '#6b7280'},
+        inRange: {color: ['#dbe6ff', '#8fabf7', '#4361ee', '#d97706', '#dc2626']}
+      },
+      series: [{type: 'heatmap', data: heatData, label: {show: true, color: '#334155', fontSize: 10}, itemStyle: {borderColor: '#fff', borderWidth: 2, borderRadius: 4}}]
+    })
+    /* 失效率演化（滑窗真实） */
+    mk('ch-bathtub', {
+      tooltip: TIP, grid: GRID,
+      xAxis: {type: 'value', name: '累计测试时间(h)', nameTextStyle: {color: '#6b7280'}, ...AX},
+      yAxis: {type: 'value', name: 'λ ×10³/h', ...AX},
+      series: [{
+        type: 'line', smooth: true, showSymbol: false, lineStyle: {color: '#ea580c', width: 2.5}, areaStyle: {color: 'rgba(234,88,12,.08)'}, data: winLam,
+        markLine: {silent: true, symbol: 'none', lineStyle: {color: '#6b7280', type: 'dashed'}, label: {color: '#6b7280', formatter: '全程均值'}, data: [{yAxis: winLam.length ? +(winLam.reduce((a, b) => a + b[1], 0) / winLam.length).toFixed(2) : 0}]}
+      }]
+    })
+    /* sparks：真实序列抽样 */
+    const smp = (arr) => {const r = []; for (let i = 0; i < 20; i++) r.push(arr[Math.floor(i * arr.length / 20)] ?? 0); return r}
+    spark('sp0', '#4361ee', smp(pts.map(p => p.n)))
+    spark('sp1', '#059669', smp(pts.map(p => +(p.T / p.n).toFixed(1))))
+    spark('sp2', '#0891b2', winLam.map(d => d[1]))
+    spark('sp3', '#dc2626', rows.map(r => r.R))
+    kpis.forEach((k, i) => countUp('kv' + i, k.raw, k.dec))
+  }
+
+  let RAWF = []
+  let RAWS = []
+
+  load = async () => {
+    try {
+      const [sw, fl, cr] = await Promise.all([
+        $fetch('/tables/softwares', {params: {size: 200}}),
+        $fetch('/tables/failures', {params: {size: 200}}),
+        $fetch('/tables/criteria', {params: {size: 100}})
+      ])
+      const softs = sw.items || []
+      RAWS = softs
+      const fails = (fl.items || []).filter(f => f.counted)
+      RAWF = fails
+        /* criteria 阈值 */
+        ; (cr.items || []).forEach(c => {
+          if (c.enabled === false) return
+          if (c.kind === 'r720') thR = Number(c.threshold) || 0.95
+          if (c.kind === 'mtbf') thMtbf = Number(c.threshold) || 500
+          if (c.kind === 'fatal') thFatal = Number(c.threshold) || 0
+        })
+      /* 每对象指标 */
+      const bySw = {}
+      fails.forEach(f => {
+        const o = bySw[f.software_id] || (bySw[f.software_id] = {n: 0, T: 0, fatal: 0})
+        o.n++; o.T += Number(f.delta_t || 0)
+        if (f.severity === '致命') o.fatal++
+      })
+      rows = softs.map(s => {
+        const o = bySw[s.id] || {n: 0, T: 1, fatal: 0}
+        const n = o.n, T = Math.max(1, o.T)
+        const mtbf = T / Math.max(1, n)
+        const lam = n / T
+        const R = Math.exp(-lam * 720)
+        const lo = mtbf * 2 * n / (2 * n + 2.9)
+        const hi = mtbf * (2 * n + 3.9) / Math.max(1, 2 * n - 3.9)
+        return {
+          id: s.id, name: s.name, version: s.version, stype: s.stype, n, T,
+          lamObs: lam * 1000, mtbf, R, A: mtbf / (mtbf + 3.6), Rlo: Math.exp(-720 / hi), fatal: o.fatal,
+          pass: R >= thR && mtbf >= thMtbf && o.fatal <= thFatal
+        }
+      }).sort((a, b) => b.R - a.R)
+      /* 全局累计序列 → Duane / Weibull 拟合 */
+      const seq = [...fails].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      let cum = 0
+      const pts = seq.map((f, i) => {cum += Number(f.delta_t || 0); return {T: cum, n: i + 1}}).filter(p => p.T > 1)
+      if (pts.length >= 3) {
+        const f1 = lsq(pts.map(p => Math.log(p.T)), pts.map(p => Math.log(p.T / p.n)))
+        fitA = Math.max(0, f1.b)
+        fitR2 = f1.r2
+        var duaneA = Math.exp(f1.a)
+      } else {fitA = 0; fitR2 = 0; var duaneA = 100}
+      const ts = seq.map(f => Number(f.delta_t || 0)).filter(t => t > 0).sort((a, b) => a - b)
+      if (ts.length >= 3) {
+        const nW = ts.length
+        const f2 = lsq(ts.map(t => Math.log(t)), ts.map((t, i) => Math.log(-Math.log(1 - (i + 1 - 0.3) / (nW + 0.4)))))
+        wBeta = Math.max(0.2, f2.b)
+        wEta = Math.exp(-f2.a / wBeta)
+      }
+      /* 滑窗 λ */
+      const win = 5
+      const winLam = []
+      for (let i = win; i <= pts.length; i++) {
+        const t1 = pts[i - 1].T
+        const t0 = i - win > 0 ? pts[i - win - 1].T : 0
+        winLam.push([t1, +(win / Math.max(1, t1 - t0) * 1000).toFixed(2)])
+      }
+      /* 帕累托 */
+      const mc = {}
+      fails.forEach(f => {mc[f.mode] = (mc[f.mode] || 0) + 1})
+      paretoData = Object.keys(mc).map(k => ({name: k, value: mc[k]})).sort((a, b) => b.value - a.value).slice(0, 8)
+      const bad = rows.filter(r => !r.pass).length
+      kpis = [
+        {lb: '样本总量', v: fails.length.toLocaleString(), un: '故障样本', tr: fails.length + ' 条有效计入', hint: 'failures 表', up: true, c: '#4361ee', raw: fails.length, dec: 0},
+        {lb: '增长率 α', v: fitA.toFixed(2), un: 'Duane', tr: 'R²=' + fitR2.toFixed(2), hint: 'Crow-AMSAA', up: fitA > 0.2, c: '#059669', raw: fitA, dec: 2},
+        {lb: 'Weibull 形状 β', v: wBeta.toFixed(2), un: '', tr: wBeta < 1 ? '早期失效主导' : wBeta < 1.8 ? '偶然失效过渡' : '耗损失效主导', hint: 'η=' + Math.round(wEta) + 'h', up: wBeta < 1.8, c: '#0891b2', raw: wBeta, dec: 2},
+        {lb: '未达判据软件', v: String(bad), un: '个', tr: '按 criteria 判据', hint: '实时判定', up: bad <= 2, c: '#dc2626', raw: bad, dec: 0}
+      ]
+      setTimeout(() => draw(pts, winLam, duaneA), 60)
+    } catch (e) {
+      $message.error('数据加载失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  load()
+</script>
+
+</html>

@@ -1,0 +1,76 @@
+{
+  "fields": [
+    {
+      "name": "url",
+      "type": "string",
+      "title": "仓库地址",
+      "description": "仓库完整 URL，作为仓库唯一标识",
+      "required": true
+    },
+    {
+      "name": "repo_path",
+      "type": "string",
+      "title": "仓库路径",
+      "description": "结构化路径，如 github.com/owner/repo，由 URL 解析生成"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "description": "探索进度",
+      "required": true,
+      "enum": [
+        "pending",
+        "cloning",
+        "exploring",
+        "completed",
+        "failed"
+      ]
+    },
+    {
+      "name": "clone_dir",
+      "type": "string",
+      "title": "克隆路径",
+      "description": "UFS 中的 clone 完整路径"
+    },
+    {
+      "name": "primary_lang",
+      "type": "string",
+      "title": "主要语言",
+      "description": "AI 识别的主要编程语言"
+    },
+    {
+      "name": "file_count",
+      "type": "int",
+      "title": "文件数",
+      "description": "源码文件总数（不含 node_modules 等）"
+    },
+    {
+      "name": "summary",
+      "type": "text",
+      "title": "概述",
+      "description": "AI 生成的仓库全局概述（3-5 句）"
+    },
+    {
+      "name": "explored_at",
+      "type": "time",
+      "title": "探索时间",
+      "description": "最近一次探索完成时间"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_repo_url",
+      "fields": [
+        "url"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_repo_status",
+      "fields": [
+        "status"
+      ]
+    }
+  ]
+}

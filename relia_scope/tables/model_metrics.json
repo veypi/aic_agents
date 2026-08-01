@@ -1,0 +1,64 @@
+{
+  "title": "模型产物",
+  "description": "Agent 模型重训任务产物：各可靠性增长模型的拟合参数与拟合优度；预测页与模型页从本表读取",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "空=全局模型"
+    },
+    {
+      "name": "model",
+      "type": "string",
+      "title": "模型",
+      "description": "G-O/Musa-Okumoto/J-M/Crow-AMSAA/Weibull",
+      "required": true
+    },
+    {
+      "name": "params",
+      "type": "text",
+      "title": "拟合参数(JSON)",
+      "description": "如 {\"a\":120,\"b\":0.0018} 或 {\"beta\":1.37,\"eta\":1240}"
+    },
+    {
+      "name": "aic",
+      "type": "number",
+      "title": "AIC"
+    },
+    {
+      "name": "fit_score",
+      "type": "number",
+      "title": "拟合优度 R²"
+    },
+    {
+      "name": "sample_n",
+      "type": "int",
+      "title": "样本量"
+    },
+    {
+      "name": "accuracy",
+      "type": "number",
+      "title": "30天预测准确率%"
+    },
+    {
+      "name": "trained_at",
+      "type": "time",
+      "title": "训练时间"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_mm_sw",
+      "fields": [
+        "software_id"
+      ]
+    },
+    {
+      "name": "idx_mm_model",
+      "fields": [
+        "model"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "fields": [
+    {
+      "name": "repo_id",
+      "type": "string",
+      "title": "仓库ID",
+      "description": "关联 repos 记录",
+      "required": true
+    },
+    {
+      "name": "file_path",
+      "type": "string",
+      "title": "文件路径",
+      "description": "相对于仓库根目录的文件路径",
+      "required": true
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "title": "语言",
+      "description": "文件扩展名 / 语言标识"
+    },
+    {
+      "name": "summary",
+      "type": "text",
+      "title": "文件摘要",
+      "description": "AI 对此文件的一句话用途描述"
+    },
+    {
+      "name": "is_entry",
+      "type": "bool",
+      "title": "是否入口",
+      "description": "是否为入口文件（main / index / app 等）"
+    },
+    {
+      "name": "token_estimate",
+      "type": "int",
+      "title": "Token估算",
+      "description": "粗略 Token 估算"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_rf_repo",
+      "fields": [
+        "repo_id"
+      ]
+    },
+    {
+      "name": "idx_rf_repo_path",
+      "fields": [
+        "repo_id",
+        "file_path"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_rf_entry",
+      "fields": [
+        "is_entry"
+      ]
+    }
+  ]
+}

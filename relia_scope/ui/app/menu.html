@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 公共布局：左侧菜单 + 共享样式（body 前缀穿透到各页面投影内容）" />
+<title>AppMenu</title>
+</head>
+<style>
+/* ================= ReliaScope 共享基础样式 =================
+   所有选择器以 body 开头：对本组件 DOM 及所有通过 <app-menu>...</app-menu> 投影进来的页面内容生效。
+   页面专属样式仍写在各页面自己的 <style> 中（scoped 互不影响）。 */
+body{height:100%}
+body .shell{--num:"DIN Alternate","Bahnschrift","Roboto Condensed","JetBrains Mono",ui-monospace,SFMono-Regular,monospace;--ink:#101c3d;--cardbg:#ffffff;display:grid;grid-template-columns:224px minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;position:relative;z-index:1}
+/* 环境背景：蓝图网格 + 双色氛围光晕 */
+body .relio-ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(1100px 480px at 92% -12%, rgba(67,97,238,.09), transparent 60%),
+  radial-gradient(900px 540px at -8% 108%, rgba(13,148,136,.08), transparent 58%),
+  linear-gradient(rgba(67,97,238,.032) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(67,97,238,.032) 1px, transparent 1px);
+  background-size:auto,auto,34px 34px,34px 34px;}
+body .page{flex:1;min-width:0;min-height:0;overflow-y:auto;padding:22px 26px 56px}
+/* ---------- 左侧菜单 ---------- */
+body .mrail{width:224px;flex-shrink:0;min-height:0;overflow-y:auto;display:flex;flex-direction:column;padding:20px 12px 14px;border-right:1px solid var(--border-color);background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(247,252,255,.55))}
+body .ngroup{font-size:10px;font-weight:700;letter-spacing:.18em;color:var(--text-color-disabled);padding:15px 10px 6px}
+body .mitem{display:flex;align-items:center;gap:10px;padding:9px 11px;margin-bottom:2px;border-radius:9px;border:1px solid transparent;color:var(--text-color-secondary);font-size:13px;text-decoration:none;cursor:pointer;transition:all var(--transition-fast);position:relative}
+body .mitem svg{width:17px;height:17px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+body .mitem:hover{color:var(--color-primary);background:rgba(67,97,238,.06);transform:translateX(2px)}
+body .mitem.on{color:#2743c7;background:linear-gradient(90deg,rgba(67,97,238,.13),rgba(13,148,136,.05));border-color:rgba(67,97,238,.25);font-weight:600}
+body .mitem.on svg{opacity:1}
+body .mitem.on::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--color-primary),var(--color-info))}
+body .mbadge{margin-left:auto;font-size:10px;font-weight:700;background:rgba(220,38,38,.12);color:#b91c1c;padding:2px 7px;border-radius:99px;font-family:var(--num)}
+body .mfoot{margin:auto 4px 4px;padding:11px 12px;border:1px dashed var(--border-color);border-radius:10px;font-size:11px;color:var(--text-color-tertiary);line-height:2}
+body .mfoot b{font-family:var(--num);color:var(--ink);font-size:12px}
+body .pdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--color-success);margin-right:6px;animation:pl 2s infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+@media(max-width:960px){
+  body{height:auto}
+  body .shell{height:auto;grid-template-columns:1fr;grid-template-rows:none}
+  body .page{overflow:visible}
+  body .mrail{width:100%;position:static;border-right:none;border-bottom:1px solid var(--border-color);flex-direction:row;flex-wrap:wrap;gap:2px;padding:10px 12px;overflow:visible}
+  body .ngroup,body .mfoot{display:none}
+  body .mitem.on::before{display:none}
+}
+/* ---------- 页头 ---------- */
+body .pagehead{display:flex;align-items:flex-end;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+body .pagehead h1{font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1.15}
+body .pagehead .crumb{font-size:10.5px;font-weight:700;letter-spacing:.16em;color:var(--text-color-tertiary);text-transform:uppercase;margin-bottom:5px}
+body .pagehead .right{margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+/* ---------- 布局网格 ---------- */
+body .g{display:grid;gap:15px}
+body .g4{grid-template-columns:repeat(4,1fr)}
+body .g3{grid-template-columns:repeat(3,1fr)}
+body .g2{grid-template-columns:repeat(2,1fr)}
+body .g23{grid-template-columns:2fr 1fr}
+body .g32{grid-template-columns:1fr 2fr}
+body .g>*{animation:rise .5s cubic-bezier(.22,.8,.32,1) both}
+body .g>*:nth-child(2){animation-delay:.06s}
+body .g>*:nth-child(3){animation-delay:.12s}
+body .g>*:nth-child(4){animation-delay:.18s}
+body .g>*:nth-child(5){animation-delay:.24s}
+body .g>*:nth-child(6){animation-delay:.3s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media(max-width:1280px){body .g4,body .g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){body .g4,body .g3,body .g2,body .g23,body .g32{grid-template-columns:1fr}}
+/* ---------- 卡片 ---------- */
+body .card{background:var(--cardbg);border:1px solid var(--border-color);border-radius:12px;padding:17px 18px;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);transition:box-shadow var(--transition-base),transform var(--transition-base),border-color var(--transition-base)}
+body .card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(67,97,238,.4),rgba(14,165,233,.28),transparent);opacity:0;transition:opacity var(--transition-base)}
+body .card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:var(--border-color-hover)}
+body .card:hover::before{opacity:1}
+body .card h3{font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body .card .tag{font-size:9.5px;font-weight:700;letter-spacing:.08em;color:#0e7490;background:rgba(8,145,178,.09);padding:2px 8px;border-radius:99px;border:1px solid rgba(8,145,178,.22)}
+body .card .tag.live{color:#b91c1c;background:rgba(220,38,38,.07);border-color:rgba(220,38,38,.22)}
+body .card .tag.live::before{content:"\25CF";margin-right:4px;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+body .card .desc{font-size:11.5px;color:var(--text-color-tertiary);margin-bottom:10px;line-height:1.7}
+/* ---------- KPI ---------- */
+body .kpi .lb{font-size:12px;color:var(--text-color-tertiary);display:flex;align-items:center;gap:7px;font-weight:500}
+body .kpi .vl{font-family:var(--num);font-size:29px;font-weight:800;margin:7px 0 3px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1.05}
+body .kpi .un{font-size:12px;color:var(--text-color-tertiary);font-weight:500;margin-left:4px;font-family:inherit}
+body .kpi .tr{font-size:11.5px;font-weight:600;display:flex;gap:7px;align-items:center}
+body .kpi .tr em{font-style:normal;color:var(--text-color-disabled);font-weight:400}
+body .kpi .spark{position:absolute;right:6px;bottom:5px;width:102px;height:40px;opacity:.9}
+body .up{color:#047857}
+body .down{color:#b91c1c}
+body .dot{width:8px;height:8px;border-radius:3px;display:inline-block;flex-shrink:0}
+/* ---------- 表格 ---------- */
+body table{width:100%;border-collapse:collapse;font-size:12.5px}
+body th{font-size:10.5px;font-weight:700;letter-spacing:.07em;color:var(--text-color-tertiary);text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--border-color);text-transform:uppercase;white-space:nowrap}
+body td{padding:9.5px 10px;border-bottom:1px solid rgba(209,213,219,.5);color:var(--text-color);vertical-align:middle}
+body tbody tr{transition:background var(--transition-fast)}
+body tbody tr:hover{background:rgba(67,97,238,.035)}
+body .mono{font-family:var(--num);font-variant-numeric:tabular-nums}
+/* ---------- 状态胶囊 ---------- */
+body .pill{padding:2.5px 10px;border-radius:99px;font-size:11px;font-weight:600;display:inline-block;white-space:nowrap}
+body .p-green{background:rgba(5,150,105,.1);color:#047857}
+body .p-yellow{background:rgba(217,119,6,.12);color:#b45309}
+body .p-red{background:rgba(220,38,38,.1);color:#b91c1c}
+body .p-blue{background:rgba(67,97,238,.1);color:#3450d1}
+body .p-cyan{background:rgba(8,145,178,.1);color:#0e7490}
+body .p-purple{background:rgba(124,58,237,.1);color:#6d28d9}
+body .p-gray{background:rgba(100,116,139,.12);color:#475569}
+/* ---------- 进度条 ---------- */
+body .bar{height:6px;border-radius:4px;background:#e8edf5;overflow:hidden;min-width:64px}
+body .bar i{display:block;height:100%;border-radius:4px;transition:width .8s cubic-bezier(.22,.8,.32,1)}
+/* ---------- 按钮 ---------- */
+body .btn{background:var(--color-primary);color:#fff;border:none;padding:9px 17px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:0 3px 10px rgba(67,97,238,.28);transition:all var(--transition-fast);white-space:nowrap}
+body .btn:hover{background:var(--color-primary-hover);transform:translateY(-1px);box-shadow:0 6px 16px rgba(67,97,238,.34)}
+body .btn:active{transform:translateY(0) scale(.98)}
+body .btn.ghost{background:#fff;border:1px solid var(--border-color);color:var(--text-color-secondary);box-shadow:var(--shadow-sm)}
+body .btn.ghost:hover{border-color:var(--color-primary);color:var(--color-primary);background:#fff}
+body .btn.sm{padding:6px 12px;font-size:12px;border-radius:8px}
+body .btn.danger{background:var(--color-danger);box-shadow:0 3px 10px rgba(239,68,68,.25)}
+body .btn.danger:hover{background:var(--color-danger-hover)}
+/* ---------- 筛选 chips ---------- */
+body .chip{padding:5.5px 14px;border-radius:99px;font-size:12px;font-weight:500;background:#fff;border:1px solid var(--border-color);color:var(--text-color-secondary);cursor:pointer;transition:all var(--transition-fast);user-select:none;display:inline-block}
+body .chip:hover{border-color:var(--color-primary);color:var(--color-primary)}
+body .chip.on{background:var(--color-primary);color:#fff;border-color:var(--color-primary);box-shadow:0 3px 9px rgba(67,97,238,.3)}
+body .filter{display:flex;gap:8px;flex-wrap:wrap}
+/* ---------- 分组标题行 ---------- */
+body .srow{display:flex;align-items:center;gap:14px;margin:24px 0 14px;flex-wrap:wrap}
+body .srow h2{font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+body .srow .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--border-color),transparent);min-width:40px}
+/* ---------- 事件流 ---------- */
+body .feed{max-height:308px;overflow-y:auto}
+body .feed-item{display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid rgba(209,213,219,.45);font-size:12.5px;animation:rise .4s both}
+body .feed-item .ic{width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;font-family:var(--num)}
+body .feed-item .tm{color:var(--text-color-disabled);font-size:10.5px;margin-top:2px;font-family:var(--num)}
+body .feed-item .tx{color:var(--text-color-secondary);line-height:1.55}
+body .feed-item .tx b{color:var(--ink);font-weight:600}
+/* ---------- 排行条目 ---------- */
+body .sitem{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid rgba(209,213,219,.45);cursor:pointer;transition:all var(--transition-fast);border-radius:8px}
+body .sitem:hover{background:rgba(67,97,238,.045);padding-left:11px}
+body .sitem:last-child{border:none}
+body .sitem .nm{font-size:13px;font-weight:600;color:var(--ink)}
+body .sitem .tp{font-size:11px;color:var(--text-color-tertiary)}
+body .sitem .rt{margin-left:auto;text-align:right}
+body .sitem .rv{font-size:15px;font-weight:800;font-family:var(--num)}
+body .ring{width:44px;height:44px;flex-shrink:0}
+/* ---------- 表单 ---------- */
+body .fin{width:100%;padding:9px 12px;border:1px solid var(--border-color);border-radius:9px;font-size:13px;background:#fff;color:var(--text-color);transition:all var(--transition-fast)}
+body .fin:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 3px rgba(67,97,238,.13)}
+body .fld{margin-bottom:12px}
+body .fld label{display:block;font-size:11.5px;font-weight:600;color:var(--text-color-secondary);margin-bottom:5px}
+/* ---------- 弹窗 ---------- */
+body .mask{position:fixed;inset:0;background:rgba(15,23,42,.44);backdrop-filter:blur(2px);z-index:60;display:flex;align-items:center;justify-content:center;animation:fd .18s}
+body .modal{width:470px;max-width:92vw;background:#fff;border-radius:14px;padding:22px;box-shadow:var(--shadow-lg);animation:pop .28s cubic-bezier(.2,.9,.3,1.15);max-height:88vh;overflow-y:auto}
+body .modal h3{font-size:16px;font-weight:800;color:var(--ink);margin-bottom:16px}
+@keyframes fd{from{opacity:0}}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.97)}}
+/* ---------- 杂项 ---------- */
+body .chart{width:100%}
+body .legend-row{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-color-tertiary);margin-top:6px}
+body .legend-row span{display:flex;align-items:center;gap:5px}
+body .footer-note{margin-top:28px;color:var(--text-color-disabled);font-size:11px;text-align:center;letter-spacing:.06em}
+body a.tlink{color:var(--color-primary);cursor:pointer;text-decoration:none;font-weight:500}
+body a.tlink:hover{text-decoration:underline}
+body ::-webkit-scrollbar{width:9px;height:9px}
+body ::-webkit-scrollbar-thumb{background:#c9d4e6;border-radius:5px;border:2px solid transparent;background-clip:content-box}
+body ::-webkit-scrollbar-track{background:transparent}
+</style>
+<body>
+<div class="shell">
+  <div class="relio-ambient"></div>
+  <aside class="mrail">
+    <div class="ngroup">可靠性工作台</div>
+    <a class="mitem" :class="{on: on('/i')}" href="/i">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      可靠性驾驶舱</a>
+    <a class="mitem" :class="{on: on('/i/collect')}" href="/i/collect">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>
+      数据采集中心</a>
+    <a class="mitem" :class="{on: on('/i/analysis')}" href="/i/analysis">
+      <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg>
+      可靠性分析</a>
+    <a class="mitem" :class="{on: on('/i/predict')}" href="/i/predict">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="9.5" ry="4.2" transform="rotate(-24 12 12)"/></svg>
+      故障预测</a>
+    <a class="mitem" :class="{on: on('/i/target')}" href="/i/target">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      单目标验证</a>
+    <a class="mitem" :class="{on: on('/i/models')}" href="/i/models">
+      <svg viewBox="0 0 24 24"><path d="M6 19c5 0 4-14 8-14"/><path d="M9 12h8"/><path d="M14 5l6 14"/></svg>
+      模型与计算</a>
+    <div class="ngroup">资产与质量</div>
+    <a class="mitem" :class="{on: on('/i/assets')}" href="/i/assets">
+      <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      软件资产库</a>
+    <a class="mitem" :class="{on: on('/i/incidents')}" href="/i/incidents">
+      <svg viewBox="0 0 24 24"><path d="M12 3L2.5 19.5h19z"/><path d="M12 10v4M12 17.2v.1"/></svg>
+      故障事件流<span class="mbadge" v-if="badge > 0">{{ badge }}</span></a>
+    <a class="mitem" :class="{on: on('/i/report')}" href="/i/report">
+      <svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/><path d="M9 13h7M9 17h7"/></svg>
+      验证报告</a>
+    <div class="ngroup">帮助与支持</div>
+    <a class="mitem" :class="{on: on('/i/help')}" href="/i/help">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2 1c0 1.8-2.6 2.2-2.6 3.7M12 17.2h.01"/></svg>
+      使用手册</a>
+      <a class="mitem" :class="{on: on('/i/help-metrics')}" href="/i/help-metrics">
+        <svg viewBox="0 0 24 24"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9z"/><path d="M12 7v3M12 13.5v.1"/></svg>
+        验证指标</a>
+    <template v-if="isAdmin">
+      <div class="ngroup">系统</div>
+      <a class="mitem" :class="{on: on('/i/settings')}" href="/i/settings">
+        <svg viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        平台设置</a>
+      <a class="mitem" :class="{on: on('/tasks')}" href="/tasks">
+        <svg viewBox="0 0 24 24"><path d="M5 3h4v4H5zM11 3h4v4h-4zM17 3h4v4h-4zM5 10h4v4H5zM11 10h4v4h-4zM17 10h4v4h-4zM5 17h4v4H5zM11 17h4v4h-4zM17 17h4v4h-4z"/></svg>
+        任务中心</a>
+      <a class="mitem" :class="{on: on('/tables')}" href="/tables">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/><path d="M8 6v12"/></svg>
+        数据库</a>
+    </template>
+    <div class="mfoot">
+      <div><span class="pdot" :style="{background: linkColor}"></span>{{ linkText }}</div>
+      <div>在管系统 <b>{{ swCount }}</b> · 在线探针 <b>{{ probeCount }}</b></div>
+      <div style="opacity:.65">ReliaScope v3.2 · AgentDB 驱动</div>
+    </div>
+  </aside>
+  <main class="page"><vslot></vslot></main>
+</div>
+</body>
+<script setup>
+badge = 0
+swCount = 0
+probeCount = 0
+linkText = '链路检测中'
+linkColor = '#94a3b8'
+isAdmin = false
+
+// 系统菜单（平台设置）仅管理员可见；兼容同步/异步返回，异常时默认隐藏
+const checkPerm = async () => {
+  try { isAdmin = !!($mod.$auth && (await $mod.$auth.PermAdmin('*'))) } catch (e) { isAdmin = false }
+}
+checkPerm()
+
+on = (to) => {
+  const p = (location.pathname || '').replace(/\/+$/, '')
+  let rp = ''
+  try { rp = (window.$router && $router.current && ($router.current.fullPath || $router.current.path)) || '' } catch (e) {}
+  const hit = (s) => !!s && (s === to || s.endsWith(to) || s.startsWith(to + '/') || s.startsWith(to + '?'))
+  return hit(p) || hit(rp)
+}
+</script>
+<script>
+const init = async () => {
+  try {
+    const inc = await $fetch('/tables/incidents', { params: { size: 200 } })
+    badge = (inc.items || []).filter(x => x.status !== '已闭环').length
+  } catch (e) { /* 静默 */ }
+  try {
+    const sw = await $fetch('/tables/softwares', { params: { size: 1 } })
+    swCount = sw.total || 0
+  } catch (e) {}
+  try {
+    const ch = await $fetch('/tables/channels', { params: { size: 100 } })
+    const items = ch.items || []
+    probeCount = items.reduce((s, x) => s + Number(x.probe_count || 0), 0)
+    const avg = items.length ? items.reduce((s, x) => s + Number(x.online_rate || 0), 0) / items.length : 100
+    linkColor = avg >= 95 ? '#22c55e' : avg >= 80 ? '#fbbf24' : '#ef4444'
+    linkText = avg >= 95 ? '采集链路正常' : avg >= 80 ? '部分通道降级' : '采集链路异常'
+  } catch (e) {}
+}
+init()
+</script>
+</html>

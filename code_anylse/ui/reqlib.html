@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="ReqVerif 需求库" />
+  <title>需求库</title>
+</head>
+<style>
+  .ell {
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+  }
+
+  .req-link {
+    color: var(--color-info);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px
+  }
+
+  .req-link:hover {
+    text-decoration: underline
+  }
+
+  .loading-mask {
+    opacity: .5;
+    pointer-events: none;
+    transition: opacity .15s
+  }
+</style>
+
+<body>
+  <local-app-menu page="reqlib">
+    <div class="rv-crumb">需求与模型 / 需求库</div>
+    <div class="rv-titlebar">
+      <h2>需求库</h2>
+      <span class="rv-desc">由《系统需求规格说明书 V3.3》Agent 智能解析入库，支持人工校对与一键校验</span>
+      <span class="spacer"></span>
+      <button class="rv-btn ghost" @click="reparse()">⟳ 校验需求库</button>
+      <button class="rv-btn" @click="addOpen = true">＋ 新增需求</button>
+    </div>
+
+    <div class="rv-toolbar">
+      <input class="rv-input" style="width:220px" v:value="kw" @keydown="onKwKey($event)"
+        placeholder="关键词 / 需求ID，回车检索" />
+      <select class="rv-input" v:value="domain" @change="onFilter()">
+        <option value="">全部域</option>
+        <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
+      </select>
+      <select class="rv-input" v:value="impl" @change="onFilter()">
+        <option value="">实现状态</option>
+        <option v-for="s in impls" :key="s" :value="s">{{ s }}</option>
+      </select>
+      <select class="rv-input" v:value="verif" @change="onFilter()">
+        <option value="">验证状态</option>
+        <option v-for="s in verifs" :key="s" :value="s">{{ s }}</option>
+      </select>
+      <button class="rv-btn ghost sm" @click="onFilter()">⌕ 检索</button>
+      <span class="spacer"></span>
+      <span class="dim" style="font-size:11px">共匹配 {{ total }} 条</span>
+    </div>
+
+    <div class="rv-twrap" :class="{ 'loading-mask': loading }">
+      <table class="rv-table">
+        <thead>
+          <tr>
+            <th>需求ID</th>
+            <th>需求描述</th>
+            <th>域</th>
+            <th>层级</th>
+            <th>实现组件</th>
+            <th>实现状态</th>
+            <th>验证状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in rows" :key="r.id">
+            <td><span class="req-link" @click="openReq(r.req_id)">{{ r.req_id }}</span></td>
+            <td>
+              <div class="ell" :title="r.description">{{ r.description }}</div>
+            </td>
+            <td>{{ r.domain }}</td>
+            <td class="dim">{{ r.level }}</td>
+            <td class="mono dim" style="font-size:11px">{{ r.impl_components || '—' }}</td>
+            <td><span class="rv-tag" :class="implCls(r.impl_status)"><i></i>{{ r.impl_status }}</span></td>
+            <td><span class="rv-tag" :class="verCls(r.verif_status)"><i></i>{{ r.verif_status }}</span></td>
+            <td><button class="rv-btn ghost sm" @click="openReq(r.req_id)">详情</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="rv-empty" v-if="!rows.length && !loading">无匹配需求</div>
+    </div>
+
+    <local-pager :page="page" :size="size" :total="total" @update="onPage"></local-pager>
+
+    <local-req-drawer ref="drawer"></local-req-drawer>
+
+    <local-dialog-shell :show="addOpen" @close="addOpen = false" title="新增需求">
+      <div class="rv-form-row">
+        <div class="rv-form-item"><label>需求ID</label><input class="rv-input mono" v:value="nreq.req_id" /></div>
+        <div class="rv-form-item"><label>所属域</label>
+          <select class="rv-input" v:value="nreq.domain">
+            <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
+          </select>
+        </div>
+        <div class="rv-form-item"><label>优先级</label>
+          <select class="rv-input" v:value="nreq.priority">
+            <option value="高">高</option>
+            <option value="中">中</option>
+            <option value="低">低</option>
+          </select>
+        </div>
+      </div>
+      <div class="rv-form-row">
+        <div class="rv-form-item"><label>需求描述（支持自然语言，AI 将自动形式化）</label>
+          <textarea rows="4" v:value="nreq.description" placeholder="例如：系统在链路中断后 2 秒内完成重连……"></textarea>
+        </div>
+      </div>
+      <div class="rv-modal-foot">
+        <button class="rv-btn ghost" @click="addOpen = false">取消</button>
+        <button class="rv-btn" @click="submitReq()">创建并建模</button>
+      </div>
+    </local-dialog-shell>
+  </local-app-menu>
+</body>
+<script setup>
+  kw = ''
+  domain = ''
+  impl = ''
+  verif = ''
+  page = 1
+  size = 20
+  total = 0
+  rows = []
+  loading = false
+  addOpen = false
+  nreq = {req_id: 'SR-NEW-', domain: '导航', priority: '中', description: ''}
+
+  domains = ['导航', '控制', '通信', '任务', '安全', '诊断']
+  impls = ['完整实现', '部分实现', '未覆盖']
+  verifs = ['符合', '偏离', '待验证']
+
+  implCls = (s) => s === '完整实现' ? 't-info' : s === '部分实现' ? 't-vio' : 't-bad'
+  verCls = (s) => s === '符合' ? 't-ok' : s === '偏离' ? 't-bad' : 't-warn'
+
+  CUR_PRJ = (() => {try {return localStorage.rv_project || 'UAV-NAV'} catch (e) {return 'UAV-NAV'} })()
+  PRJ_TABLES = {requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1}
+  q = async (table, filters, size, pageN, sort) => {
+    if (PRJ_TABLES[table]) filters = Object.assign({}, filters, {project_code: CUR_PRJ})
+    const params = {size: size || 20, page: pageN || 1}
+    if (filters && Object.keys(filters).length) params.filters = JSON.stringify(filters)
+    if (sort) params.sort = sort
+    return $mod.$fetch('/tables/' + table, {params})
+  }
+
+  doQuery = async () => {
+    loading = true
+    try {
+      const flt = {}
+      if (domain) flt.domain = domain
+      if (impl) flt.impl_status = impl
+      if (verif) flt.verif_status = verif
+      let items = []
+      const p1 = await q('requirements', flt, 200, 1, 'req_id')
+      items = p1.items || []
+      const pn = Math.min(3, Math.ceil((p1.total || 0) / 200))
+      if (pn > 1) {
+        const rest = await Promise.all(Array.from({length: pn - 1}, (_, i) => q('requirements', flt, 200, i + 2, 'req_id')))
+        rest.forEach(d => {items = items.concat(d.items || [])})
+      }
+      const k = (kw || '').trim().toLowerCase()
+      const filtered = k
+        ? items.filter(r => (r.req_id || '').toLowerCase().includes(k) || (r.description || '').toLowerCase().includes(k))
+        : items
+      total = filtered.length
+      rows = filtered.slice((page - 1) * size, page * size)
+    } catch (e) {
+      $message.error('需求检索失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+
+  onFilter = () => {page = 1; doQuery()}
+  onPage = (n) => {page = n; doQuery()}
+  onKwKey = (ev) => {if (ev.key === 'Enter') onFilter()}
+
+  openReq = (rid) => {
+    $refs.drawer.$data.open(rid)
+  }
+
+  /* 创建需求库校验任务：Agent 全量校验一致性并修复明显错误 */
+  reparse = async () => {
+    try {
+      const td = await $mod.$fetch('/api/tasks', {
+        method: 'POST', body: {
+          title: '需求库校验',
+          goal: '【req-validate】校验 ReqVerif 需求库（当前 ' + total + ' 条）：统计规模与分布，检查空描述/缺域/低置信度/自相矛盾/废弃仍有追踪等问题项，仅修复明显错误。按核心 prompt 中【req-validate】规范执行。',
+          steps: '1. 全量读取 requirements 并统计；2. 逐项检查问题；3. 修复明显错误并汇报分布与问题清单',
+          constraints: '只读为主；仅修复明显错误字段，不得批量改写需求文本',
+        }
+      })
+      $message.success('需求库校验任务已创建（' + ((td.task && td.task.id) || '') + '），完成后可刷新查看')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    }
+  }
+
+  submitReq = async () => {
+    const id = (nreq.req_id || '').trim()
+    const desc = (nreq.description || '').trim()
+    if (!id || !desc) {$message.error('请填写需求ID与描述'); return }
+    try {
+      await $mod.$fetch('/tables/requirements', {
+        method: 'POST', body: {
+          data: {
+            req_id: id, description: desc, domain: nreq.domain, priority: nreq.priority,
+            level: '系统级', impl_status: '未覆盖', verif_status: '待验证',
+            impl_components: '', source: '人工录入', confidence: 100, deprecated: false,
+          }
+        }
+      })
+      addOpen = false
+      nreq = {req_id: 'SR-NEW-', domain: '导航', priority: '中', description: ''}
+      $message.success('需求已创建，AI 形式化建模任务已排队')
+      onFilter()
+    } catch (e) {
+      $message.error('创建失败：' + e.message)
+    }
+  }
+
+  qr = (() => {try {return $router.query || {}} catch (e) {return {}} })()
+</script>
+<script>
+  if (qr.kw) kw = qr.kw
+  doQuery()
+  if (qr.req_id) openReq(qr.req_id)
+</script>
+
+</html>

@@ -1,0 +1,70 @@
+{
+  "fields": [
+    {
+      "name": "repo_id",
+      "type": "string",
+      "title": "仓库ID",
+      "description": "关联 repos 记录",
+      "required": true
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "title": "分类",
+      "description": "分类标签",
+      "required": true,
+      "default": "architecture",
+      "enum": [
+        "architecture",
+        "dependency",
+        "pattern",
+        "api",
+        "data_flow",
+        "overview",
+        "tech_stack",
+        "other"
+      ]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "title": "标题",
+      "description": "洞察标题",
+      "required": true
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "title": "内容",
+      "description": "Markdown 格式的详细分析内容",
+      "required": true
+    },
+    {
+      "name": "confidence",
+      "type": "string",
+      "title": "置信度",
+      "description": "AI 对此洞察的置信度",
+      "default": "medium",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_ri_repo",
+      "fields": [
+        "repo_id"
+      ]
+    },
+    {
+      "name": "idx_ri_repo_cat",
+      "fields": [
+        "repo_id",
+        "category"
+      ]
+    }
+  ]
+}

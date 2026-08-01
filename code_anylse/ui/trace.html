@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>需求追踪矩阵</title>
+</head>
+<style>
+  .matrix-wrap {
+    overflow: auto;
+    max-height: 600px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg)
+  }
+
+  table.matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-size: 11.5px
+  }
+
+  .matrix th,
+  .matrix td {
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 10px;
+    text-align: center;
+    white-space: nowrap
+  }
+
+  .matrix thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-color-tertiary);
+    font-size: 11px;
+    color: var(--text-color-secondary);
+    font-weight: 600
+  }
+
+  .matrix thead th .thsub {
+    font-weight: 400;
+    font-size: 10px;
+    opacity: .7;
+    margin-top: 1px
+  }
+
+  .matrix td.rowh {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    text-align: left;
+    background: var(--bg-color-secondary);
+    max-width: 300px
+  }
+
+  .matrix thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--bg-color-tertiary)
+  }
+
+  .req-link {
+    color: var(--color-primary);
+    font-family: 'Chakra Petch', var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer
+  }
+
+  .req-link:hover {
+    text-decoration: underline
+  }
+
+  .rh-desc {
+    margin-left: 8px;
+    color: var(--text-color-disabled);
+    font-size: 10.5px
+  }
+
+  .cell {
+    cursor: pointer;
+    min-width: 70px;
+    transition: background-color .15s;
+    user-select: none
+  }
+
+  .cell-F {
+    background: color-mix(in srgb, var(--color-info) 15%, transparent);
+    color: #0369a1;
+    font-weight: 700
+  }
+
+  .cell-P {
+    background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
+    color: #4338ca;
+    font-weight: 700
+  }
+
+  .cell-N {
+    color: var(--text-color-disabled)
+  }
+
+  .cell:hover {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px
+  }
+
+  tr.hi>td {
+    background: color-mix(in srgb, var(--color-warning) 13%, transparent) !important
+  }
+
+  .rev {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-warning);
+    margin-left: 4px;
+    vertical-align: middle;
+    animation: rv-pulse 1.6s infinite
+  }
+
+  .ck {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-color-secondary);
+    cursor: pointer;
+    user-select: none
+  }
+
+  .ck input {
+    accent-color: var(--color-primary)
+  }
+
+  .legend {
+    font-size: 11px;
+    color: var(--text-color-disabled);
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-left: auto
+  }
+
+  .legend b {
+    font-weight: 600
+  }
+
+  .lg-f {
+    color: #0369a1
+  }
+
+  .lg-p {
+    color: #4338ca
+  }
+</style>
+
+<body>
+  <local-app-menu page="trace">
+    <div class="rv-crumb">需求与模型 / 需求追踪</div>
+    <div class="rv-titlebar">
+      <h1>需求追踪矩阵</h1>
+      <p>系统需求 × 软件组件覆盖关系 · 点击单元格切换实现状态（F→P→N）</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="exportMatrix">导出矩阵</button>
+      </span>
+    </div>
+
+    <div class="rv-grid g4" style="margin-bottom:14px">
+      <local-kpi-card lab="完整实现链接" :val="statF" tone="var(--color-info)"></local-kpi-card>
+      <local-kpi-card lab="部分实现链接" :val="statP" tone="var(--color-secondary)"></local-kpi-card>
+      <local-kpi-card lab="未覆盖需求" :val="statN" tone="var(--color-danger)"><a class="sub-link" href="javascript:;"
+          @click="showGaps">仅看缺口 →</a></local-kpi-card>
+      <local-kpi-card lab="待重验链接" :val="statRev" tone="var(--color-warning)" sub="由 SR-NAV-104 变更触发"></local-kpi-card>
+    </div>
+
+    <div class="rv-toolbar">
+      <label class="ck"><input type="checkbox" :checked="gapOnly" @change="onGap($event)"> 仅看覆盖缺口（{{ statN }}）</label>
+      <div class="legend">
+        <span><b class="lg-f">●</b> 完整实现</span>
+        <span><b class="lg-p">◐</b> 部分实现</span>
+        <span><b>—</b> 未覆盖</span>
+        <span><i class="rev" style="animation:none"></i> 待重验</span>
+      </div>
+    </div>
+
+    <div class="rv-panel" style="padding:0">
+      <div v-if="loading" class="rv-empty">正在构建追踪矩阵…</div>
+      <div v-else class="matrix-wrap">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>系统需求 \ 软件组件</th>
+              <th v-for="c in comps" :key="c.id">{{ c.comp_code }}<div class="thsub">{{ c.name }}</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in pageRows()" :key="r.id" :class="{ hi: r.req_id === hiReq }">
+              <td class="rowh"><span class="req-link" :title="r.req_id" @click="goReq(r.req_id)">{{ r.req_id
+                  }}</span><span class="rh-desc">{{ short(r.description) }}</span></td>
+              <td v-for="c in comps" :key="c.id" class="cell" :class="'cell-' + cellOf(r.req_id, c.comp_code)"
+                :title="r.req_id + ' × ' + c.comp_code + '：点击切换'" @click="toggle(r, c)">{{ symOf(r.req_id, c.comp_code)
+                }}<i class="rev" v-if="isRev(r.req_id, c.comp_code)"></i></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <local-pager :page="page" :size="size" :total="totalM()" @update="onPage"></local-pager>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  comps = []
+  reqsAll = []
+  linkMap = {}
+  page = 1
+  size = 20
+  gapOnly = false
+  hiReq = ''
+  statF = 0
+  statP = 0
+  statN = 0
+  statRev = 0
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => {try {return localStorage.rv_project || 'UAV-NAV'} catch (e) {return 'UAV-NAV'} })()
+  PRJ_TABLES = {requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1}
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) {f.project_code = CUR_PRJ; p = Object.assign({}, p, {filters: JSON.stringify(f)})}
+    }
+    return $mod.$fetch('/tables/' + t, {params: p})
+  }
+  hasLink = (rid) => {
+    const m = linkMap[rid]
+    return !!(m && Object.keys(m).length > 0)
+  }
+  viewList = () => gapOnly ? reqsAll.filter((r) => !hasLink(r.req_id)) : reqsAll
+  allPages = async (t, params) => {
+    const first = await q(t, Object.assign({size: 200, page: 1}, params))
+    let items = (first.items || []).slice()
+    let p = 2
+    while (items.length < (first.total || 0) && p <= 3) {
+      const nx = await q(t, Object.assign({size: 200, page: p}, params))
+      items = items.concat(nx.items || [])
+      p++
+    }
+    return items
+  }
+
+  refreshStats = async () => {
+    try {
+      const [f, p2, rev] = await Promise.all([
+        q('trace_links', {size: 1, filters: JSON.stringify({link_type: 'F'})}),
+        q('trace_links', {size: 1, filters: JSON.stringify({link_type: 'P'})}),
+        q('trace_links', {size: 1, filters: JSON.stringify({need_reverify: true})}),
+      ])
+      statF = f.total || 0
+      statP = p2.total || 0
+      statRev = rev.total || 0
+      statN = reqsAll.filter((r) => !hasLink(r.req_id)).length
+    } catch (e) { /* 保持上一次数值 */}
+  }
+
+  cellOf = (rid, cc) => {
+    const m = linkMap[rid]
+    if (m && m[cc]) return m[cc].link_type
+    return 'N'
+  }
+  symOf = (rid, cc) => {
+    const t = cellOf(rid, cc)
+    return t === 'F' ? '●' : t === 'P' ? '◐' : '—'
+  }
+  isRev = (rid, cc) => {
+    const m = linkMap[rid]
+    return !!(m && m[cc] && m[cc].need_reverify)
+  }
+  pageRows = () => viewList().slice((page - 1) * size, page * size)
+  totalM = () => viewList().length
+  short = (s) => (s || '').length > 26 ? (s || '').slice(0, 26) + '…' : (s || '')
+
+  onPage = (n) => {page = n}
+  onGap = (ev) => {gapOnly = ev.target.checked; page = 1}
+  showGaps = () => {gapOnly = true; page = 1}
+  /* Agent 任务：导出追踪矩阵 CSV 到 $USER/exports */
+  exportMatrix = async () => {
+    try {
+      const td = await $mod.$fetch('/api/tasks', {
+        method: 'POST', body: {
+          title: '导出追踪矩阵',
+          goal: '【export-trace】导出 ReqVerif 需求追踪矩阵（当前 ' + reqsAll.length + ' 需求 × ' + comps.length + ' 组件）为 CSV，写入 $USER/exports/。按核心 prompt 中【export-trace】规范执行。',
+          steps: '1. 全量读取三表；2. 生成 CSV（行=需求 列=组件 值=F/P）；3. 写文件并汇报统计与路径',
+          constraints: '只读数据库；产物写入 $USER/exports/',
+        }
+      })
+      $message.success('导出任务已创建（' + ((td.task && td.task.id) || '') + '），文件将写入 exports 目录')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    }
+  }
+  goReq = (rid) => {
+    try {$router.push('/i/reqlib?req_id=' + encodeURIComponent(rid))} catch (e) {location.href = '/i/reqlib?req_id=' + encodeURIComponent(rid)}
+  }
+
+  toggle = async (r, c) => {
+    const m = linkMap[r.req_id] || {}
+    const cur = m[c.comp_code]
+    const base = '/tables/trace_links'
+    try {
+      if (cur && cur.link_type === 'F') {
+        await $mod.$fetch(base + '/' + cur.id, {method: 'PATCH', body: {data: {link_type: 'P'}}})
+        linkMap = Object.assign({}, linkMap, {[r.req_id]: Object.assign({}, m, {[c.comp_code]: Object.assign({}, cur, {link_type: 'P'})})})
+        $message.info('追踪链接已更新：' + r.req_id + ' ↔ ' + c.comp_code + ' → 部分实现')
+      } else if (cur) {
+        await $mod.$fetch(base + '/' + cur.id, {method: 'DELETE'})
+        const nm = Object.assign({}, m)
+        delete nm[c.comp_code]
+        linkMap = Object.assign({}, linkMap, {[r.req_id]: nm})
+        $message.info('追踪链接已取消：' + r.req_id + ' ↔ ' + c.comp_code + '（变更已记录审计日志）')
+      } else {
+        const created = await $mod.$fetch(base, {method: 'POST', body: {data: {req_id: r.req_id, comp_code: c.comp_code, link_type: 'F'}}})
+        linkMap = Object.assign({}, linkMap, {[r.req_id]: Object.assign({}, m, {[c.comp_code]: created})})
+        $message.info('追踪链接已建立：' + r.req_id + ' ↔ ' + c.comp_code + ' → 完整实现')
+      }
+      refreshStats()
+    } catch (e) {
+      $message.error('操作失败：' + e.message)
+    }
+  }
+
+  initPage = async () => {
+    try {
+      const qp = $router.query || {}
+      if (qp.req_id) hiReq = qp.req_id
+      if (qp.gap === '1') gapOnly = true
+      const [compsD, reqs, links] = await Promise.all([
+        q('components', {size: 20, sort: 'created_at'}),
+        allPages('requirements', {sort: 'req_id'}),
+        allPages('trace_links', {}),
+      ])
+      comps = compsD.items || []
+      reqsAll = reqs
+      const m = {}
+      links.forEach((l) => {
+        if (!m[l.req_id]) m[l.req_id] = {}
+        m[l.req_id][l.comp_code] = l
+      })
+      linkMap = m
+      await refreshStats()
+    } catch (e) {
+      $message.error('加载追踪矩阵失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+
+</html>

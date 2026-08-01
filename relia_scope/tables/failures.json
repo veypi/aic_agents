@@ -1,0 +1,67 @@
+{
+  "title": "原始故障样本",
+  "description": "试验/运行中采集的失效事件序列；全部可靠度指标（λ、MTBF、R(t)、判定结论）均由本表统计得出",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id",
+      "required": true
+    },
+    {
+      "name": "seq",
+      "type": "int",
+      "title": "发生序号",
+      "description": "失效发生顺序，从 1 开始"
+    },
+    {
+      "name": "delta_t",
+      "type": "int",
+      "title": "间隔 Δt (h)",
+      "description": "与上一次失效的间隔小时数"
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "title": "故障模式"
+    },
+    {
+      "name": "severity",
+      "type": "string",
+      "title": "严重度",
+      "enum": [
+        "致命",
+        "严重",
+        "一般",
+        "轻微"
+      ]
+    },
+    {
+      "name": "counted",
+      "type": "bool",
+      "title": "计入统计",
+      "description": "剔除后不参与指标计算",
+      "default": true
+    },
+    {
+      "name": "build",
+      "type": "string",
+      "title": "构建版本",
+      "description": "如 B3 / B4 / B5"
+    },
+    {
+      "name": "note",
+      "type": "string",
+      "title": "备注"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_fail_sw",
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

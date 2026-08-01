@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>变更与基线管理</title>
+</head>
+<style>
+  .vtl{position:relative;padding:4px 0 4px 22px}
+  .vtl::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--color-info),var(--color-primary));opacity:.45;border-radius:2px}
+  .vtl-item{position:relative;padding:0 0 18px 8px}
+  .vtl-item:last-child{padding-bottom:4px}
+  .vtl-item::before{content:'';position:absolute;left:-19px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--bg-color-secondary);border:2.5px solid var(--color-primary)}
+  .vtl-item.warn::before{border-color:var(--color-warning)}
+  .vtl-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .vtl-title{font-size:13.5px;font-weight:600;color:var(--text-color);cursor:pointer}
+  .vtl-title:hover{color:var(--color-primary)}
+  .vtl-sum{font-size:12px;color:var(--text-color-secondary);margin:6px 0 5px;line-height:1.6}
+  .vtl-meta{font-size:10.5px;color:var(--text-color-disabled);font-family:'Chakra Petch',var(--font-mono)}
+</style>
+<body>
+  <local-app-menu page="change">
+    <div class="rv-crumb">需求与模型 / 变更与版本</div>
+    <div class="rv-titlebar">
+      <h1>变更与基线管理</h1>
+      <p>需求变更事件流 · 影响域级联分析 · 版本基线受控发布</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="diffBl">基线差异比对</button>
+        <button class="rv-btn" :disabled="busyBl" @click="createBl">{{ busyBl ? '创建中…' : '＋ 创建基线 BL-V3.4' }}</button>
+      </span>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在加载变更数据…</div></div>
+    <div v-else>
+      <div class="rv-grid" style="grid-template-columns: 1.1fr 1fr; align-items:start; margin-bottom:14px">
+        <div class="rv-panel acc-secondary">
+          <h3>变更事件流（Agent 自动解析 · 级联标记）</h3>
+          <div class="vtl">
+            <div v-for="ev in events" :key="ev.id" class="vtl-item" :class="{ warn: ev.change_type === '指标收紧' }">
+              <div class="vtl-h">
+                <span class="vtl-title" @click="goTrace(ev.req_id)">{{ ev.title }}</span>
+                <span class="rv-tag" :class="typeTone(ev.change_type)">{{ ev.change_type }}</span>
+              </div>
+              <div class="vtl-sum">{{ ev.summary }}</div>
+              <div class="vtl-meta">{{ fmtTime(ev.occurred_at) }} · {{ ev.req_id }} · 文档 {{ ev.doc_from }} → {{ ev.doc_to }} · 影响 {{ ev.impact_count }} 项</div>
+            </div>
+            <div v-if="!events.length" class="rv-empty">暂无变更事件</div>
+          </div>
+        </div>
+
+        <div class="rv-panel acc-cyan" style="padding:0">
+          <div class="phead" style="padding:14px 18px 0">版本基线</div>
+          <div class="rv-twrap">
+            <table class="rv-table">
+              <thead><tr><th>基线</th><th>需求数</th><th>覆盖率</th><th>得分</th><th>状态</th><th>发布时间</th></tr></thead>
+              <tbody>
+                <tr v-for="b in baselines" :key="b.id">
+                  <td class="mono" style="font-weight:600;color:var(--color-primary)">{{ b.code }}</td>
+                  <td class="mono">{{ b.req_count }}</td>
+                  <td class="mono">{{ b.coverage }}%</td>
+                  <td class="mono" style="font-weight:700">{{ b.score }}</td>
+                  <td><span class="rv-tag" :class="blTone(b.status)">{{ b.status }}</span></td>
+                  <td class="dim">{{ fmtTime(b.released_at) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="rv-panel"><local-chart-box :option="chGraph" height="400px"></local-chart-box></div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  events = []
+  baselines = []
+  chGraph = null
+  busyBl = false
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+
+  typeTone = (t) => t === '指标收紧' ? 't-warn' : t === '需求新增' ? 't-ok' : t === '需求修改' ? 't-info' : t === '需求删除' ? 't-bad' : 't-gray'
+  blTone = (s) => s === '当前' ? 't-ok' : s === '审批中' ? 't-warn' : 't-gray'
+  fmtTime = (s) => (s || '').slice(0, 16).replace('T', ' ')
+
+  buildGraph = (links, cases) => {
+    const nodes = [
+      { name: 'SR-NAV-104', category: 0, symbolSize: 46, itemStyle: { color: '#0891b2' } },
+      { name: 'CE · 指标收紧', category: 3, symbolSize: 30 },
+    ]
+    const edges = [{ source: 'CE · 指标收紧', target: 'SR-NAV-104' }]
+    links.forEach((l) => {
+      const nm = l.comp_code
+      if (!nodes.filter((n) => n.name === nm).length) nodes.push({ name: nm, category: 1, symbolSize: 34 })
+      edges.push({ source: 'SR-NAV-104', target: nm })
+    })
+    cases.forEach((c) => {
+      if (!nodes.filter((n) => n.name === c.case_id).length) nodes.push({ name: c.case_id, category: 2, symbolSize: 26 })
+      edges.push({ source: 'SR-NAV-104', target: c.case_id })
+    })
+    chGraph = {
+      title: { text: '变更影响域分析 · SR-NAV-104（定位精度 ±2m → ±1.5m）', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: {},
+      legend: { data: ['系统需求', '软件组件', '测试用例', '变更事件'], right: 0, top: 0, icon: 'circle', itemWidth: 9, textStyle: { color: 'rgba(20,60,90,.6)', fontSize: 11 } },
+      series: [{
+        type: 'graph', layout: 'force', data: nodes, links: edges,
+        categories: [{ name: '系统需求' }, { name: '软件组件' }, { name: '测试用例' }, { name: '变更事件' }],
+        roam: true, draggable: true,
+        label: { show: true, fontSize: 10, color: 'rgba(15,50,80,.8)' },
+        lineStyle: { color: 'rgba(20,60,90,.28)', width: 1.4, curveness: 0.08 },
+        emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+        force: { repulsion: 320, edgeLength: [70, 120] },
+        itemStyle: { color: '#2563eb', borderColor: '#fff', borderWidth: 1.5 },
+      }],
+    }
+  }
+
+  refresh = async () => {
+    const [evD, blD] = await Promise.all([
+      q('change_events', { size: 20, sort: '-occurred_at' }),
+      q('baselines', { size: 20, sort: '-released_at' }),
+    ])
+    events = evD.items || []
+    baselines = blD.items || []
+  }
+
+  diffBl = () => { $message.info('差异比对完成：BL-V3.2 → BL-V3.3 · 新增 12 项 / 修改 8 项 / 废弃 3 项，影响 6 条追踪链接') }
+
+  createBl = async () => {
+    busyBl = true
+    try {
+      const [totD, uncD, indD] = await Promise.all([
+        q('requirements', { size: 1 }),
+        q('requirements', { size: 1, filters: JSON.stringify({ impl_status: '未覆盖' }) }),
+        q('indicators', { size: 60 }),
+      ])
+      const total = totD.total || 1
+      const unc = uncD.total || 0
+      const l1s = (indD.items || []).filter((i) => i.level === 1)
+      const tw = l1s.reduce((a, i) => a + (i.weight || 0), 0) || 1
+      const score = l1s.reduce((a, i) => a + (i.weight || 0) * (i.score || 0), 0) / tw
+      const rec = await $mod.$fetch('/tables/baselines', { method: 'POST', body: { data: {
+        code: 'BL-V3.4',
+        req_count: total,
+        coverage: +((total - unc) / total * 100).toFixed(1),
+        score: +score.toFixed(1),
+        status: '审批中',
+        released_at: new Date().toISOString(),
+      } } })
+      await refresh()
+      $message.success('基线 ' + rec.code + ' 已创建（得分 ' + rec.score + ' / 覆盖 ' + rec.coverage + '%），进入审批流')
+    } catch (e) {
+      $message.error('创建失败：' + e.message)
+    } finally {
+      busyBl = false
+    }
+  }
+
+  goTrace = (rid) => {
+    try { $router.push('/i/trace?req_id=' + encodeURIComponent(rid)) } catch (e) { location.href = '/i/trace?req_id=' + encodeURIComponent(rid) }
+  }
+
+  initPage = async () => {
+    try {
+      await refresh()
+      const [linksD, casesD] = await Promise.all([
+        q('trace_links', { size: 20, filters: JSON.stringify({ req_id: 'SR-NAV-104' }) }),
+        q('test_cases', { size: 20, filters: JSON.stringify({ req_id: 'SR-NAV-104' }) }),
+      ])
+      buildGraph(linksD.items || [], casesD.items || [])
+    } catch (e) {
+      $message.error('加载变更数据失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+</html>

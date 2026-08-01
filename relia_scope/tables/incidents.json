@@ -1,0 +1,81 @@
+{
+  "title": "故障事件",
+  "description": "运行期故障工单：分级、状态、MTTR 与根因",
+  "fields": [
+    {
+      "name": "code",
+      "type": "string",
+      "title": "工单号",
+      "description": "如 F-20417",
+      "required": true
+    },
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID"
+    },
+    {
+      "name": "symptom",
+      "type": "text",
+      "title": "现象"
+    },
+    {
+      "name": "level",
+      "type": "string",
+      "title": "级别",
+      "enum": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "enum": [
+        "已闭环",
+        "定位中",
+        "监控中",
+        "处理中"
+      ]
+    },
+    {
+      "name": "mttr",
+      "type": "number",
+      "title": "MTTR (h)"
+    },
+    {
+      "name": "root_cause",
+      "type": "string",
+      "title": "根因分类"
+    },
+    {
+      "name": "owner",
+      "type": "string",
+      "title": "责任人"
+    },
+    {
+      "name": "suggestion",
+      "type": "text",
+      "title": "处置建议",
+      "description": "T5 根因分析任务撰写的整改与回归建议"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_inc_code",
+      "fields": [
+        "code"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_inc_status",
+      "fields": [
+        "status"
+      ]
+    }
+  ]
+}

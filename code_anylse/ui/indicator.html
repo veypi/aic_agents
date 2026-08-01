@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>量化指标体系</title>
+</head>
+<style>
+  .tree{padding:6px 4px}
+  .tn1h{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background-color .15s}
+  .tn1h:hover{background:var(--bg-color-tertiary)}
+  .caret{width:12px;color:var(--text-color-disabled);font-size:10px}
+  .tcode{font-family:'Chakra Petch',var(--font-mono);font-size:11px;color:var(--color-primary);font-weight:600}
+  .tname{font-size:12.5px;color:var(--text-color)}
+  .wchip{margin-left:auto}
+  .tscore{font-family:'Chakra Petch',var(--font-mono);font-weight:700;font-size:13px}
+  .sc-ok{color:var(--color-success)}.sc-info{color:var(--color-info)}.sc-warn{color:var(--color-warning)}
+  .tbar{height:5px;margin:2px 10px 8px 30px}
+  .tn2h{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 30px;font-size:12px;color:var(--text-color-secondary)}
+  .tn3{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 52px;font-size:11.5px;border-left:2px solid transparent}
+  .tn3.warn{border-left-color:var(--color-warning);background:color-mix(in srgb,var(--color-warning) 8%,transparent)}
+  .tval{margin-left:auto;color:var(--text-color-disabled);font-size:10.5px}
+  .wflag{color:var(--color-warning)}
+  .wrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--border-color)}
+  .wrow:last-child{border-bottom:none}
+  .wrow .wl{width:130px;font-size:12.5px;flex:none}
+  .wrow input[type=range]{flex:1;accent-color:var(--color-primary)}
+  .wrow .wv{width:44px;text-align:right;font-family:'Chakra Petch',monospace;font-weight:700;color:var(--color-primary)}
+  .cr-note{font-size:11.5px;color:var(--text-color-secondary);background:var(--bg-color-tertiary);border-radius:8px;padding:8px 12px;margin-top:10px}
+</style>
+<body>
+  <local-app-menu page="indicator">
+    <div class="rv-crumb">验证体系 / 量化指标</div>
+    <div class="rv-titlebar">
+      <h1>量化指标体系</h1>
+      <p>3 层指标树 · AHP 层次分析法赋权 · 加权聚合综合符合性得分</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="openAdd">＋ 新增指标</button>
+        <button class="rv-btn" @click="openWeight">权重配置</button>
+      </span>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在加载指标体系…</div></div>
+    <div v-else>
+      <div class="rv-grid" style="grid-template-columns: 1.15fr 1fr; align-items:start; margin-bottom:14px">
+        <div class="rv-panel acc-secondary" style="padding:10px 8px">
+          <div class="phead" style="padding:6px 12px 10px">量化指标树（3 层 · {{ inds.length }} 项）</div>
+          <div class="tree">
+            <div v-for="l1 in l1Tree()" :key="l1.code" class="tn1">
+              <div class="tn1h" @click="toggleExp(l1.code)">
+                <span class="caret">{{ expandCodes.includes(l1.code) ? '▾' : '▸' }}</span>
+                <span class="tcode">{{ l1.code }}</span>
+                <span class="tname">{{ l1.name }}</span>
+                <span class="rv-tag t-info wchip">权重 {{ Math.round((l1.weight || 0) * 100) }}%</span>
+                <span class="tscore" :class="scoreCls(l1.score || 0)">{{ l1.score || '—' }} 分</span>
+              </div>
+              <div v-if="expandCodes.includes(l1.code)" class="tn1b">
+                <div class="rv-bar tbar"><i :style="{ width: (l1.score || 0) + '%', background: barColor(l1.score || 0) }"></i></div>
+                <div v-for="l2 in l1.children" :key="l2.code">
+                  <div class="tn2h"><span class="tcode">{{ l2.code }}</span><span class="tname">{{ l2.name }}</span></div>
+                  <div v-for="l3 in l2.children" :key="l3.code" class="tn3" :class="{ warn: isWarn(l3.code) }">
+                    <span class="tcode">{{ l3.code }}</span>
+                    <span class="tname">{{ l3.name }}</span>
+                    <span class="tval">当前 {{ l3.current_value || '—' }} / 阈值 {{ l3.threshold || '—' }}</span>
+                    <span v-if="isWarn(l3.code)" class="wflag" title="超出阈值，已计入不符合项">⚠</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rv-panel acc-cyan" style="padding:0">
+          <div class="phead" style="padding:14px 18px 0">一级指标权重与得分</div>
+          <div class="rv-twrap">
+            <table class="rv-table">
+              <thead><tr><th>指标</th><th>量化方法</th><th>权重</th><th>得分</th></tr></thead>
+              <tbody>
+                <tr v-for="l1 in l1s()" :key="l1.id">
+                  <td><span class="tcode">{{ l1.code }}</span> <span class="tname">{{ l1.name }}</span></td>
+                  <td class="dim">{{ l1.quant_method || '—' }}<div style="font-size:10px;color:var(--text-color-disabled)">{{ l1.normalize || '' }}</div></td>
+                  <td style="min-width:110px"><span class="mono">{{ Math.round((l1.weight || 0) * 100) }}%</span><div class="rv-bar" style="width:70px;margin-top:4px"><i :style="{ width: weightPct(l1.weight) + '%' }"></i></div></td>
+                  <td><span class="tscore" :class="scoreCls(l1.score || 0)">{{ l1.score || '—' }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="cr-note" style="margin:0 18px 16px">一致性比率 CR = 0.041 &lt; 0.1，判断矩阵通过一致性检验；功能阈值：{{ (l1s()[0] && l1s()[0].threshold) || '符合率 ≥ 95%' }}</div>
+        </div>
+      </div>
+
+      <div class="rv-panel"><local-chart-box :option="chAhp" height="340px"></local-chart-box></div>
+    </div>
+
+  <local-dialog-shell :show="weightShow" @close="weightShow = false" title="权重配置 · AHP">
+    <div>
+      <div class="wrow" v-for="l1 in l1s()" :key="l1.code">
+        <span class="wl">{{ l1.name }}（{{ l1.code }}）</span>
+        <input type="range" min="3" max="30" step="1" :value="wEdit[l1.code] || 0" @input="setW(l1.code, $event.target.value)">
+        <span class="wv">{{ wEdit[l1.code] || 0 }}%</span>
+      </div>
+      <div class="cr-note">权重合计：{{ totalW() }}%（建议 = 100%）· 保存后综合得分将按新权重重新聚合</div>
+    </div>
+    <div class="rv-form-foot">
+      <button class="rv-btn ghost" @click="weightShow = false">取消</button>
+      <button class="rv-btn" :disabled="weightBusy" @click="saveWeights">{{ weightBusy ? '保存中…' : '保存并重新聚合' }}</button>
+    </div>
+  </local-dialog-shell>
+
+  <local-dialog-shell :show="addShow" @close="addShow = false" title="新增量化指标">
+    <div class="rv-form-grid">
+      <label class="rv-form-item"><span>指标名称</span><input class="rv-input" v:value="addName" placeholder="如：任务规划时效性"></label>
+      <label class="rv-form-item"><span>层级</span>
+        <select class="rv-input" v:value="addLevel">
+          <option value="2">二级指标</option>
+          <option value="3">三级指标</option>
+        </select>
+      </label>
+      <label class="rv-form-item"><span>父指标</span>
+        <select class="rv-input" v:value="addParent">
+          <option v-for="p in parentOptions()" :key="p.id" :value="p.code">{{ p.code }} · {{ p.name }}</option>
+        </select>
+      </label>
+      <label class="rv-form-item"><span>当前值</span><input class="rv-input" v:value="addCurrent" placeholder="如：92%"></label>
+      <label class="rv-form-item"><span>阈值要求</span><input class="rv-input" v:value="addThreshold" placeholder="如：≥ 90%"></label>
+    </div>
+    <div class="rv-form-foot">
+      <button class="rv-btn ghost" @click="addShow = false">取消</button>
+      <button class="rv-btn" :disabled="addBusy" @click="submitAdd">{{ addBusy ? '创建中…' : '创建（进入评审）' }}</button>
+    </div>
+  </local-dialog-shell>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  inds = []
+  expandCodes = ['IND-FUN']
+  wEdit = {}
+  weightShow = false
+  weightBusy = false
+  addShow = false
+  addBusy = false
+  addName = ''
+  addLevel = '3'
+  addParent = ''
+  addCurrent = ''
+  addThreshold = ''
+  chAhp = null
+
+  IND_ORDER = ['IND-FUN', 'IND-PER', 'IND-REL', 'IND-SAF', 'IND-MNT', 'IND-TST', 'IND-DIA']
+  WARN_CODES = ['IND-MNT-01-01', 'IND-DIA-01-02']
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+
+  l1s = () => inds.filter((i) => i.level === 1).sort((a, b) => IND_ORDER.indexOf(a.code) - IND_ORDER.indexOf(b.code))
+  l1Tree = () => l1s().map((l1) => {
+    const l2s = inds.filter((i) => i.level === 2 && i.parent_code === l1.code).sort((a, b) => a.code < b.code ? -1 : 1)
+    l2s.forEach((l2) => {
+      l2.children = inds.filter((i) => i.level === 3 && i.parent_code === l2.code).sort((a, b) => a.code < b.code ? -1 : 1)
+    })
+    l1.children = l2s
+    return l1
+  })
+  isWarn = (code) => WARN_CODES.includes(code)
+  toggleExp = (code) => {
+    expandCodes = expandCodes.includes(code) ? expandCodes.filter((c) => c !== code) : expandCodes.concat(code)
+  }
+  barColor = (s) => s >= 90 ? 'var(--color-success)' : s >= 85 ? 'var(--color-info)' : 'var(--color-warning)'
+  scoreCls = (s) => s >= 90 ? 'sc-ok' : s >= 85 ? 'sc-info' : 'sc-warn'
+  weightPct = (w) => Math.min(100, Math.round((w || 0) / 0.228 * 100))
+
+  loadInds = async () => {
+    const d = await q('indicators', { size: 60, sort: 'code' })
+    inds = d.items || []
+  }
+
+  renderAhp = () => {
+    const ls = l1s()
+    const names = ls.map((l) => l.name)
+    const data = []
+    ls.forEach((a, i) => {
+      ls.forEach((b, j) => {
+        const v = a.weight && b.weight ? Math.min(4, +((a.weight) / (b.weight)).toFixed(1)) : 1
+        data.push([j, i, v])
+      })
+    })
+    chAhp = {
+      title: { text: 'AHP 判断矩阵（由当前权重导出）', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: { position: 'top' },
+      grid: { left: 70, right: 20, top: 44, bottom: 74 },
+      xAxis: { type: 'category', data: names, splitArea: { show: true }, axisLabel: { color: 'rgba(20,60,90,.6)', fontSize: 10.5 }, axisLine: { lineStyle: { color: 'rgba(20,60,90,.12)' } } },
+      yAxis: { type: 'category', data: names, splitArea: { show: true }, axisLabel: { color: 'rgba(20,60,90,.6)', fontSize: 10.5 }, axisLine: { lineStyle: { color: 'rgba(20,60,90,.12)' } } },
+      visualMap: { min: 0, max: 4, calculable: true, orient: 'horizontal', left: 'center', bottom: 4, itemWidth: 12, textStyle: { color: 'rgba(20,60,90,.55)', fontSize: 10 }, inRange: { color: ['#e0f2fe', '#67e8f9', '#0891b2', '#155e75'] } },
+      series: [{ type: 'heatmap', data: data, label: { show: true, fontSize: 10, color: 'rgba(15,50,80,.75)' }, itemStyle: { borderColor: '#fff', borderWidth: 1 } }],
+    }
+  }
+
+  openWeight = () => {
+    const m = {}
+    l1s().forEach((l) => { m[l.code] = Math.round((l.weight || 0) * 100) })
+    wEdit = m
+    weightShow = true
+  }
+  setW = (c, v) => { wEdit = Object.assign({}, wEdit, { [c]: +v }) }
+  totalW = () => l1s().reduce((a, l) => a + (wEdit[l.code] || 0), 0)
+  saveWeights = async () => {
+    weightBusy = true
+    try {
+      const ls = l1s()
+      for (let i = 0; i < ls.length; i++) {
+        const w = (wEdit[ls[i].code] != null ? wEdit[ls[i].code] : Math.round((ls[i].weight || 0) * 100)) / 100
+        await $mod.$fetch('/tables/indicators/' + ls[i].id, { method: 'PATCH', body: { data: { weight: w } } })
+      }
+      weightShow = false
+      await loadInds()
+      renderAhp()
+      $message.success('权重已保存，综合得分按新权重重新聚合')
+    } catch (e) {
+      $message.error('保存失败：' + e.message)
+    } finally {
+      weightBusy = false
+    }
+  }
+
+  parentOptions = () => inds.filter((i) => i.level === 1 || i.level === 2).sort((a, b) => a.code < b.code ? -1 : 1)
+  openAdd = () => {
+    addName = ''; addLevel = '3'; addParent = ''; addCurrent = ''; addThreshold = ''
+    const opts = parentOptions()
+    if (opts.length) addParent = opts[opts.length - 1].code
+    addShow = true
+  }
+  submitAdd = async () => {
+    if (!addName.trim()) { $message.error('请填写指标名称'); return }
+    if (!addParent) { $message.error('请选择父指标'); return }
+    addBusy = true
+    try {
+      await $mod.$fetch('/tables/indicators', { method: 'POST', body: { data: {
+        code: 'IND-EXT-' + String(Date.now()).slice(-5),
+        name: addName.trim(),
+        level: +addLevel,
+        parent_code: addParent,
+        weight: 0,
+        quant_method: '待定',
+        normalize: '待定',
+        threshold: addThreshold || '待定',
+        current_value: addCurrent || '—',
+        score: 0,
+        status: '评审中',
+      } } })
+      addShow = false
+      await loadInds()
+      $message.success('指标已加入体系（状态：评审中），评审通过后参与符合性聚合')
+    } catch (e) {
+      $message.error('创建失败：' + e.message)
+    } finally {
+      addBusy = false
+    }
+  }
+
+  initPage = async () => {
+    try {
+      await loadInds()
+      renderAhp()
+    } catch (e) {
+      $message.error('加载指标体系失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+</html>

@@ -1,0 +1,80 @@
+{
+  "title": "变更事件",
+  "description": "需求文档变更的自动解析事件流，含影响域级联分析",
+  "fields": [
+    {
+      "name": "req_id",
+      "type": "string",
+      "title": "关联需求"
+    },
+    {
+      "name": "change_type",
+      "type": "string",
+      "title": "变更类型",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "title": "事件标题",
+      "required": true
+    },
+    {
+      "name": "summary",
+      "type": "text",
+      "title": "影响分析"
+    },
+    {
+      "name": "impact_count",
+      "type": "int",
+      "title": "影响项数",
+      "default": 0
+    },
+    {
+      "name": "doc_from",
+      "type": "string",
+      "title": "文档从版本"
+    },
+    {
+      "name": "doc_to",
+      "type": "string",
+      "title": "文档到版本"
+    },
+    {
+      "name": "occurred_at",
+      "type": "time",
+      "title": "发生时间"
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    },
+    {
+      "name": "commit_from",
+      "type": "string",
+      "title": "变更前commit",
+      "description": "变更前 commit"
+    },
+    {
+      "name": "commit_to",
+      "type": "string",
+      "title": "变更后commit",
+      "description": "变更后 commit"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "req_id"
+      ]
+    },
+    {
+      "fields": [
+        "change_type"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

@@ -1,0 +1,54 @@
+{
+  "title": "报告内容块",
+  "description": "验证报告的结构化内容块；Agent 报告任务写入，前端报告详情页按 sort 顺序与 kind 类型渲染",
+  "fields": [
+    {
+      "name": "report_id",
+      "type": "string",
+      "title": "报告ID",
+      "required": true
+    },
+    {
+      "name": "sort",
+      "type": "int",
+      "title": "顺序",
+      "default": 0
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "title": "块类型",
+      "required": true,
+      "enum": [
+        "text",
+        "metrics",
+        "table",
+        "chart",
+        "verdict"
+      ]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "title": "块标题"
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "title": "正文(kind=text)"
+    },
+    {
+      "name": "payload",
+      "type": "text",
+      "title": "数据(JSON, kind≠text)"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_rs_report",
+      "fields": [
+        "report_id"
+      ]
+    }
+  ]
+}

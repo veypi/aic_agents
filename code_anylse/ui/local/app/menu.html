@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="ReqVerif 布局组件：左侧菜单 + 页面骨架 + 共享设计系统（body 前缀穿透）" />
+  <title>App Shell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<style>
+  /* ================= ReqVerif 共享设计系统 =================
+   body 前缀 = vhtml 穿透写法：选择器作用于本组件自身 DOM
+   以及所有子组件 / vslot 投影内容。页面无需再写共享样式。 */
+  body {
+    display: block;
+    height: 100%
+  }
+
+  body .num {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 700;
+    letter-spacing: -.01em
+  }
+
+  body .mono {
+    font-family: var(--font-mono);
+    font-size: .93em
+  }
+
+  body .dim {
+    color: var(--text-color-tertiary)
+  }
+
+  body .spacer {
+    flex: 1
+  }
+
+  body .up {
+    color: #15803d
+  }
+
+  body .down {
+    color: #dc2626
+  }
+
+  /* ---------- 布局骨架 ---------- */
+  body .rv-app {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 100%
+  }
+
+  body .rv-side {
+    display: block;
+    width: 224px;
+    flex: none;
+    height: 100%;
+    overflow-y: auto;
+    background: var(--bg-color-secondary);
+    border-right: 1px solid var(--border-color)
+  }
+
+  body .rv-main {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    padding: 20px 24px 44px;
+    animation: rv-fade-in .28s ease both
+  }
+
+  body .rv-crumb {
+    font-size: 10.5px;
+    letter-spacing: .16em;
+    color: var(--text-color-tertiary);
+    font-family: 'Chakra Petch', var(--font-mono);
+    margin-bottom: 6px
+  }
+
+  body .rv-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px
+  }
+
+  body .rv-titlebar h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-color);
+    margin: 0
+  }
+
+  body .rv-titlebar h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-color);
+    margin: 0
+  }
+
+  body .rv-titlebar p {
+    font-size: 12px;
+    color: var(--text-color-secondary);
+    margin: 4px 0 0
+  }
+
+  body .rv-titlebar .rv-desc {
+    font-size: 12px;
+    color: var(--text-color-secondary)
+  }
+
+  body .tb-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+    align-items: center
+  }
+
+  /* ---------- 栅格 / 面板 / KPI ---------- */
+  body .rv-grid {
+    display: grid;
+    gap: 14px
+  }
+
+  body .g2 {
+    grid-template-columns: 1fr 1fr
+  }
+
+  body .g3 {
+    grid-template-columns: repeat(3, 1fr)
+  }
+
+  body .g4 {
+    grid-template-columns: repeat(4, 1fr)
+  }
+
+  @media(max-width:1200px) {
+    body .g4 {
+      grid-template-columns: 1fr 1fr
+    }
+
+    body .g3 {
+      grid-template-columns: 1fr 1fr
+    }
+  }
+
+  body .rv-grid>* {
+    animation: rv-fade-in .35s ease both
+  }
+
+  body .rv-grid>*:nth-child(2) {
+    animation-delay: .04s
+  }
+
+  body .rv-grid>*:nth-child(3) {
+    animation-delay: .08s
+  }
+
+  body .rv-grid>*:nth-child(4) {
+    animation-delay: .12s
+  }
+
+  body .rv-grid>*:nth-child(n+5) {
+    animation-delay: .16s
+  }
+
+  body .rv-panel {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-sm)
+  }
+
+  body .rv-panel>h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-color-secondary);
+    margin: 0 0 12px
+  }
+
+  body .rv-panel>h3::before {
+    content: "";
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--color-info);
+    flex: none
+  }
+
+  body .rv-panel.acc-pri>h3::before {
+    background: var(--color-primary)
+  }
+
+  body .rv-panel.acc-vio>h3::before {
+    background: var(--color-secondary)
+  }
+
+  body .rv-panel.acc-ok>h3::before {
+    background: var(--color-success)
+  }
+
+  body .rv-panel.acc-warn>h3::before {
+    background: var(--color-warning)
+  }
+
+  body .rv-panel.acc-bad>h3::before {
+    background: var(--color-danger)
+  }
+
+  body .phead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-color-secondary);
+    margin: 0 0 12px
+  }
+
+  body .phead::before {
+    content: "";
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--color-info);
+    flex: none
+  }
+
+  body .rv-panel.acc-primary>h3::before,
+  body .acc-primary>.phead::before {
+    background: var(--color-primary)
+  }
+
+  body .rv-panel.acc-secondary>h3::before,
+  body .acc-secondary>.phead::before {
+    background: var(--color-secondary)
+  }
+
+  body .rv-panel.acc-cyan>h3::before,
+  body .acc-cyan>.phead::before {
+    background: var(--color-info)
+  }
+
+  body .acc-ok>.phead::before {
+    background: var(--color-success)
+  }
+
+  body .acc-warn>.phead::before {
+    background: var(--color-warning)
+  }
+
+  body .rv-kpi {
+    position: relative;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px 12px 18px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast)
+  }
+
+  body .rv-kpi:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md)
+  }
+
+  body .rv-kpi::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--tone, var(--color-primary))
+  }
+
+  body .rv-kpi .lab {
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    letter-spacing: .08em
+  }
+
+  body .rv-kpi .val {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--tone, var(--text-color));
+    line-height: 1.15;
+    margin-top: 2px
+  }
+
+  body .rv-kpi .val small {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color-tertiary);
+    margin-left: 2px
+  }
+
+  body .rv-kpi .sub {
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    margin-top: 4px
+  }
+
+  /* ---------- 按钮 / 输入 ---------- */
+  body .rv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1.4;
+    font-family: inherit;
+    text-decoration: none
+  }
+
+  body .rv-btn:hover {
+    background: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--color-primary) 30%, transparent)
+  }
+
+  body .rv-btn:active {
+    transform: none;
+    background: var(--color-primary-active)
+  }
+
+  body .rv-btn.ghost {
+    background: transparent;
+    color: var(--text-color-secondary);
+    border: 1px solid var(--border-color)
+  }
+
+  body .rv-btn.ghost:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+    box-shadow: none
+  }
+
+  body .rv-btn.danger {
+    background: var(--color-danger)
+  }
+
+  body .rv-btn.danger:hover {
+    background: var(--color-danger-hover);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--color-danger) 30%, transparent)
+  }
+
+  body .rv-btn.sm {
+    padding: 4px 10px;
+    font-size: 11px
+  }
+
+  body .rv-btn:disabled {
+    opacity: .45;
+    cursor: default;
+    transform: none !important;
+    box-shadow: none !important
+  }
+
+  body .rv-input,
+  body .rv-select,
+  body select.rv-input {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-color);
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    font-family: inherit
+  }
+
+  body .rv-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+    background: #fff
+  }
+
+  body .rv-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center
+  }
+
+  /* ---------- 表格 / 标签 ---------- */
+  body .rv-twrap {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-color-secondary);
+    box-shadow: var(--shadow-sm)
+  }
+
+  body .rv-table {
+    width: 100%;
+    border-collapse: collapse
+  }
+
+  body .rv-table th {
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--bg-color-tertiary) 45%, transparent)
+  }
+
+  body .rv-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+    font-size: 12px;
+    vertical-align: middle;
+    color: var(--text-color)
+  }
+
+  body .rv-table tbody tr {
+    transition: background var(--transition-fast)
+  }
+
+  body .rv-table tbody tr:hover {
+    background: color-mix(in srgb, var(--color-primary) 4%, transparent)
+  }
+
+  body .rv-table tbody tr:last-child td {
+    border-bottom: none
+  }
+
+  body .rv-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1.6
+  }
+
+  body .rv-tag i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+    opacity: .85
+  }
+
+  body .t-ok {
+    background: color-mix(in srgb, var(--color-success) 15%, transparent);
+    color: #15803d
+  }
+
+  body .t-warn {
+    background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    color: #b45309
+  }
+
+  body .t-bad {
+    background: color-mix(in srgb, var(--color-danger) 13%, transparent);
+    color: #dc2626
+  }
+
+  body .t-info {
+    background: color-mix(in srgb, var(--color-info) 14%, transparent);
+    color: #0369a1
+  }
+
+  body .t-vio {
+    background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
+    color: #4338ca
+  }
+
+  body .t-gray {
+    background: var(--bg-color-tertiary);
+    color: var(--text-color-secondary)
+  }
+
+  /* ---------- 进度条 / KV / 日志 / 图表 ---------- */
+  body .rv-bar {
+    height: 5px;
+    border-radius: 99px;
+    background: var(--bg-color-tertiary);
+    overflow: hidden
+  }
+
+  body .rv-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    background: var(--tone, var(--color-primary));
+    transition: width .6s ease
+  }
+
+  body .rv-kv {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border-color) 70%, transparent)
+  }
+
+  body .rv-kv:last-child {
+    border-bottom: none
+  }
+
+  body .rv-kv b {
+    width: 104px;
+    flex: none;
+    color: var(--text-color-tertiary);
+    font-weight: 400
+  }
+
+  body .rv-sec {
+    margin-top: 18px
+  }
+
+  body .rv-sec h4 {
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: var(--color-info);
+    margin: 0 0 8px;
+    font-family: 'Chakra Petch', sans-serif
+  }
+
+  body .rv-log {
+    background: var(--bg-color-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-color-secondary);
+    line-height: 1.9;
+    overflow-y: auto
+  }
+
+  body .rv-chart {
+    width: 100%;
+    height: 280px
+  }
+
+  body .rv-chart-sm {
+    width: 100%;
+    height: 220px
+  }
+
+  body .rv-empty {
+    padding: 36px 12px;
+    text-align: center;
+    color: var(--text-color-disabled);
+    font-size: 12px
+  }
+
+  body .rv-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-color-disabled);
+    display: inline-block;
+    flex: none
+  }
+
+  body .rv-dot.live {
+    background: var(--color-success);
+    animation: rv-pulse 1.6s infinite
+  }
+
+  body .rv-dot.warn {
+    background: var(--color-warning);
+    animation: rv-pulse 1.6s infinite
+  }
+
+  body .rv-dot.bad {
+    background: var(--color-danger)
+  }
+
+  /* ---------- 弹窗 / 抽屉 ---------- */
+  body .rv-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, .35);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s
+  }
+
+  body .rv-mask.show {
+    opacity: 1;
+    pointer-events: auto
+  }
+
+  body .rv-modal {
+    width: 640px;
+    max-width: 92vw;
+    max-height: 86vh;
+    overflow-y: auto;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 20px 22px;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(12px);
+    transition: transform .22s ease
+  }
+
+  body .rv-mask.show .rv-modal {
+    transform: none
+  }
+
+  body .rv-modal h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: var(--text-color)
+  }
+
+  body .rv-form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px
+  }
+
+  body .rv-form-item {
+    flex: 1
+  }
+
+  body .rv-form-item label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    margin-bottom: 5px
+  }
+
+  body .rv-form-item .rv-input,
+  body .rv-form-item .rv-select,
+  body .rv-form-item textarea {
+    width: 100%
+  }
+
+  body .rv-form-item textarea {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--text-color);
+    outline: none;
+    font-family: inherit;
+    resize: vertical
+  }
+
+  body .rv-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px
+  }
+
+  body label.rv-form-item {
+    display: block
+  }
+
+  body label.rv-form-item>span {
+    display: block;
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    margin-bottom: 5px
+  }
+
+  body .rv-form-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+    align-items: center
+  }
+
+  body .rv-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px
+  }
+
+  body .rv-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 470px;
+    max-width: 94vw;
+    background: var(--bg-color-secondary);
+    border-left: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    z-index: 90;
+    transform: translateX(100%);
+    transition: transform .25s ease;
+    overflow-y: auto;
+    padding: 20px 22px
+  }
+
+  body .rv-drawer.show {
+    transform: none
+  }
+
+  body .tlink {
+    color: var(--color-primary);
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: 12px
+  }
+
+  body .tlink:hover {
+    text-decoration: underline
+  }
+
+  body .sub-link {
+    color: var(--color-primary);
+    font-size: 11px;
+    cursor: pointer
+  }
+
+  body .sub-link:hover {
+    text-decoration: underline
+  }
+
+  /* ---------- 分页 ---------- */
+  body .rv-pager {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    margin-top: 12px;
+    align-items: center
+  }
+
+  body .rv-pager button {
+    min-width: 28px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
+    border-radius: var(--radius-md);
+    color: var(--text-color-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: inherit
+  }
+
+  body .rv-pager button:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary)
+  }
+
+  body .rv-pager button.cur {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary)
+  }
+
+  body .rv-pager button:disabled {
+    opacity: .4;
+    cursor: default
+  }
+
+  body .rv-pager .rv-ptotal {
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    margin-right: 6px
+  }
+
+  /* ---------- 菜单本体 ---------- */
+  body .rv-mwrap {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding-bottom: 14px
+  }
+
+  body .rv-prj {
+    margin: 14px 12px 0
+  }
+
+  body .rv-prj .rv-input {
+    width: 100%;
+    font-size: 12px;
+    padding: 6px 8px;
+    cursor: pointer
+  }
+
+  body .rv-search {
+    position: relative;
+    margin: 8px 12px 8px
+  }
+
+  body .rv-search .rv-sico {
+    position: absolute;
+    left: 9px;
+    top: 6px;
+    color: var(--text-color-disabled);
+    font-size: 14px;
+    pointer-events: none
+  }
+
+  body .rv-search .rv-input {
+    width: 100%;
+    padding-left: 27px;
+    box-sizing: border-box
+  }
+
+  body .rv-nav {
+    padding: 2px 10px;
+    flex: 1
+  }
+
+  body .rv-mg {
+    font-size: 10px;
+    letter-spacing: .18em;
+    color: var(--text-color-disabled);
+    padding: 14px 10px 5px;
+    font-family: 'Chakra Petch', sans-serif
+  }
+
+  body .rv-mi {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    border-radius: var(--radius-md);
+    color: var(--text-color-secondary);
+    font-size: 13px;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    position: relative
+  }
+
+  body .rv-mi:hover {
+    background: var(--bg-color-tertiary);
+    color: var(--text-color);
+    transform: translateX(2px)
+  }
+
+  body .rv-mi.on {
+    background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+    color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--color-primary)
+  }
+
+  body .rv-mico {
+    width: 18px;
+    text-align: center;
+    color: var(--text-color-disabled);
+    font-size: 13px;
+    flex: none;
+    transition: color var(--transition-fast)
+  }
+
+  body .rv-mi:hover .rv-mico {
+    color: var(--text-color-secondary)
+  }
+
+  body .rv-mi.on .rv-mico {
+    color: var(--color-primary)
+  }
+
+  body .rv-mi .cnt {
+    margin-left: auto;
+    font-size: 10px;
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 600;
+    background: var(--bg-color-tertiary);
+    color: var(--text-color-secondary);
+    padding: 1px 7px;
+    border-radius: 99px
+  }
+
+  body .rv-mi.on .cnt {
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    color: var(--color-primary)
+  }
+
+  body .rv-pulse {
+    margin: 14px 12px 6px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-color)
+  }
+
+  body .rv-phead {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-color-secondary)
+  }
+
+  body .rv-pst {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-color-tertiary)
+  }
+
+  body .rv-ppct {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--text-color);
+    margin: 7px 0 6px;
+    line-height: 1
+  }
+
+  body .rv-ppct small {
+    font-size: 12px;
+    color: var(--text-color-tertiary);
+    margin-left: 2px;
+    font-weight: 600
+  }
+
+  body .rv-pmeta {
+    font-size: 10.5px;
+    color: var(--text-color-tertiary);
+    margin-top: 7px;
+    font-family: var(--font-mono)
+  }
+
+  body .rv-bline {
+    margin: 8px 14px 0;
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px
+  }
+
+  body .rv-bline b {
+    color: var(--text-color-secondary)
+  }
+
+  /* ---------- 动效 / 滚动条 ---------- */
+  @keyframes rv-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px)
+    }
+
+    to {
+      opacity: 1;
+      transform: none
+    }
+  }
+
+  @keyframes rv-pulse {
+    50% {
+      opacity: .25
+    }
+  }
+
+  body ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px
+  }
+
+  body ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 99px
+  }
+
+  body ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color-hover)
+  }
+
+  body ::-webkit-scrollbar-track {
+    background: transparent
+  }
+</style>
+
+<body>
+  <div class="rv-app">
+    <aside class="rv-side">
+      <div class="rv-mwrap">
+        <div class="rv-prj">
+          <select class="rv-input" v:value="curPrj" @change="onPrj($event)">
+            <option v-for="p in projects" :key="p.code" :value="p.code">{{ p.code }} · {{ p.name }}</option>
+          </select>
+        </div>
+        <div class="rv-search">
+          <span class="rv-sico">⌕</span>
+          <input class="rv-input" v:value="kw" @keydown="onKwKey($event)" placeholder="搜索需求 / 用例…" />
+        </div>
+
+        <nav class="rv-nav">
+          <template :key="g.group" v-for="g in navList">
+            <div class="rv-mg">{{ g.group }}</div>
+            <a :key="it.key" v-for="it in g.items" class="rv-mi" :class="{ on: page === it.key }" :href="it.href">
+              <span class="rv-mico">{{ it.icon }}</span>{{ it.label }}
+              <span class="cnt" v-if="countOf(it.key)">{{ countOf(it.key) }}</span>
+            </a>
+          </template>
+        </nav>
+
+        <div class="rv-pulse" v-if="run">
+          <div class="rv-phead">
+            <i class="rv-dot" :class="{ live: run.status === '运行中' }"></i>
+            <span class="mono">{{ run.run_code }}</span>
+            <span class="rv-pst">{{ run.status }}</span>
+          </div>
+          <div class="rv-ppct">{{ run.progress }}<small>%</small></div>
+          <div class="rv-bar"><i :style="{ width: run.progress + '%' }"></i></div>
+          <div class="rv-pmeta">{{ fmt(run.done) }} / {{ fmt(run.total) }} · {{ run.parallelism }} 并发</div>
+        </div>
+
+        <div class="rv-bline" v-if="baseline">
+          基线 <b class="mono">{{ baseline.code }}</b> · 符合性 <b class="num">{{ baseline.score }}</b>
+        </div>
+      </div>
+    </aside>
+    <main class="rv-main">
+      <vslot></vslot>
+    </main>
+  </div>
+</body>
+<script setup>
+  page = ''
+  kw = ''
+  counts = {reqlib: 0, case: 0}
+  run = null
+  baseline = null
+  projects = []
+  curPrj = 'UAV-NAV'
+
+  navList = [
+    {
+      group: '工作台', items: [
+        {key: 'dashboard', icon: '◈', label: '工作台总览', href: '/i/dashboard'},
+        {key: 'projects', icon: '⌘', label: '项目管理', href: '/i/projects'},
+      ]
+    },
+    {
+      group: '需求与模型', items: [
+        {key: 'reqlib', icon: '▤', label: '需求库', href: '/i/reqlib'},
+        {key: 'model', icon: '⬡', label: '需求模型设计', href: '/i/model'},
+        {key: 'trace', icon: '⌗', label: '需求追踪矩阵', href: '/i/trace'},
+        {key: 'change', icon: '⇅', label: '变更与版本', href: '/i/change'},
+      ]
+    },
+    {
+      group: '验证体系', items: [
+        {key: 'indicator', icon: '⌖', label: '指标体系管理', href: '/i/indicator'},
+        {key: 'case', icon: '▦', label: '验证用例管理', href: '/i/case'},
+        {key: 'exec', icon: '▶', label: '验证执行中心', href: '/i/exec'},
+        {key: 'report', icon: '∑', label: '符合性报告', href: '/i/report'},
+      ]
+    },
+    {
+      group: '帮助文档', items: [
+        {key: 'help_indicators', icon: '❖', label: '需求验证指标体系', href: '/i/help_indicators'},
+      ]
+    },
+  ]
+
+  /* 平台运维组：需通过权限校验才挂载 */
+  opsGroup = {
+    group: '平台运维', items: [
+      {key: 'ops', icon: '⊞', label: '云环境与微服务', href: '/i/ops'},
+      {key: 'tasks', icon: '☑', label: '任务管理', href: '/tasks'},
+      {key: 'tables', icon: '▣', label: '数据库', href: '/tables'},
+    ]
+  }
+  checkPerm = async () => {
+    let ok = false
+    try {
+      const r = $mod.$auth && $mod.$auth.PermAdmin ? $mod.$auth.PermAdmin('*') : false
+      ok = !!(r && typeof r.then === 'function' ? await r : r)
+    } catch (e) {ok = false}
+    if (ok && !navList.some(g => g.group === '平台运维')) navList = navList.concat([opsGroup])
+  }
+
+  countOf = (k) => counts[k] || ''
+  fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'))
+
+  /* 项目切换：持久化 localStorage.rv_project，切换后整页刷新（各页读取该值过滤） */
+  fetchProjects = async () => {
+    try {
+      const d = await $mod.$fetch('/tables/projects', {params: {size: 20}})
+      projects = d.items || []
+      let saved = ''
+      try {saved = localStorage.rv_project || ''} catch (e) { }
+      if (saved && projects.some((p) => p.code === saved)) {
+        curPrj = saved
+      } else if (projects.length) {
+        curPrj = projects[0].code
+        try {localStorage.rv_project = curPrj} catch (e) { }
+      }
+    } catch (e) { /* projects 表缺失时保持默认项目 */}
+  }
+  onPrj = (ev) => {
+    try {localStorage.rv_project = ev.target.value} catch (e) { }
+    location.reload()
+  }
+
+  fetchCounts = async () => {
+    try {
+      const flt = JSON.stringify({project_code: curPrj})
+      const [r, c] = await Promise.all([
+        $mod.$fetch('/tables/requirements', {params: {size: 1, filters: flt}}),
+        $mod.$fetch('/tables/test_cases', {params: {size: 1, filters: flt}}),
+      ])
+      counts = {reqlib: r.total, case: c.total}
+    } catch (e) { /* 静默：计数缺失不阻塞导航 */}
+  }
+
+  fetchPulse = async () => {
+    try {
+      const rs = await $mod.$fetch('/tables/verif_runs', {params: {size: 20, sort: '-started_at', filters: JSON.stringify({project_code: curPrj})}})
+      run = (rs.items || []).find(x => x.status === '运行中') || (rs.items || [])[0] || null
+    } catch (e) { }
+  }
+
+  fetchBaseline = async () => {
+    try {
+      const b = await $mod.$fetch('/tables/baselines', {params: {size: 10, filters: JSON.stringify({project_code: curPrj})}})
+      baseline = (b.items || []).find(x => x.status === '当前') || (b.items || [])[0] || null
+    } catch (e) { }
+  }
+
+  onKwKey = (ev) => {
+    if (ev.key !== 'Enter') return
+    const v = (kw || '').trim()
+    if (!v) return
+    kw = ''
+    try {$router.push('/i/reqlib?kw=' + encodeURIComponent(v))} catch (e) {location.href = '/i/reqlib?kw=' + encodeURIComponent(v)}
+  }
+
+  timer = null
+</script>
+<script>
+  checkPerm()
+  fetchProjects().then(() => {fetchCounts(); fetchBaseline(); fetchPulse()})
+  timer = setInterval(fetchPulse, 5000)
+</script>
+<script dispose>
+  if (timer) clearInterval(timer)
+</script>
+
+</html>

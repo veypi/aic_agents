@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="description" content="ECharts 封装：主题预设 + 生命周期管理" />
+  <title>Chart Box</title>
+</head>
+<style>
+  local-chart-box{display:block;width:100%}
+  .cbox{width:100%;height:100%;min-height:120px}
+</style>
+<body>
+  <div class="cbox" :style="{ height: height }"></div>
+</body>
+<script setup>
+  option = null
+  height = '280px'
+  chart = null
+  lastFp = ''
+  pollTimer = null
+
+  /* 浅色主题预设：序列色板 / 轴系 / tooltip / legend，页面只传结构性配置 */
+  PALETTE = ['#4361ee', '#0ea5e9', '#3f37c9', '#22c55e', '#fbbf24', '#ef4444', '#0d9488', '#64748b']
+  AXDEF = {
+    axisLine: { lineStyle: { color: '#d1d5db' } },
+    axisTick: { lineStyle: { color: '#d1d5db' } },
+    axisLabel: { color: '#6b7280', fontSize: 11 },
+    splitLine: { lineStyle: { color: 'rgba(209,213,219,.6)' } },
+  }
+  TTDEF = {
+    backgroundColor: '#fff', borderColor: '#e5e7eb', borderWidth: 1,
+    textStyle: { color: '#111827', fontSize: 12 },
+    extraCssText: 'box-shadow:0 6px 16px rgba(17,24,39,.12);border-radius:8px;',
+  }
+  LGDEF = { textStyle: { color: '#6b7280', fontSize: 11 }, itemWidth: 14, itemHeight: 8 }
+
+  normAx = (a) => Object.assign({}, AXDEF, a)
+  themed = (o) => {
+    if (!o) return o
+    const r = Object.assign({}, o)
+    /* 关闭元素动画：实时监控类图表高频 setOption 会反复重启动画，
+       在低帧率/无头环境下永远停在起始帧（只见标题不见图） */
+    r.animation = false
+    if (!r.color) r.color = PALETTE
+    if (r.tooltip) r.tooltip = Object.assign({}, TTDEF, r.tooltip)
+    if (r.legend) r.legend = Object.assign({}, LGDEF, r.legend)
+    if (r.xAxis) r.xAxis = Array.isArray(r.xAxis) ? r.xAxis.map(normAx) : normAx(r.xAxis)
+    if (r.yAxis) r.yAxis = Array.isArray(r.yAxis) ? r.yAxis.map(normAx) : normAx(r.yAxis)
+    return r
+  }
+
+  ensure = () => {
+    if (chart || !window.echarts) return
+    chart = echarts.init($node.querySelector('.cbox'))
+  }
+  onResize = () => { if (chart) chart.resize() }
+
+  /* option 同步：vhtml 对绑定的 prop 对象是原地深修改（身份不变），
+     $watch(() => option) 与身份比较都会失效；改用内容指纹轮询兜底，
+     保证父组件反复重赋/原地更新 option（如实时监控图）都能刷新 */
+  sync = () => {
+    if (!option) return
+    let fp = ''
+    try { fp = JSON.stringify(option) } catch (e) { return }
+    if (fp === lastFp) return
+    ensure()
+    if (!chart) return
+    chart.setOption(themed(option), true)
+    lastFp = fp
+  }
+</script>
+<script>
+  ensure()
+  sync()
+  addEventListener('resize', onResize)
+  $watch(() => option, sync)
+  pollTimer = setInterval(sync, 400)
+</script>
+<script dispose>
+  removeEventListener('resize', onResize)
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (chart) { chart.dispose(); chart = null }
+</script>
+</html>

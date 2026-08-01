@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 使用手册" />
+<title>使用手册 · ReliaScope</title>
+</head>
+<style>
+.shot{width:100%;border:1px solid var(--border-color);border-radius:10px;margin-top:12px;display:block;box-shadow:var(--shadow-sm)}
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px}
+.fstep{background:#f6f9fe;border:1px solid var(--border-color);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text-color-secondary)}
+.fstep b{display:block;font-size:13px;color:var(--ink);margin-bottom:3px}
+.fstep .no{display:inline-flex;width:22px;height:22px;border-radius:7px;background:var(--color-primary);color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-right:7px}
+.pts{margin:8px 0 0;padding-left:2px}
+.pts li{font-size:12.5px;color:var(--text-color-secondary);line-height:2;list-style:none;padding-left:16px;position:relative}
+.pts li::before{content:"";position:absolute;left:2px;top:11px;width:6px;height:6px;border-radius:2px;background:var(--color-primary);opacity:.55}
+.pts li b{color:var(--ink);font-weight:600}
+.kv{font-size:12.5px;color:var(--text-color-secondary);line-height:2.1}
+.kv b{color:var(--ink);font-weight:600}
+.kv code{font-family:var(--num);color:#0e7490;background:rgba(8,145,178,.08);padding:1px 6px;border-radius:5px;font-size:11.5px}
+.navchips{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:900px){.flow{grid-template-columns:1fr}}
+</style>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">帮助与支持 · User Manual</div>
+        <h1>使用手册</h1>
+      </div>
+      <div class="right">
+        <span class="chip" @click="jump('quick')">快速上手</span>
+        <span class="chip" @click="jump('arch')">三层架构</span>
+        <span class="chip" @click="jump('s4')">单目标验证</span>
+        <span class="chip" @click="jump('csv')">CSV 格式</span>
+        <span class="chip" @click="jump('perm')">权限说明</span>
+      </div>
+    </header>
+
+    <div class="card" id="quick">
+      <h3>ReliaScope 是什么 · 快速上手 <span class="tag">AgentDB 驱动</span></h3>
+      <div class="desc">软件可靠性验证平台：多源采集故障数据 → 原始样本驱动指标计算 → 单目标验证自动判定 → 报告归档，全流程数据可追溯。</div>
+      <div class="flow">
+        <div class="fstep"><b><span class="no">1</span>接入与采集</b>采集接口将日志 / APM / 混沌实验等故障数据汇入 failures 原始样本表（未接入时可手动录入或 CSV 导入）。</div>
+        <div class="fstep"><b><span class="no">2</span>验证与判定</b>λ、MTBF、R(720h) 前端实时计算，判据逐条核对，结论卡即时生成。</div>
+        <div class="fstep"><b><span class="no">3</span>报告与归档</b>Agent 生成图文报告数据，前端渲染可视化报告；CSV 数据包随时导出归档。</div>
+      </div>
+      <div class="kv" style="margin-top:12px">
+        数据底座（12 张表）：<b>softwares</b> 软件资产 · <b>failures</b> 原始故障样本（全部指标唯一数据源）· <b>incidents</b> 故障工单 · <b>criteria</b> 验证判据 · <b>reports</b>/<b>report_sections</b> 报告与内容块 · <b>channels</b> 采集通道 · <b>events</b> 事件流 · <b>model_metrics</b>/<b>predictions</b> Agent 模型与预测产物 · <b>quality_runs</b> 质量评估 · <b>integrations</b> 外部接入。
+      </div>
+    </div>
+
+    <div class="card" id="arch" style="margin-top:15px">
+      <h3>三层架构：数据从哪来 <span class="tag">设计原则</span></h3>
+      <div class="desc">前端只有两种角色——根据数据库实时计算、根据数据库渲染；一切异步产物都经 AgentDB 流向页面。</div>
+      <div class="flow">
+        <div class="fstep"><b>① 前端实时计算</b>点击、筛选、录入后必须即时反馈的：KPI、判据核对、趋势/分布/拟合曲线、CSV 导入导出。</div>
+        <div class="fstep"><b>② Agent 后台任务</b>可异步的重计算与撰写：模型重训、质量评估、报告生成、根因分析、全通道同步。前端 <code>POST /api/tasks</code> 触发，Agent 写库。</div>
+        <div class="fstep"><b>③ 外部系统对接</b>探针 / CI-CD / APM / 告警等真实数据源由后台采集器写库（integrations 表查看接入状态），前端代码无需改动。</div>
+      </div>
+    </div>
+
+    <div class="srow"><h2>功能模块</h2><div class="ln"></div><div class="navchips">
+      <span class="chip" v-for="(s, i) in secs" :key="s.t" @click="jump('s' + i)">{{ s.t }}</span>
+    </div></div>
+
+    <div class="card" v-for="(s, i) in secs" :key="s.t" :id="'s' + i" style="margin-bottom:15px">
+      <h3>{{ s.t }} <span class="tag" v-if="s.tag">{{ s.tag }}</span></h3>
+      <div class="desc">{{ s.d }}</div>
+      <ul class="pts"><li v-for="p in s.pts" :key="p" v-html="p"></li></ul>
+      <img class="shot" :src="'help/' + s.img" :alt="s.t" loading="lazy" />
+    </div>
+
+    <div class="srow"><h2>数据交换</h2><div class="ln"></div></div>
+    <div class="card" id="csv">
+      <h3>CSV 导入导出格式 <span class="tag">单目标验证页</span></h3>
+      <div class="desc">「导出数据包 CSV」归档当前对象全套数据；「导入样本 CSV」批量录入故障样本；两者格式兼容，可直接整包回导。</div>
+      <div class="g g2">
+        <div>
+          <div class="kv"><b>导出结构（单文件三段）</b><br>① 对象信息 + 指标汇总（T、n、λ、MTBF 及置信区间、R(720h)、可用度 A）<br>② 判据逐条核对 + 验证结论<br>③ 原始故障样本表<br>文件带 BOM，Excel / WPS 直接打开不乱码。</div>
+        </div>
+        <div>
+          <div class="kv"><b>导入规则</b><br>· 必需列：<code>间隔Δt(h)</code>、<code>故障模式</code><br>· 可选列：<code>严重度</code>（致命/严重/一般/轻微，缺省一般）、<code>构建</code>（缺省 B5）、<code>计入统计</code>（“否”=剔除，缺省计入）<br>· seq 按当前最大值自动续号；非法行自动跳过并计数<br>· UTF-8 / GBK 编码均可识别</div>
+        </div>
+      </div>
+      <table style="margin-top:12px">
+        <thead><tr><th>样本列</th><th>含义</th><th>导入要求</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">seq</td><td>失效序号</td><td>导出列，导入时忽略（自动续号）</td></tr>
+          <tr><td class="mono">发生时刻(h)</td><td>累计试验时间</td><td>导出列，导入时忽略（由 Δt 累加）</td></tr>
+          <tr><td class="mono">间隔Δt(h)</td><td>距上次失效的小时数</td><td><b>必填</b>，正数</td></tr>
+          <tr><td class="mono">故障模式</td><td>如 内存泄漏 / 并发竞态</td><td><b>必填</b>，非空文本</td></tr>
+          <tr><td class="mono">严重度</td><td>致命 / 严重 / 一般 / 轻微</td><td>可选，缺省“一般”</td></tr>
+          <tr><td class="mono">构建</td><td>构建版本号，如 B5</td><td>可选，缺省 B5</td></tr>
+          <tr><td class="mono">计入统计</td><td>是 / 否</td><td>可选，缺省“是”</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" id="perm" style="margin-top:15px">
+      <h3>权限与可见性</h3>
+      <div class="kv">
+        · <b>平台设置</b>（菜单“系统”分组）仅管理员可见：菜单项按 <code>PermAdmin</code> 权限自动显示或隐藏。<br>
+        · 业务表数据按登录用户隔离，不同用户互不可见。<br>
+        · 判据中标记 <b>强制</b> 的条目（如 P1 严重故障一票否决）不可停用；阈值修改后所有验证对象即时按新标准重判。<br>
+        · 驾驶舱「实时事件流」读取 events 表：采集接口或 Agent 任务写入后自动呈现，空表时显示等待占位。<br>
+        · 本手册常驻左侧菜单 <b>帮助与支持 → 使用手册</b>。
+      </div>
+    </div>
+
+    <div class="footer-note">ReliaScope v3.2 · 使用手册 · 截图与功能随版本更新</div>
+</app-menu>
+</body>
+<script setup>
+secs = [
+  { t: '可靠性驾驶舱', tag: 'Overview', img: 'cockpit.jpg',
+    d: '全局可靠性态势总览：KPI、故障密度趋势、类型分布、验证健康度与事件流，全部由 AgentDB 实时计算。',
+    pts: ['顶部 KPI：在管系统数、<b>加权平均可靠度 R(720h)</b>、全网 MTBF（调和平均）、未闭环故障单',
+          '「近30天 / 近90天 / 近一年」切换统计区间：按 failures 入库与 incidents 闭环<b>真实日聚合</b>',
+          '<b>高可靠软件 TOP5</b>：点击条目直达该对象的单目标验证页',
+          '实时事件流：读取 events 表（每 10 秒轮询），等待采集接入期间显示占位',
+          '「＋ 新建验证任务」直达单目标验证页'] },
+  { t: '数据采集中心', tag: 'channels 表', img: 'collect.jpg',
+    d: '多源采集探针运行看板：通道吞吐、在线率、端到端延迟与数据质量评估。',
+    pts: ['通道状态卡与日吞吐图：数据来自 channels 表（吞吐由采集接口写入）',
+          '「质量评估」按钮：创建 <b>Agent 任务</b>，对 failures 做六维质量打分并写入 quality_runs 表，雷达图与质量分随即更新',
+          '「立即同步」按钮：创建 <b>Agent 全通道同步任务</b>刷新 channels',
+          '「探针管理」跳转平台设置的接入与通知卡'] },
+  { t: '可靠性分析', tag: '前端拟合', img: 'analysis.jpg',
+    d: '面向试验数据的统计建模：可靠性增长与失效分布，全部由 failures 样本实时拟合。',
+    pts: ['增长曲线（Duane / Crow-AMSAA）：对数线性回归求实测 <b>增长率 α 与 R²</b>',
+          'Weibull 失效分布：失效间隔<b>中位秩回归</b>求 β / η',
+          '失效模式帕累托 + 软件×构建热力图 + 滑窗失效率演化：全部实算',
+          '评估结论阈值取自 criteria 表；「导出分析快照 CSV」一键归档'] },
+  { t: '故障预测', tag: 'Agent 产物', img: 'predict.jpg',
+    d: '历史曲线前端日聚合；预测产物由 Agent 重训任务写入 predictions / model_metrics 表。',
+    pts: ['「重训预测模型」按钮：创建 <b>Agent T1 任务</b>——拟合 G-O / Musa / J-M / Crow-AMSAA / Weibull 并算 AIC 选优',
+          'RUL 排行、发布就绪度、预测准确率：读 predictions / model_metrics（未重训时显示引导占位）',
+          'G-O 剩余缺陷曲线：前端对累计样本<b>实时最小二乘拟合</b>',
+          '风险预警矩阵：按故障模式频次 × 严重度加权实算'] },
+  { t: '单目标验证', tag: '核心流程', img: 'target.jpg',
+    d: '对单个软件对象执行可靠性验证：由原始故障样本自动计算 λ、MTBF、R(720h)，按判据自动给出验证结论。',
+    pts: ['顶部下拉<b>选择验证对象</b>，KPI、判据、图表全页联动；也可从驾驶舱 TOP5 / 故障事件流带入',
+          '判据逐条核对：实测值 vs 阈值，任一不满足即「验证未通过」（强制项一票否决）',
+          '原始故障数据记录：点击「计入 / 剔除」异常样本，全部指标<b>即时重算</b>',
+          '「＋ 录入故障样本」单条录入 ·「导入样本 CSV」批量导入 ·「导出数据包 CSV」归档',
+          '验证结论卡：置信区间、R(720h) 置信下限与处置建议'] },
+  { t: '模型与计算', tag: '交互试算', img: 'models.jpg',
+    d: '交互式可靠性计算引擎 + 模型库 AIC 对比（Agent 重训产物）。',
+    pts: ['任务时间 t、失效率 λ、修复率 μ 三参数 + 冗余配置，前端实时计算 R(t)/MTBF/A/年停机',
+          '模型库适用性对比：五模型 AIC 读 model_metrics 表，<b>最优模型自动标记</b>（未重训时显示引导占位）',
+          '试算结果仅供工程参考，<b>正式指标以单目标验证页为准</b>'] },
+  { t: '软件资产库', tag: 'softwares 表', img: 'assets.jpg',
+    d: '在管软件台账：基础信息、失效率基线 λ 与业务权重，是加权平均可靠度的计算底座。',
+    pts: ['每张卡片显示 λ 基线、R(720h) 换算值与评估状态',
+          '「＋ 登记软件」直接写入 softwares 表；「发起验证」写入 reports 表',
+          '权重 weight 决定该对象在驾驶舱「加权平均可靠度」中的占比'] },
+  { t: '故障事件流', tag: 'incidents 表', img: 'incidents.jpg',
+    d: '运行期故障工单全生命周期：P1–P4 分级、状态流转、MTTR 与根因分析。',
+    pts: ['近 72h 故障分布：按工单 created_at <b>真实 3 小时分桶</b>',
+          '「＋ 新建工单」真实写入 incidents 表（告警通道对接后自动建单）',
+          '根因为空的工单显示「<b>AI 根因</b>」：点击创建 Agent T5 分析任务，结论写回工单',
+          '点击工单行跳转对应软件的单目标验证页'] },
+  { t: '验证报告', tag: 'reports + sections', img: 'report.jpg',
+    d: '报告列表与结论分布前端渲染；图文报告数据由 Agent T4 任务生成。',
+    pts: ['「＋ 签发报告」：创建 <b>Agent T4 任务</b>——计算指标、核对判据，写 reports 主行与 report_sections 内容块',
+          '「查看报告」进入详情视图：按 sort 渲染<b>文本块 / 指标块 / 表格 / 图表 / 结论卡</b>五种内容块',
+          '结论总览饼图与里程碑甘特图由 reports 表实时统计'] },
+  { t: '平台设置', tag: '管理员', img: 'settings.jpg',
+    d: '验证判据配置与外部接入状态，仅管理员可见（详见下方「权限与可见性」）。',
+    pts: ['判据启用开关与阈值修改<b>实时写回 criteria 表</b>，所有验证对象按新标准重新判定',
+          '「恢复出厂判据」真实批量重置阈值并全部启用',
+          '接入与通知卡读 integrations 表：CI-CD / APM / 混沌 / 告警的对接状态（未接入显示等待对接）'] }
+]
+
+jump = (id) => {
+  const el = document.getElementById(id)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+</script>
+</html>

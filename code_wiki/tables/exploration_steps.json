@@ -1,0 +1,62 @@
+{
+  "fields": [
+    {
+      "name": "repo_id",
+      "type": "string",
+      "title": "仓库ID",
+      "description": "关联 repos 记录",
+      "required": true
+    },
+    {
+      "name": "step_num",
+      "type": "int",
+      "title": "步骤序号",
+      "description": "探索步骤序号",
+      "required": true
+    },
+    {
+      "name": "action",
+      "type": "string",
+      "title": "操作",
+      "description": "AI 执行的操作类型",
+      "required": true,
+      "enum": [
+        "grep",
+        "read",
+        "ls",
+        "find",
+        "glob",
+        "inspect"
+      ]
+    },
+    {
+      "name": "target",
+      "type": "string",
+      "title": "目标",
+      "description": "操作目标：搜索模式 / 文件路径",
+      "required": true
+    },
+    {
+      "name": "finding",
+      "type": "text",
+      "title": "发现",
+      "description": "该步骤的关键发现摘要"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_es_repo",
+      "fields": [
+        "repo_id"
+      ]
+    },
+    {
+      "name": "idx_es_repo_step",
+      "fields": [
+        "repo_id",
+        "step_num"
+      ],
+      "unique": true
+    }
+  ]
+}

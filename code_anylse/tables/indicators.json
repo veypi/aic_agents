@@ -1,0 +1,95 @@
+{
+  "title": "符合性指标体系",
+  "description": "通用—专用三级指标树，含 AHP 权重、量化方法、阈值与当前得分",
+  "fields": [
+    {
+      "name": "code",
+      "type": "string",
+      "title": "指标代码",
+      "description": "形如 IND-FUN / IND-FUN-01 / IND-FUN-01-01",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "指标名称",
+      "required": true
+    },
+    {
+      "name": "level",
+      "type": "int",
+      "title": "层级",
+      "description": "1 / 2 / 3",
+      "required": true
+    },
+    {
+      "name": "parent_code",
+      "type": "string",
+      "title": "父级指标代码",
+      "description": "一级指标为空"
+    },
+    {
+      "name": "weight",
+      "type": "number",
+      "title": "AHP 权重",
+      "description": "仅一级指标"
+    },
+    {
+      "name": "quant_method",
+      "type": "string",
+      "title": "量化方法"
+    },
+    {
+      "name": "normalize",
+      "type": "string",
+      "title": "标准化方式"
+    },
+    {
+      "name": "threshold",
+      "type": "string",
+      "title": "阈值要求"
+    },
+    {
+      "name": "current_value",
+      "type": "string",
+      "title": "当前实测值"
+    },
+    {
+      "name": "score",
+      "type": "number",
+      "title": "当前得分",
+      "description": "0-100，仅一级指标"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"生效\""
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "code"
+      ],
+      "unique": true
+    },
+    {
+      "fields": [
+        "parent_code"
+      ]
+    },
+    {
+      "fields": [
+        "level"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="description" content="KPI 指标卡：左侧色条 + 数字滚动进场，sub 区域支持插槽" />
+  <title>KPI Card</title>
+</head>
+<style>
+  local-kpi-card{display:block;min-width:0}
+</style>
+<body>
+  <div class="rv-kpi" :style="tone ? { '--tone': tone } : {}">
+    <div class="lab">{{ lab }}</div>
+    <div class="val">{{ shown }}<small v-if="suffix">{{ suffix }}</small></div>
+    <div class="sub"><vslot><span v-if="sub">{{ sub }}</span></vslot></div>
+  </div>
+</body>
+<script setup>
+  lab = ''
+  val = ''
+  suffix = ''
+  tone = ''
+  sub = ''
+  shown = '—'
+
+  fmtN = (v, dec) => Number(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+
+  animateTo = (v) => {
+    if (v == null || v === '') { shown = '—'; return }
+    const n = parseFloat(v)
+    if (isNaN(n) || !isFinite(n)) { shown = v; return }
+    const dec = (String(v).split('.')[1] || '').length
+    const t0 = performance.now()
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / 700)
+      const e = 1 - Math.pow(1 - k, 3)
+      shown = fmtN(n * e, dec)
+      if (k < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  $watch(() => val, animateTo)
+</script>
+<script>
+  animateTo(val)
+</script>
+</html>

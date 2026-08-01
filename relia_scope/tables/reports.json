@@ -1,0 +1,55 @@
+{
+  "title": "验证报告",
+  "description": "可靠性验证报告与里程碑进度",
+  "fields": [
+    {
+      "name": "code",
+      "type": "string",
+      "title": "报告编号",
+      "description": "如 RPT-2026-031",
+      "required": true
+    },
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID"
+    },
+    {
+      "name": "vtype",
+      "type": "string",
+      "title": "验证类型",
+      "description": "鉴定试验/增长试验/验收测试等"
+    },
+    {
+      "name": "conclusion",
+      "type": "string",
+      "title": "结论",
+      "enum": [
+        "通过",
+        "有条件通过",
+        "不通过",
+        "待完成"
+      ]
+    },
+    {
+      "name": "issue_date",
+      "type": "string",
+      "title": "签发日期"
+    },
+    {
+      "name": "progress",
+      "type": "int",
+      "title": "里程碑进度 %",
+      "description": "用于甘特图"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_rep_code",
+      "fields": [
+        "code"
+      ],
+      "unique": true
+    }
+  ]
+}

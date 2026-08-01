@@ -1,0 +1,57 @@
+{
+  "title": "外部接入",
+  "description": "外部系统集成状态（CI/CD、APM、混沌工程、告警通道）；平台设置页接入与通知卡从本表读取",
+  "fields": [
+    {
+      "name": "system",
+      "type": "string",
+      "title": "系统标识",
+      "required": true,
+      "enum": [
+        "CICD",
+        "APM",
+        "Chaos",
+        "Alert",
+        "Probe"
+      ]
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "显示名称",
+      "required": true
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "未接入",
+      "enum": [
+        "已连接",
+        "运行中",
+        "异常",
+        "未接入"
+      ]
+    },
+    {
+      "name": "detail",
+      "type": "string",
+      "title": "状态说明"
+    },
+    {
+      "name": "link_count",
+      "type": "int",
+      "title": "连接数",
+      "default": 0
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_intg_system",
+      "fields": [
+        "system"
+      ],
+      "unique": true
+    }
+  ]
+}

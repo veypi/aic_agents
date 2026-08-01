@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReqVerif 需求符合性验证平台</title>
+</head>
+<style>
+  body{margin:0;font-family:'Chakra Petch','Microsoft YaHei','PingFang SC',sans-serif;background:var(--bg-color,#f6f8fb)}
+  vrouter{display:block;min-height:100vh}
+  .boot{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-color,#f6f8fb);text-align:center}
+  .boot-logo{width:46px;height:46px;margin:0 auto 14px;border-radius:10px;background:var(--color-primary,#4361ee);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;box-shadow:0 8px 22px rgba(67,97,238,.32);animation:boot-in .5s ease both}
+  .boot-name{font-size:19px;font-weight:700;color:var(--text-color,#111827);letter-spacing:.03em}
+  .boot-sub{font-size:11px;color:var(--text-color-tertiary,#6b7280);margin-top:8px;letter-spacing:.14em}
+  .boot-sub b{display:inline-block;animation:boot-blink 1.2s infinite;font-weight:400}
+  .boot-sub b:nth-child(2){animation-delay:.2s}.boot-sub b:nth-child(3){animation-delay:.4s}
+  @keyframes boot-in{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+  @keyframes boot-blink{50%{opacity:.15}}
+</style>
+<body>
+  <div class="boot" id="boot">
+    <div class="boot-logo">RV</div>
+    <div class="boot-name">ReqVerif</div>
+    <div class="boot-sub">正在进入工作台 <b>·</b><b>·</b><b>·</b></div>
+  </div>
+  <vrouter></vrouter>
+</body>
+<script>
+  // 启动归一化：/i 或 /i/ → /i/dashboard
+  const p = location.pathname.replace(/\/+$/, '')
+  if (p.endsWith('/i')) {
+    location.replace(p + '/dashboard')
+  } else {
+    // 已是子路由：交给自动路由渲染，隐藏启动画面
+    document.getElementById('boot').style.display = 'none'
+  }
+</script>
+</html>

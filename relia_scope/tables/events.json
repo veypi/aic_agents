@@ -1,0 +1,60 @@
+{
+  "title": "事件流",
+  "description": "平台事件流：探针上报、异常检测、故障闭环等；由采集接口或 Agent 任务写入，驾驶舱实时事件流从本表读取",
+  "fields": [
+    {
+      "name": "ts",
+      "type": "time",
+      "title": "发生时间",
+      "required": true
+    },
+    {
+      "name": "etype",
+      "type": "string",
+      "title": "事件类型",
+      "description": "探针上报/异常检测/故障闭环/模型重训/混沌实验/数据接入/指标达成",
+      "required": true
+    },
+    {
+      "name": "level",
+      "type": "string",
+      "title": "级别",
+      "default": "info",
+      "enum": [
+        "info",
+        "warn",
+        "critical"
+      ]
+    },
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "关联软件ID"
+    },
+    {
+      "name": "summary",
+      "type": "string",
+      "title": "事件摘要",
+      "required": true
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "title": "来源通道"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_events_ts",
+      "fields": [
+        "ts"
+      ]
+    },
+    {
+      "name": "idx_events_sw",
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

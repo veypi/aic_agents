@@ -1,124 +1,22 @@
-# ---> Go
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# UFS agents 仓库（aic_agents）：默认全部忽略，仅白名单 agent 内容进入 git 提交范围
+# - uuid 目录（平台自动创建的测试 agent）不追踪
+# - 白名单 = 手动管理的英文字母 agent
+# - 白名单目录内的平台运行产物（data.db/sessions/log）不追踪
 
-# Test binary, built with `go test -c`
-*.test
+/*
+!/.gitignore
+!README.md
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+!/song_tu/
+!/3d_maker/
+!/ppt_studio/
+!/well_talk/
+!/verisim/
+!/code_anylse/
+!/code_wiki/
+!/relia_scope/
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
-.env
-
-# ---> Linux
-*~
-
-# temporary files which can be created if a process still has a handle open of a deleted file
-.fuse_hidden*
-
-# KDE directory preferences
-.directory
-
-# Linux trash folder which might appear on any partition or disk
-.Trash-*
-
-# .nfs files are created when an open file is removed but is still being accessed
-.nfs*
-
-# ---> Emacs
-# -*- mode: gitignore; -*-
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# Org-mode
-.org-id-locations
-*_archive
-
-# flymake-mode
-*_flymake.*
-
-# eshell files
-/eshell/history
-/eshell/lastdir
-
-# elpa packages
-/elpa/
-
-# reftex files
-*.rel
-
-# AUCTeX auto folder
-/auto/
-
-# cask packages
-.cask/
-dist/
-
-# Flycheck
-flycheck_*.el
-
-# server auth directory
-/server/
-
-# projectiles files
-.projectile
-
-# directory configuration
-.dir-locals.el
-
-# network security
-/network-security.data
-
-
-# ---> Windows
-# Windows thumbnail cache files
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-
-# Dump file
-*.stackdump
-
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-node_modules/
-.cache
-sqlite.db
-.claude/
-.tmp/
-.DS_Store
+# 白名单目录内的平台运行产物（agent 运行会话时产生）
+**/data.db
+**/sessions/
+**/*.log

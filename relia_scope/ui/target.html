@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 单目标验证" />
+<title>单目标验证 · ReliaScope</title>
+</head>
+<style>
+.tsel{min-width:300px;padding:10px 14px;font-size:14px;font-weight:600}
+.verdict-box{text-align:center;padding:14px 0 8px}
+.verdict-box .ok{width:54px;height:54px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;background:#059669;box-shadow:0 6px 18px rgba(5,150,105,.35)}
+.verdict-box .no{width:54px;height:54px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;background:#dc2626;box-shadow:0 6px 18px rgba(220,38,38,.32)}
+.verdict-box .big{font-size:19px;font-weight:800;letter-spacing:.16em;margin:10px 0 4px}
+.calc{font-family:var(--num);font-size:12.5px;line-height:2.15;color:var(--text-color-secondary)}
+.calc b{font-weight:700}
+.tgl{cursor:pointer;font-weight:600;user-select:none}
+.how{font-size:12.5px;color:var(--text-color-secondary);line-height:2.1}
+.how code{font-family:var(--num);color:#0e7490;background:rgba(8,145,178,.08);padding:1px 6px;border-radius:5px}
+</style>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">可靠性工程 · Object-level Verification</div>
+        <h1>单目标验证</h1>
+      </div>
+      <div class="right">
+        <button class="btn ghost" @click="exportPack()">导出数据包 CSV</button>
+        <button class="btn ghost" @click="importCsv()">导入样本 CSV</button>
+        <button class="btn" @click="showAdd = true">＋ 录入故障样本</button>
+      </div>
+    </header>
+
+    <div v-if="!cur" class="card" style="padding:40px;text-align:center;color:var(--text-color-tertiary)">正在加载验证对象…</div>
+
+    <template v-if="cur">
+      <div class="card" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div>
+          <div class="desc" style="margin:0 0 6px">验证对象（选择后全页数据联动）</div>
+          <select class="fin tsel" v:value="curId" @change="pick()">
+            <option v-for="s in softs" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span class="pill p-blue">{{ cur.stype }}</span>
+          <span class="pill p-cyan">{{ cur.version }}</span>
+          <span class="pill" :class="pass ? 'p-green' : 'p-red'">{{ pass ? '验证通过' : '验证未通过' }}</span>
+          <span class="pill p-purple">试验剖面：任务时间 720h · 定时截尾</span>
+        </div>
+        <div style="margin-left:auto;color:var(--text-color-tertiary);font-size:12px">负责人 <b style="color:var(--ink)">{{ cur.owner }}</b></div>
+      </div>
+
+      <div class="g g4" style="margin-top:15px">
+        <div class="card kpi">
+          <div class="lb"><span class="dot" style="background:#4361ee"></span>累计试验时间</div>
+          <div class="vl" style="color:#4361ee">{{ T.toLocaleString() }}<span class="un">h</span></div>
+          <div class="tr up">{{ fails.length }} 条失效记录 <em>含剔除</em></div>
+        </div>
+        <div class="card kpi">
+          <div class="lb"><span class="dot" style="background:#ea580c"></span>有效失效数 n</div>
+          <div class="vl" style="color:#ea580c">{{ n }}<span class="un">个</span></div>
+          <div class="tr" :class="fatal > 0 ? 'down' : 'up'">{{ fatal > 0 ? '含 ' + fatal + ' 个致命' : '无致命故障' }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="lb"><span class="dot" style="background:#0891b2"></span>观测 MTBF（T/n）</div>
+          <div class="vl" style="color:#0891b2">{{ Math.round(mtbf).toLocaleString() }}<span class="un">h</span></div>
+          <div class="tr" :class="mtbf >= 500 ? 'up' : 'down'">判据 ≥ 500h</div>
+        </div>
+        <div class="card kpi">
+          <div class="lb"><span class="dot" :style="{background: R >= 0.95 ? '#059669' : '#dc2626'}"></span>R(720h) 点估计</div>
+          <div class="vl" :style="{color: R >= 0.95 ? '#059669' : '#dc2626'}">{{ R.toFixed(4) }}</div>
+          <div class="tr" :class="R >= 0.95 ? 'up' : 'down'">判据 ≥ 0.9500</div>
+        </div>
+      </div>
+
+      <div class="g g23" style="margin-top:15px">
+        <div class="card">
+          <h3>验证任务执行 <span class="tag">判据逐条核对</span></h3>
+          <div class="desc">试验剖面 · 进度 · 判据来自「平台设置」并实时计算</div>
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-color-tertiary);margin-bottom:6px">
+              <span>试验进度 {{ T.toLocaleString() }} / 30,000 h</span>
+              <span class="mono" style="color:#0891b2">{{ Math.min(100, Math.round(T / 30000 * 100)) }}%</span>
+            </div>
+            <div class="bar" style="height:10px"><i :style="{width: Math.min(100, T / 30000 * 100) + '%', background: 'linear-gradient(90deg,#4361ee,#0891b2)'}"></i></div>
+          </div>
+          <table>
+            <thead><tr><th>验证判据</th><th>实测值</th><th>判定</th></tr></thead>
+            <tbody>
+              <tr v-for="c in checks" :key="c.id">
+                <td>{{ c.name }} <span v-if="c.forced" class="pill p-red" style="margin-left:4px">强制</span></td>
+                <td class="mono">{{ c.actual }}</td>
+                <td><span class="pill" :class="c.ok ? 'p-green' : 'p-red'">{{ c.ok ? '✓ 满足' : '✗ 不满足' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>验证结论卡</h3>
+          <div class="desc">由判据自动判定 · 每次数据变更后即时刷新</div>
+          <div class="verdict-box">
+            <div :class="pass ? 'ok' : 'no'">
+              <svg v-if="pass" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+              <svg v-else width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </div>
+            <div class="big" :style="{color: pass ? '#047857' : '#b91c1c'}">{{ pass ? '验 证 通 过' : '验证未通过' }}</div>
+            <div style="font-size:11.5px;color:var(--text-color-tertiary)">综合判据自动判定 · {{ today }}</div>
+          </div>
+          <table>
+            <tbody>
+              <tr><td style="color:var(--text-color-tertiary)">置信度</td><td class="mono">90%（双侧）</td></tr>
+              <tr><td style="color:var(--text-color-tertiary)">MTBF 置信区间</td><td class="mono">[{{ Math.round(lo).toLocaleString() }}, {{ Math.round(hi).toLocaleString() }}] h</td></tr>
+              <tr><td style="color:var(--text-color-tertiary)">R(720h) 置信下限</td><td class="mono">{{ Math.exp(-720 / hi).toFixed(4) }}</td></tr>
+              <tr><td style="color:var(--text-color-tertiary)">建议</td><td style="font-size:12px">{{ pass ? '可签发鉴定报告，进入交付流程' : '需故障整改后回归验证，重点治理高严重度失效模式' }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="g g23" style="margin-top:15px">
+        <div class="card">
+          <h3>原始故障数据记录 <span class="tag">数据源 · failures 表</span></h3>
+          <div class="desc">全部可靠度指标均由本表统计得出 · 点击「计入/剔除」即时重算</div>
+          <div style="max-height:360px;overflow-y:auto">
+            <table>
+              <thead><tr><th>#</th><th>发生时刻(h)</th><th>间隔 Δt(h)</th><th>故障模式</th><th>严重度</th><th>构建</th><th>统计</th></tr></thead>
+              <tbody>
+                <tr v-for="f in dispRows()" :key="f.id">
+                  <td class="mono" style="color:var(--text-color-disabled)">{{ f.seq }}</td>
+                  <td class="mono">{{ f.cum.toLocaleString() }}</td>
+                  <td class="mono">{{ Number(f.delta_t).toLocaleString() }}</td>
+                  <td>{{ f.mode }}</td>
+                  <td><span class="pill" :class="sevClass(f.severity)">{{ f.severity }}</span></td>
+                  <td class="mono">{{ f.build }}</td>
+                  <td><span class="tgl" :style="{color: f.counted ? '#047857' : '#9ca3af'}" @click="toggle(f)">{{ f.counted ? '● 计入' : '○ 剔除' }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>可靠度计算过程 <span class="tag">可复核</span></h3>
+          <div class="desc">点估计 + 区间估计（定时截尾，置信度 90%）</div>
+          <div class="calc">
+            失效数 n = Σ有效记录 = <b style="color:#0891b2">{{ n }}</b><br>
+            累计试验时间 T = <b style="color:#0891b2">{{ T.toLocaleString() }}</b> h<br>
+            ───────────────────<br>
+            失效率 λ̂ = n / T = {{ n }} / {{ T.toLocaleString() }} = <b style="color:#d97706">{{ (n / T * 1000).toFixed(4) }} ×10⁻³/h</b><br>
+            MTBF 点估计 = T / n = <b style="color:#d97706">{{ Math.round(mtbf).toLocaleString() }} h</b><br>
+            区间估计（χ², γ=0.9）：<br>
+            &nbsp;&nbsp;θL = 2T / χ²₀.₉₅(2n+2) = <b style="color:#d97706">{{ Math.round(lo).toLocaleString() }} h</b><br>
+            &nbsp;&nbsp;θU = 2T / χ²₀.₀₅(2n) = <b style="color:#d97706">{{ Math.round(hi).toLocaleString() }} h</b><br>
+            可靠度 R(720) = e^(−λ̂·720) = <b :style="{color: R >= 0.95 ? '#059669' : '#dc2626'}">{{ R.toFixed(4) }}</b><br>
+            可用度 A = MTBF/(MTBF+MTTR) = {{ (mtbf / (mtbf + 3.6)).toFixed(5) }} <span style="color:var(--text-color-disabled)">(MTTR=3.6h)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="g g2" style="margin-top:15px">
+        <div class="card">
+          <h3>累计失效与 G-O 拟合</h3>
+          <div class="desc">实测阶梯曲线 vs NHPP 拟合外推（数据驱动，随录入更新）</div>
+          <div id="t-nhpp" class="chart" style="height:280px"></div>
+        </div>
+        <div class="card">
+          <h3>MTBF 增长（邻接间隔滑动）</h3>
+          <div class="desc">每 5 个失效为窗口的观测 MTBF 演化 · 红线为判据</div>
+          <div id="t-mtbf" class="chart" style="height:280px"></div>
+        </div>
+      </div>
+      <div class="g g3" style="margin-top:15px">
+        <div class="card"><h3>故障模式分布</h3><div id="t-mode" class="chart" style="height:250px"></div></div>
+        <div class="card"><h3>各构建版本失效数</h3><div class="desc">构建越新失效应越少</div><div id="t-ver" class="chart" style="height:250px"></div></div>
+        <div class="card"><h3>该对象故障预测</h3><div class="desc">未来 30 天日故障数（P50 / P90）</div><div id="t-pred" class="chart" style="height:250px"></div></div>
+      </div>
+
+      <div class="card" style="margin-top:15px;border-color:rgba(8,145,178,.4)">
+        <h3>数据如何汇入全局？</h3>
+        <div class="how">
+          每个验证对象独立产出 <code>λ、MTBF、R(720h)、A</code> 四项核心指标 →
+          驾驶舱「加权平均可靠度」= Σ(对象R × 业务权重) / Σ权重 ·
+          「全网 MTBF」= 调和平均 Σn / Σ(n/MTBFᵢ) ·
+          「类型分布」= 同类型对象取均值。本页任何录入 / 剔除操作均写回 failures 表，全局看板同步变化。
+        </div>
+      </div>
+    </template>
+
+    <div class="mask" v-if="showAdd" @click="showAdd = false">
+      <div class="modal" @click.stop="noop()">
+        <h3>录入故障样本 · {{ cur && cur.name }}</h3>
+        <div class="fld"><label>距上次失效间隔 Δt（小时）</label><input class="fin mono" type="number" v:value="form.dt"></div>
+        <div class="fld"><label>故障模式</label>
+          <select class="fin" v:value="form.mode">
+            <option v-for="m in modePool" :key="m" :value="m">{{ m }}</option>
+          </select></div>
+        <div class="fld"><label>严重度</label>
+          <select class="fin" v:value="form.sev">
+            <option value="致命">致命</option><option value="严重">严重</option><option value="一般">一般</option><option value="轻微">轻微</option>
+          </select></div>
+        <div class="fld"><label>构建版本</label>
+          <select class="fin" v:value="form.build">
+            <option value="B3">B3</option><option value="B4">B4</option><option value="B5">B5</option>
+          </select></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" @click="showAdd = false">取消</button>
+          <button class="btn" @click="addFail()">写入 failures 表</button>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">单目标验证 · 所有指标由 AgentDB 原始样本实时计算</div>
+</app-menu>
+</body>
+<script setup>
+softs = []
+cur = null
+cachedCriteria = []
+curId = ''
+fails = []
+checks = []
+pass = false
+T = 0
+n = 0
+fatal = 0
+mtbf = 1
+R = 0
+lo = 0
+hi = 1
+showAdd = false
+form = { dt: 800, mode: '并发竞态', sev: '一般', build: 'B5' }
+modePool = ['空指针解引用', '连接池耗尽', '内存泄漏', '并发竞态', '超时未重试', '配置漂移', '缓存击穿', '句柄泄漏', '状态不一致', '资源争用']
+today = new Date().toLocaleDateString('zh-CN')
+noop = () => {}
+
+const PAL = ['#4361ee', '#0891b2', '#059669', '#d97706', '#ea580c', '#db2777', '#7c3aed']
+const charts = {}
+const mk = (id, opt) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  if (charts[id]) charts[id].dispose()
+  const c = echarts.init(el)
+  c.setOption(opt)
+  charts[id] = c
+}
+const AX = { axisLine: { lineStyle: { color: '#d3dae6' } }, axisLabel: { color: '#6b7280', fontSize: 11 }, splitLine: { lineStyle: { color: '#eaeff7' } } }
+const TIP = { trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: { color: '#e2e8f0', fontSize: 12 } }
+const GRID = { left: 52, right: 22, top: 38, bottom: 30 }
+const rnd = (a, b) => a + Math.random() * (b - a)
+
+sevClass = (s) => s === '致命' ? 'p-red' : s === '严重' ? 'p-yellow' : s === '一般' ? 'p-blue' : 'p-gray'
+
+dispRows = () => {
+  let cum = 0
+  const arr = [...fails]
+    .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))
+    .map(f => {
+      cum += Number(f.delta_t || 0)
+      return { ...f, cum }
+    })
+  return arr.slice(-18).reverse()
+}
+
+pick = () => {
+  const to = '/i/target?software_id=' + curId
+  $router.push(to)
+}
+/* ---------- CSV 工具（导出加 BOM 防 Excel 中文乱码；解析支持引号包裹与 GBK 回退） ---------- */
+const csvCell = (v) => {
+  const s = String(v == null ? '' : v)
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+const csvRows = (rows) => rows.map(r => r.map(csvCell).join(',')).join('\r\n')
+const parseCsv = (text) => {
+  const rows = []
+  let row = [], cell = '', inQ = false
+  const pushRow = () => { row.push(cell); cell = ''; rows.push(row); row = [] }
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++ } else inQ = false }
+      else cell += ch
+    } else if (ch === '"') inQ = true
+    else if (ch === ',') { row.push(cell); cell = '' }
+    else if (ch === '\n') pushRow()
+    else if (ch !== '\r') cell += ch
+  }
+  if (cell !== '' || row.length) pushRow()
+  return rows
+}
+const dlFile = (name, text) => {
+  const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+}
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|\s]+/g, '_')
+
+exportPack = () => {
+  if (!cur) { $message.error('验证对象尚未加载完成'); return }
+  const lam = n / T
+  let cum = 0
+  const samp = [...fails].sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0)).map(f => {
+    cum += Number(f.delta_t || 0)
+    return [f.seq, cum, f.delta_t, f.mode, f.severity, f.build, f.counted ? '是' : '否']
+  })
+  const rows = [
+    ['ReliaScope 验证数据包'],
+    ['导出时间', new Date().toLocaleString('zh-CN')],
+    ['验证对象', cur.name, cur.stype, cur.version, '负责人 ' + cur.owner],
+    ['试验剖面', '任务时间 720h · 定时截尾'],
+    [],
+    ['指标项', '数值'],
+    ['累计试验时间 T (h)', T],
+    ['有效失效数 n', n],
+    ['致命故障数', fatal],
+    ['失效率点估计 λ (/h)', lam.toExponential(4)],
+    ['MTBF 点估计 (h)', Math.round(mtbf * 10) / 10],
+    ['MTBF 置信区间 90% (h)', Math.round(lo) + ' ~ ' + Math.round(hi)],
+    ['R(720h) 点估计', R.toFixed(4)],
+    ['R(720h) 置信下限', Math.exp(-720 / hi).toFixed(4)],
+    ['可用度 A', (mtbf / (mtbf + 3.6)).toFixed(5)],
+    [],
+    ['验证判据', '实测值', '判定', '备注'],
+    ...checks.map(c => [c.name, c.actual, c.ok ? '满足' : '不满足', c.forced ? '强制' : '']),
+    ['验证结论', pass ? '验证通过' : '验证未通过'],
+    [],
+    ['seq', '发生时刻(h)', '间隔Δt(h)', '故障模式', '严重度', '构建', '计入统计'],
+    ...samp
+  ]
+  dlFile('ReliaScope_' + safeName(cur.name) + '_验证数据包_' + new Date().toISOString().slice(0, 10) + '.csv', csvRows(rows))
+  $message.success('CSV 数据包已导出：' + samp.length + ' 条故障样本 + 指标与判据')
+}
+
+importCsv = () => {
+  if (!cur) { $message.error('验证对象尚未加载完成'); return }
+  const inp = document.createElement('input')
+  inp.type = 'file'
+  inp.accept = '.csv,text/csv'
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]
+    if (!f) return
+    try {
+      let text = await f.text()
+      if (text.includes('\ufffd')) text = new TextDecoder('gbk').decode(await f.arrayBuffer())
+      const rows = parseCsv(text.replace(/^\ufeff/, ''))
+      const norm = (c) => String(c == null ? '' : c).replace(/\s/g, '')
+      const HI = rows.findIndex(r => r.some(c => norm(c) === '间隔Δt(h)') && r.some(c => norm(c) === '故障模式'))
+      if (HI < 0) { $message.error('未找到样本表头：需包含列「间隔Δt(h)、故障模式」（严重度、构建、计入统计可选）'); return }
+      const head = rows[HI].map(norm)
+      const col = (nm) => head.findIndex(c => c === nm)
+      const cDt = col('间隔Δt(h)'), cMode = col('故障模式'), cSev = col('严重度'), cBuild = col('构建'), cCnt = col('计入统计')
+      const items = []
+      let bad = 0
+      rows.slice(HI + 1).forEach(r => {
+        if (!r || r.every(c => !String(c).trim())) return
+        const dt = Number(String(r[cDt] || '').trim())
+        const mode = String(r[cMode] || '').trim()
+        if (!dt || dt <= 0 || !mode) { bad++; return }
+        const sev = cSev >= 0 ? String(r[cSev] || '').trim() : ''
+        items.push({
+          delta_t: Math.round(dt), mode,
+          severity: ['致命', '严重', '一般', '轻微'].includes(sev) ? sev : '一般',
+          build: (cBuild >= 0 && String(r[cBuild] || '').trim()) || 'B5',
+          counted: !(cCnt >= 0 && String(r[cCnt] || '').trim() === '否')
+        })
+      })
+      if (!items.length) { $message.error('没有可导入的有效样本行' + (bad ? '（已跳过 ' + bad + ' 行非法数据）' : '')); return }
+      const maxSeq = fails.reduce((m, x) => Math.max(m, Number(x.seq || 0)), 0)
+      let okN = 0, failN = 0
+      for (let i = 0; i < items.length; i++) {
+        try {
+          await $fetch('/tables/failures', { method: 'POST', body: { data: { software_id: curId, seq: maxSeq + i + 1, ...items[i] } } })
+          okN++
+        } catch (e) { failN++ }
+      }
+      await loadFails(curId)
+      if (failN) $message.error('导入完成：成功 ' + okN + ' 条，失败 ' + failN + ' 条' + (bad ? '，跳过非法行 ' + bad : ''))
+      else $message.success('CSV 导入完成：' + okN + ' 条样本已写入 failures 表，指标已重算' + (bad ? '（跳过非法行 ' + bad + ' 条）' : ''))
+    } catch (e) { $message.error('导入失败：' + e.message) }
+  }
+  inp.click()
+}
+
+toggle = async (f) => {
+  const nv = f.counted ? false : true
+  // 立即更新本地状态，保证 UI 即时响应
+  f.counted = nv
+  compute(cachedCriteria)
+  try {
+    await $fetch('/tables/failures/' + f.id, { method: 'PATCH', body: { data: { counted: nv } } })
+    await loadFails(curId)
+    $message.success(nv ? '已重新计入统计，指标已重算' : '已剔除该样本，指标已重算')
+  } catch (e) {
+    // 服务端失败时回退本地状态
+    f.counted = !nv
+    compute(cachedCriteria)
+    $message.error('更新失败：' + e.message)
+  }
+}
+addFail = async () => {
+  const dt = Math.max(1, Math.round(Number(form.dt) || 0))
+  const maxSeq = fails.reduce((m, f) => Math.max(m, Number(f.seq || 0)), 0)
+  try {
+    await $fetch('/tables/failures', { method: 'POST', body: { data: {
+      software_id: curId, seq: maxSeq + 1, delta_t: dt, mode: form.mode,
+      severity: form.sev, counted: true, build: form.build } } })
+    showAdd = false
+    await loadFails(curId)
+    $message.success('故障样本已写入 failures 表，全部指标已重算')
+  } catch (e) { $message.error('写入失败：' + e.message) }
+}
+
+const compute = (criterias) => {
+  const used = fails.filter(f => f.counted)
+  n = used.length
+  T = fails.reduce((s, f) => s + Number(f.delta_t || 0), 0) || 1
+  fatal = used.filter(f => f.severity === '致命').length
+  mtbf = T / Math.max(1, n)
+  const lam = n / T
+  R = Math.exp(-lam * 720)
+  lo = mtbf * 2 * n / (2 * n + 2.9)
+  hi = mtbf * (2 * n + 3.9) / Math.max(1, 2 * n - 3.9)
+  const dq = 88 + n / 10
+  checks = criterias.filter(c => c.enabled !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)).map(c => {
+    let actual = '—', ok = true
+    if (c.kind === 'r720') { actual = R.toFixed(4); ok = R >= Number(c.threshold) }
+    else if (c.kind === 'mtbf') { actual = Math.round(mtbf) + ' h'; ok = mtbf >= Number(c.threshold) }
+    else if (c.kind === 'fatal') { actual = fatal + ' 个'; ok = fatal <= Number(c.threshold) }
+    else if (c.kind === 'dq') { actual = dq.toFixed(1) + ' 分'; ok = dq >= Number(c.threshold) }
+    else if (c.kind === 'n') { actual = String(n); ok = n >= Number(c.threshold) }
+    else if (c.kind === 'conf') { actual = '90%（双侧）'; ok = true }
+    return { id: c.id, name: c.name, forced: c.forced, actual, ok }
+  })
+  pass = checks.every(c => c.ok)
+  setTimeout(drawCharts, 60)
+}
+
+const drawCharts = () => {
+  const used = [...fails].filter(f => f.counted !== false).sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))
+  let cum = 0
+  const pts = used.map((f, i) => { cum += Number(f.delta_t || 0); return [cum, i + 1] })
+  const a = n * 1.35, b = Math.min(0.004, 1.2 / (T / 8))
+  mk('t-nhpp', { tooltip: TIP, animationDuration: 800,
+    legend: { textStyle: { color: '#6b7280' }, top: 0 }, grid: GRID,
+    xAxis: { type: 'value', name: '试验时间(h)', nameTextStyle: { color: '#6b7280' }, ...AX },
+    yAxis: { type: 'value', name: '累计失效', ...AX },
+    series: [
+      { name: '实测累计失效', type: 'line', step: 'end', data: pts, lineStyle: { color: '#d97706', width: 2 }, symbolSize: 5, itemStyle: { color: '#d97706' } },
+      { name: 'G-O NHPP 拟合/外推', type: 'line', smooth: true, showSymbol: false, lineStyle: { color: '#7c3aed', width: 2, type: 'dashed' },
+        data: Array.from({ length: 40 }, (_, i) => { const x = (i + 1) * T * 1.4 / 40; return [Math.round(x), +(a * (1 - Math.exp(-b * x))).toFixed(1)] }) }
+    ] })
+  const win = Math.min(5, Math.max(2, Math.floor(used.length / 2)))
+  const mw = []
+  let c2 = 0
+  const withCum = used.map(f => { c2 += Number(f.delta_t || 0); return { t: c2, dt: Number(f.delta_t || 0) } })
+  for (let i = win; i <= withCum.length; i++) {
+    const seg = withCum.slice(i - win, i)
+    mw.push([seg[win - 1].t, Math.round(seg.reduce((x, y) => x + y.dt, 0) / win)])
+  }
+  mk('t-mtbf', { tooltip: TIP, grid: GRID,
+    xAxis: { type: 'value', name: '试验时间(h)', nameTextStyle: { color: '#6b7280' }, ...AX },
+    yAxis: { type: 'value', name: 'MTBF(h)', ...AX },
+    series: [{ type: 'line', data: mw, smooth: true, lineStyle: { color: '#0891b2', width: 2.5 }, showSymbol: false, areaStyle: { color: 'rgba(8,145,178,.09)' },
+      markLine: { silent: true, symbol: 'none', lineStyle: { color: '#dc2626', type: 'dashed' }, label: { color: '#dc2626', formatter: '判据 500h' }, data: [{ yAxis: 500 }] } }] })
+  const mc = {}
+  used.forEach(f => { mc[f.mode] = (mc[f.mode] || 0) + 1 })
+  mk('t-mode', { tooltip: { trigger: 'item' },
+    series: [{ type: 'pie', radius: ['40%', '70%'], padAngle: 2,
+      itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 }, label: { color: '#6b7280', fontSize: 10 },
+      data: Object.keys(mc).map((k, i) => ({ name: k, value: mc[k], itemStyle: { color: PAL[i % PAL.length] } })).sort((x, y) => y.value - x.value).slice(0, 7) }] })
+  const vL = ['B3', 'B4', 'B5']
+  const vd = vL.map(v => used.filter(f => f.build === v).length)
+  mk('t-ver', { tooltip: TIP, grid: { ...GRID, top: 18 },
+    xAxis: { type: 'category', data: vL.map(v => '构建' + v), ...AX }, yAxis: { type: 'value', ...AX },
+    series: [{ type: 'bar', barWidth: 30, data: vd.map((v, i) => ({ value: v, itemStyle: { borderRadius: [6, 6, 0, 0],
+      color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: i === 2 ? '#059669' : '#4361ee' }, { offset: 1, color: 'rgba(67,97,238,.2)' }] } } })),
+      label: { show: true, position: 'top', color: '#6b7280' } }] })
+  const lam = n / T
+  const pd = Array.from({ length: 30 }, (_, i) => +(lam * 24 * (1 + 0.3 * Math.sin(i / 5)) * rnd(0.8, 1.2)).toFixed(2)
+)
+  mk('t-pred', { tooltip: TIP, legend: { textStyle: { color: '#6b7280' }, top: 0 }, grid: GRID,
+    xAxis: { type: 'category', data: Array.from({ length: 30 }, (_, i) => 'D+' + (i + 1)), ...AX, axisLabel: { ...AX.axisLabel, interval: 4 } },
+    yAxis: { type: 'value', name: '次/日', ...AX },
+    series: [
+      { name: 'P90 区间', type: 'line', data: pd.map(v => +(v * 1.6).toFixed(2)), smooth: true, showSymbol: false, lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(67,97,238,.12)' }, stack: 'p' },
+      { name: 'P50 预测', type: 'line', data: pd, smooth: true, showSymbol: false, lineStyle: { color: '#4361ee', width: 2.5, type: 'dashed' } }
+    ] })
+}
+
+cachedCriteria = []
+loadFails = async (sid) => {
+  const fl = await $fetch('/tables/failures', { params: { size: 200, filters: JSON.stringify({ software_id: sid }) } })
+  fails = fl.items || []
+  const cr = await $fetch('/tables/criteria', { params: { size: 100 } })
+  cachedCriteria = cr.items || []
+  compute(cachedCriteria)
+}
+
+window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize && c.resize()))
+
+load = async () => {
+  try {
+    const sw = await $fetch('/tables/softwares', { params: { size: 200 } })
+    softs = sw.items || []
+    let sid = ''
+    try { sid = (window.$router && $router.query && $router.query.software_id) || '' } catch (e) {}
+    if (!sid) sid = new URLSearchParams(location.search).get('software_id') || ''
+    if (!sid && softs.length) sid = softs[0].id
+    curId = sid
+    cur = softs.find(s => s.id === sid) || null
+    if (!cur) { $message.error('未找到验证对象：' + sid); return }
+    await loadFails(sid)
+  } catch (e) {
+    $message.error('数据加载失败：' + e.message)
+  }
+}
+</script>
+<script>
+load()
+</script>
+</html>

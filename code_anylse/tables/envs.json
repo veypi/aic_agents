@@ -1,0 +1,50 @@
+{
+  "title": "验证环境",
+  "description": "常驻与动态验证环境实例",
+  "fields": [
+    {
+      "name": "env_code",
+      "type": "string",
+      "title": "环境编号",
+      "description": "形如 env-prod-a",
+      "required": true
+    },
+    {
+      "name": "env_type",
+      "type": "string",
+      "title": "类型"
+    },
+    {
+      "name": "nodes",
+      "type": "int",
+      "title": "节点数",
+      "default": 0
+    },
+    {
+      "name": "purpose",
+      "type": "string",
+      "title": "用途"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态"
+    },
+    {
+      "name": "ttl_hours",
+      "type": "int",
+      "title": "TTL（小时）",
+      "description": "动态环境自动回收时限，常驻为 0",
+      "default": 0
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "env_code"
+      ],
+      "unique": true
+    }
+  ],
+  "max_records_per_user": 0
+}

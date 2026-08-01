@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="description" content="需求详情抽屉：聚合需求、追踪链接、关联用例、变更历史" />
+  <title>Requirement Drawer</title>
+</head>
+<style>
+  local-req-drawer{display:block}
+  .rd-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .rd-head h3{margin:0;font-size:16px;color:var(--color-info)}
+  .rd-desc{font-size:13px;color:var(--text-color-secondary);line-height:1.8;margin:10px 0 0}
+  .rd-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .rd-link{color:var(--color-primary);cursor:pointer;text-decoration:none}
+  .rd-link:hover{text-decoration:underline}
+</style>
+<body>
+  <div class="rv-drawer" :class="{ show: visible }">
+    <div class="rd-head">
+      <h3 class="mono">{{ req.req_id || '…' }}</h3>
+      <button class="rv-btn ghost sm" @click="close()">✕ 关闭</button>
+    </div>
+
+    <div v-if="req.id">
+      <div class="rd-tags">
+        <span class="rv-tag" :class="implCls(req.impl_status)"><i></i>{{ req.impl_status }}</span>
+        <span class="rv-tag" :class="verCls(req.verif_status)"><i></i>{{ req.verif_status }}</span>
+        <span class="rv-tag t-gray">{{ req.domain }}</span>
+        <span class="rv-tag t-bad" v-if="req.deprecated"><i></i>已废弃</span>
+      </div>
+      <p class="rd-desc">{{ req.description }}</p>
+
+      <div class="rv-sec">
+        <h4>基本信息</h4>
+        <div class="rv-kv"><b>层级</b><span>{{ req.level }}</span></div>
+        <div class="rv-kv"><b>优先级</b><span>{{ req.priority }}</span></div>
+        <div class="rv-kv"><b>实现组件</b><span class="mono">{{ req.impl_components || '—' }}</span></div>
+        <div class="rv-kv"><b>文档出处</b><span>{{ req.source || '—' }}</span></div>
+        <div class="rv-kv"><b>解析置信度</b><span class="num">{{ req.confidence }}%</span></div>
+        <div class="rv-kv" v-if="req.ocl"><b>形式化约束</b><span class="mono" style="font-size:11px">{{ req.ocl }}</span></div>
+      </div>
+
+      <div class="rv-sec">
+        <h4>追踪链接（{{ links.length }}）</h4>
+        <div class="rv-kv" v-for="l in links" :key="l.id">
+          <b class="mono">{{ l.comp_code }}</b>
+          <span>
+            <span class="rv-tag" :class="l.link_type === 'F' ? 't-info' : 't-vio'">{{ l.link_type === 'F' ? '完整实现' : '部分实现' }}</span>
+            <span class="rv-tag t-warn" v-if="l.need_reverify"><i></i>待重验</span>
+          </span>
+        </div>
+        <div class="rv-empty" v-if="!links.length">无组件覆盖 — 存在覆盖缺口</div>
+      </div>
+
+      <div class="rv-sec">
+        <h4>关联验证用例（{{ cases.length }}）</h4>
+        <div class="rv-kv" v-for="c in cases" :key="c.id">
+          <b class="mono">{{ c.case_id }}</b>
+          <span>
+            <span class="rv-tag" :class="resCls(c.last_result)"><i></i>{{ c.last_result }}</span>
+            <span class="dim" style="font-size:11px">{{ c.source }}</span>
+          </span>
+        </div>
+        <div class="rv-kv" v-if="!cases.length">
+          <b>—</b><span class="dim">暂无用例，<a class="rd-link" href="#" @click="goCases()">去用例中心生成</a></span>
+        </div>
+      </div>
+
+      <div class="rv-sec">
+        <h4>变更历史（{{ changes.length }}）</h4>
+        <div class="rv-kv" v-for="h in changes" :key="h.id">
+          <b class="mono">{{ shortT(h.occurred_at) }}</b>
+          <span>{{ h.title }}</span>
+        </div>
+        <div class="rv-kv" v-if="!changes.length"><b>—</b><span class="dim">无变更记录</span></div>
+      </div>
+    </div>
+
+    <div class="rv-empty" v-else>正在加载需求详情…</div>
+  </div>
+</body>
+<script setup>
+  visible = false
+  req = {}
+  links = []
+  cases = []
+  changes = []
+
+  implCls = (s) => s === '完整实现' ? 't-info' : s === '部分实现' ? 't-vio' : 't-bad'
+  verCls = (s) => s === '符合' ? 't-ok' : s === '偏离' ? 't-bad' : 't-warn'
+  resCls = (s) => s === '通过' ? 't-ok' : s === '失败' ? 't-bad' : s === '阻塞' ? 't-warn' : 't-gray'
+  shortT = (t) => (t || '').slice(5, 10)
+
+  open = async (rid) => {
+    visible = true
+    req = {}
+    links = []
+    cases = []
+    changes = []
+    try {
+      const [r, l, c, h] = await Promise.all([
+        $mod.$fetch('/tables/requirements', { params: { size: 1, filters: JSON.stringify({ req_id: rid }) } }),
+        $mod.$fetch('/tables/trace_links', { params: { size: 50, filters: JSON.stringify({ req_id: rid }) } }),
+        $mod.$fetch('/tables/test_cases', { params: { size: 50, filters: JSON.stringify({ req_id: rid }) } }),
+        $mod.$fetch('/tables/change_events', { params: { size: 20, filters: JSON.stringify({ req_id: rid }) } }),
+      ])
+      req = (r.items || [])[0] || {}
+      links = l.items || []
+      cases = c.items || []
+      changes = h.items || []
+    } catch (e) {
+      $message.error('需求详情加载失败：' + e.message)
+    }
+  }
+
+  close = () => { visible = false }
+
+  goCases = () => {
+    close()
+    try { $router.push('/i/case?req_id=' + encodeURIComponent(req.req_id)) } catch (e) { location.href = '/i/case?req_id=' + encodeURIComponent(req.req_id) }
+  }
+</script>
+</html>

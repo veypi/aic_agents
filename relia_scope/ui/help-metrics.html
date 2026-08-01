@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 可靠性验证指标" />
+<title>验证指标 · ReliaScope</title>
+</head>
+<style>
+.sec{margin-bottom:28px}
+.sec h3{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.sec h3 .idx{display:inline-flex;width:24px;height:24px;border-radius:7px;background:var(--color-primary);color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.sec .desc{font-size:12.5px;color:var(--text-color-secondary);line-height:2.05;margin-bottom:6px}
+.sec .formula{background:#f6f9fe;border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;font-family:var(--num);font-size:13px;line-height:2.2;color:#0e7490;margin:8px 0;overflow-x:auto}
+.sec .formula b{color:var(--ink)}
+.sec .note{font-size:11px;color:var(--text-color-tertiary);margin-top:4px;line-height:1.8}
+.toc{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.toc a{font-size:12px;color:var(--color-primary);text-decoration:none;padding:4px 12px;border:1px solid var(--border-color);border-radius:99px;transition:all var(--transition-fast)}
+.toc a:hover{background:rgba(67,97,238,.06);border-color:var(--color-primary)}
+</style>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">帮助与支持 · Knowledge Base</div>
+        <h1>可靠性验证指标</h1>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="desc">以下指标是 ReliaScope 平台进行软件可靠性验证的核心依据，所有计算均基于 <b>failures 表</b>中的原始故障样本实时得出。每项指标均在「单目标验证」页逐条核对对应判据（criteria 表），全部满足方可通过验证。</div>
+    </div>
+
+    <div class="toc">
+      <a href="#m1">失效率 &lambda;</a>
+      <a href="#m2">MTBF</a>
+      <a href="#m3">可靠度 R(t)</a>
+      <a href="#m4">可用度 A</a>
+      <a href="#m5">置信区间</a>
+      <a href="#m6">致命故障数</a>
+      <a href="#m7">数据质量 DQ</a>
+      <a href="#m8">最低样本量 n</a>
+      <a href="#m9">G-O NHPP</a>
+      <a href="#m10">Weibull</a>
+      <a href="#m11">Duane / Crow-AMSAA</a>
+    </div>
+
+    <div class="sec card" id="m1">
+      <h3><span class="idx">1</span>失效率 &lambda;（Failure Rate）</h3>
+      <div class="desc">单位时间内发生失效的期望次数，是可靠性工程最基本的度量。ReliaScope 采用观测失效率（点估计），由全部有效故障样本直接计算。</div>
+      <div class="formula">&lambda;&#770; = <b>n / T</b> &times; 1000 &ensp;（单位：/kh，即每千小时失效次数）</div>
+      <div class="note">
+        其中 <b>n</b> = 有效失效总数（counted &ne; false 的 failures 行数），<b>T</b> = 全部样本的 delta_t 之和（含剔除行）。<br>
+        &lambda; 越小表示软件越稳定。例如 Linux Kernel 的 &lambda; = 0.01 /kh，意味着平均每 10 万小时才发生一次失效。
+      </div>
+    </div>
+
+    <div class="sec card" id="m2">
+      <h3><span class="idx">2</span>MTBF（Mean Time Between Failures）</h3>
+      <div class="desc">平均故障间隔时间，即两次连续失效之间的期望运行时间。MTBF 是失效率的倒数，直观反映系统的可靠性水平。</div>
+      <div class="formula">MTBF = <b>T / n</b> &ensp;（单位：小时 h）</div>
+      <div class="note">
+        判据阈值：<b>&ge; 500 h</b>（可在「平台设置」页调整）。<br>
+        例如 PostgreSQL 的 MTBF = 150,600 / 11 &asymp; 13,691 h，意味着预期两次故障之间可连续运行约 19 个月。
+      </div>
+    </div>
+
+    <div class="sec card" id="m3">
+      <h3><span class="idx">3</span>可靠度 R(t)（Reliability）</h3>
+      <div class="desc">在规定时间 t 内、规定条件下，软件不发生失效的概率。ReliaScope 默认任务时间 t = 720 小时（30 天），假设失效服从指数分布。</div>
+      <div class="formula">R(t) = <b>e<sup>&minus;&lambda;&#770;&middot;t</sup></b> = e<sup>&minus;(n/T)&middot;720</sup></div>
+      <div class="note">
+        判据阈值：<b>&ge; 0.9500</b>。<br>
+        指数假设意味着失效随机发生、失效率恒定（偶发失效期）。若 R(720h) = 0.9647，表示在未来 720 小时内不失效的概率为 96.47%。<br>
+        该值受样本量 n 和总试验时间 T 共同影响：少量样本会导致估计方差大、置信区间宽。
+      </div>
+    </div>
+
+    <div class="sec card" id="m4">
+      <h3><span class="idx">4</span>可用度 A（Availability）</h3>
+      <div class="desc">稳态下系统处于可工作状态的时间比例，综合考虑故障和修复两个过程。</div>
+      <div class="formula">A = <b>MTBF / (MTBF + MTTR)</b> &ensp;（MTTR = 3.6 h，默认平均修复时间）</div>
+      <div class="note">
+        A 越接近 1 表示停机时间越少。例如 MTBF = 20,000 h 时，A = 20,000 / 20,003.6 &asymp; 0.99982，年预期停机约 1.6 小时。<br>
+        可用度不在判据表中，但作为参考指标在「分析计算过程」中展示。
+      </div>
+    </div>
+
+    <div class="sec card" id="m5">
+      <h3><span class="idx">5</span>MTBF 置信区间（Confidence Interval）</h3>
+      <div class="desc">点估计（单一数值）无法反映不确定性。ReliaScope 采用<b>定时截尾试验</b>模型，置信度 &gamma; = 90%，给出 MTBF 的双侧区间估计。</div>
+      <div class="formula">
+        &theta;<sub>L</sub> = <b>2T / &chi;&sup2;<sub>(1+&gamma;)/2, 2n+2</sub></b><br>
+        &theta;<sub>U</sub> = <b>2T / &chi;&sup2;<sub>(1&minus;&gamma;)/2, 2n</sub></b>
+      </div>
+      <div class="note">
+        &chi;&sup2; 分位数使用 <b>Wilson-Hilferty 近似</b>计算。R(720h) 的置信下限 = e<sup>&minus;720/&theta;<sub>U</sub></sup>，在「验证结论卡」中展示。<br>
+        判据：置信度 <b>90%（双侧）</b>。
+      </div>
+    </div>
+
+    <div class="sec card" id="m6">
+      <h3><span class="idx">6</span>致命故障一票否决</h3>
+      <div class="desc">统计有效样本中 <b>severity = 致命</b> 的故障数。任何致命故障的发生都是不可接受的——这是安全关键系统的强制性判据。</div>
+      <div class="formula">fatal = &Sigma; [severity = 致命 &and; counted = true]</div>
+      <div class="note">
+        判据：<b>致命故障 = 0</b>（强制项，不可停用）。<br>
+        即使 R(720h) 和 MTBF 全部达标，只要有一个致命故障未整改，验证结论即为「不通过」。
+      </div>
+    </div>
+
+    <div class="sec card" id="m7">
+      <h3><span class="idx">7</span>数据质量 DQ（Data Quality）</h3>
+      <div class="desc">由 Agent T2 任务从六个维度对 failures 表做综合评分，评估故障数据的可信度。每个维度 0-100 分，按加权均值汇总。</div>
+      <div class="formula">
+        DQ = w<sub>1</sub>&middot;完整性 + w<sub>2</sub>&middot;一致性 + w<sub>3</sub>&middot;时效性<br>
+        &ensp;&ensp;&ensp;&ensp;+ w<sub>4</sub>&middot;准确性 + w<sub>5</sub>&middot;唯一性 + w<sub>6</sub>&middot;合规性
+      </div>
+      <div class="note">
+        <b>完整性</b>：必填字段非空比例 &ensp; <b>一致性</b>：seq 连续性 + 软件归属有效性<br>
+        <b>时效性</b>：近 7 天有新样本的比例 &ensp; <b>准确性</b>：delta_t 正值且离群值占比低<br>
+        <b>唯一性</b>：重复行比例反向 &ensp; <b>合规性</b>：severity / build 枚举合规比例<br>
+        判据阈值：<b>&ge; 85 分</b>。在「单目标验证」页目标 DQ = 88 + n/10。
+      </div>
+    </div>
+
+    <div class="sec card" id="m8">
+      <h3><span class="idx">8</span>最低样本量 n</h3>
+      <div class="desc">统计推断的基本前提：样本量过小会导致估计方差过大、结论不可靠。ReliaScope 要求有效失效样本数至少达到阈值。</div>
+      <div class="formula">n = &Sigma; [counted = true] &ensp;（有效计入统计的 failures 行数）</div>
+      <div class="note">
+        判据阈值：<b>n &ge; 8</b>。<br>
+        例如 Nginx 有 8 条有效样本，满足该判据；Linux Kernel 仅有 6 条，即使 R(720h) 高达 0.9857 仍被判定为「未通过」。
+      </div>
+    </div>
+
+    <div class="sec card" id="m9">
+      <h3><span class="idx">9</span>G-O NHPP 增长模型</h3>
+      <div class="desc">Goel-Okumoto 非齐次泊松过程模型，用于描述"随着测试推进，缺陷检出速率递减"的可靠性增长规律。Agent T1 任务负责对每个软件的累计失效序列做拟合。</div>
+      <div class="formula">m(t) = <b>a &middot; (1 &minus; e<sup>&minus;b&middot;t</sup>)</b></div>
+      <div class="note">
+        <b>a</b> = 软件中预期的总缺陷数（模型估计）&ensp; <b>b</b> = 缺陷检出速率参数<br>
+        拟合方法：对累计失效序列 (t<sub>i</sub>, i) 遍历 b 做网格搜索，每个 b 用最小二乘直接求解 a，以残差平方和最小为目标。<br>
+        剩余缺陷 = a &minus; n，用于「故障预测」页的前端实时估计。更精确的预测产物（p50_30d / p90_30d / rul_h）由 Agent 写入 predictions 表。
+      </div>
+    </div>
+
+    <div class="sec card" id="m10">
+      <h3><span class="idx">10</span>Weibull 寿命分布</h3>
+      <div class="desc">用于描述失效间隔时间的分布规律，通过形状参数 &beta; 判断当前处于早期失效、偶发失效还是耗损失效阶段。</div>
+      <div class="formula">
+        f(t) = (&beta;/&eta;) &middot; (t/&eta;)<sup>&beta;&minus;1</sup> &middot; e<sup>&minus;(t/&eta;)<sup>&beta;</sup></sup><br>
+        R(t) = e<sup>&minus;(t/&eta;)<sup>&beta;</sup></sup>
+      </div>
+      <div class="note">
+        对失效间隔做<b>中位秩回归</b>：x = ln(t), y = ln(&minus;ln(1&minus;F))，其中 F = (i&minus;0.3)/(n+0.4)。<br>
+        斜率 = <b>&beta;</b>（形状参数），&eta; = e<sup>&minus;截距/&beta;</sup>（尺度参数）。<br>
+        &beta; &lt; 1 → 早期失效期（磨合）&ensp; &beta; &asymp; 1 → 偶发失效期 &ensp; &beta; &gt; 1 → 耗损失效期。
+      </div>
+    </div>
+
+    <div class="sec card" id="m11">
+      <h3><span class="idx">11</span>Duane / Crow-AMSAA 增长模型</h3>
+      <div class="desc">描述累计 MTBF 随测试时间呈幂律增长的趋势，广泛用于可靠性增长试验的跟踪与评估。</div>
+      <div class="formula">累计 MTBF(T) = <b>a &middot; T<sup>&alpha;</sup></b></div>
+      <div class="note">
+        对 (ln T, ln(T/n(T))) 做线性回归：斜率 = <b>&alpha;</b>（增长率），截距 = ln a。<br>
+        &alpha; &gt; 0.2 表示有明显增长趋势；&alpha; &asymp; 0 表示 MTBF 不随测试时间增长。R&sup2; 衡量拟合优度。<br>
+        该模型在「可靠性分析」页以对数坐标图呈现。
+      </div>
+    </div>
+
+    <div class="footer-note">ReliaScope v3.2 · 验证指标手册 · 所有公式基于 MIL-HDBK-338B / IEEE 1633 等标准</div>
+</app-menu>
+</body>
+</html>

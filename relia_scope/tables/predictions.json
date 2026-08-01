@@ -1,0 +1,46 @@
+{
+  "title": "预测产物",
+  "description": "Agent 重训任务产出的每软件故障预测；故障预测页从本表读取",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "required": true
+    },
+    {
+      "name": "p50_30d",
+      "type": "number",
+      "title": "未来30天故障P50"
+    },
+    {
+      "name": "p90_30d",
+      "type": "number",
+      "title": "未来30天故障P90"
+    },
+    {
+      "name": "residual",
+      "type": "number",
+      "title": "预计剩余缺陷"
+    },
+    {
+      "name": "rul_h",
+      "type": "number",
+      "title": "剩余寿命(h)"
+    },
+    {
+      "name": "readiness",
+      "type": "number",
+      "title": "发布就绪度(0-100)"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_pred_sw",
+      "fields": [
+        "software_id"
+      ],
+      "unique": true
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="ReqVerif 工作台总览" />
+  <title>工作台总览</title>
+</head>
+<style>
+  .dash-sub b{font-family:'Chakra Petch',sans-serif;font-weight:600}
+</style>
+<body>
+  <local-app-menu page="dashboard">
+    <div class="rv-crumb">工作台</div>
+    <div class="rv-titlebar">
+      <h2>工作台总览</h2>
+      <span class="rv-desc" v-if="baseline">基线 <b class="mono">{{ baseline.code }}</b> · 最近轮次 <b class="mono">{{ run ? run.run_code : '—' }}</b></span>
+      <span class="spacer"></span>
+      <a class="rv-btn ghost" href="/i/report">查看符合性报告</a>
+      <a class="rv-btn" href="/i/exec">发起新一轮验证</a>
+    </div>
+
+    <div class="rv-grid g4" style="margin-bottom:14px">
+      <local-kpi-card lab="需求总数" :val="reqTotal" tone="var(--color-primary)">
+        <span class="dash-sub">完整 <b>{{ fmt(reqFull) }}</b> · 部分 <b>{{ fmt(reqPartial) }}</b> · 未覆盖 <b class="down">{{ fmt(reqNone) }}</b></span>
+      </local-kpi-card>
+      <local-kpi-card lab="需求覆盖率" :val="coverage" suffix="%" tone="var(--color-info)">
+        <span class="dash-sub">未覆盖 <b class="down">{{ fmt(reqNone) }}</b> 项 · 基线 BL-V3.2 为 95.3%</span>
+      </local-kpi-card>
+      <local-kpi-card lab="本轮用例通过率" :val="runRate" suffix="%" tone="var(--color-success)">
+        <span class="dash-sub"><b class="up">{{ fmt(runPassed) }}</b> 通过 / <b class="down">{{ fmt(runFailed) }}</b> 失败 / <b>{{ fmt(runBlocked) }}</b> 阻塞</span>
+      </local-kpi-card>
+      <local-kpi-card lab="加权符合性总分" :val="score" tone="var(--color-secondary)" sub="按 AHP 权重矩阵实时加权 · CR 0.036 一致性通过"></local-kpi-card>
+    </div>
+
+    <div class="rv-grid g2" style="margin-bottom:14px">
+      <div class="rv-panel acc-pri">
+        <h3>一级指标符合性雷达（当前 vs 目标阈值 85）</h3>
+        <local-chart-box :option="radarOpt" height="284px"></local-chart-box>
+      </div>
+      <div class="rv-panel acc-warn">
+        <h3>待办与风险（{{ todos.length }}）</h3>
+        <table class="rv-table">
+          <thead><tr><th>事项</th><th>类型</th><th>负责人</th><th>截止</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr v-for="t in todos" :key="t.id">
+              <td style="max-width:250px">{{ t.title }}</td>
+              <td><span class="rv-tag" :class="typeCls(t.todo_type)">{{ t.todo_type }}</span></td>
+              <td>{{ t.owner }}</td>
+              <td class="mono dim">{{ shortT(t.due) }}</td>
+              <td><span class="rv-tag" :class="stCls(t.status)"><i></i>{{ t.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="rv-empty" v-if="!todos.length">暂无待办事项</div>
+      </div>
+    </div>
+
+    <div class="rv-grid g3">
+      <div class="rv-panel acc-ok">
+        <h3>验证轮次结果对比</h3>
+        <local-chart-box :option="runsOpt" height="224px"></local-chart-box>
+      </div>
+      <div class="rv-panel acc-vio">
+        <h3>用例来源构成</h3>
+        <local-chart-box :option="srcOpt" height="224px"></local-chart-box>
+      </div>
+      <div class="rv-panel acc-bad">
+        <h3>失败用例 Top（需优先处置）</h3>
+        <table class="rv-table">
+          <thead><tr><th>用例</th><th>关联需求</th><th>来源</th><th>缺陷</th></tr></thead>
+          <tbody>
+            <tr v-for="c in failed" :key="c.id">
+              <td class="mono" style="color:var(--color-info)">{{ c.case_id }}</td>
+              <td class="mono">{{ c.req_id }}</td>
+              <td><span class="rv-tag t-gray">{{ c.source }}</span></td>
+              <td><b class="down num">{{ c.defects }}</b></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="rv-empty" v-if="!failed.length">当前无失败用例</div>
+        <div style="margin-top:10px;text-align:right"><a class="rv-btn ghost sm" href="/i/case?result=失败">查看全部 →</a></div>
+      </div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  reqTotal = 0
+  reqFull = 0
+  reqPartial = 0
+  reqNone = 0
+  coverage = '0'
+  runRate = '0'
+  runPassed = 0
+  runFailed = 0
+  runBlocked = 0
+  score = '0'
+  run = null
+  baseline = null
+  todos = []
+  failed = []
+  radarOpt = null
+  runsOpt = null
+  srcOpt = null
+
+  fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'))
+  shortT = (t) => (t || '').slice(5, 10)
+  typeCls = (s) => ({ '变更重验': 't-warn', '覆盖缺口': 't-bad', '平台运维': 't-info', '指标评审': 't-vio', '版本管理': 't-gray' }[s] || 't-gray')
+  stCls = (s) => ({ '未开始': 't-gray', '进行中': 't-info', '待处理': 't-warn', '已完成': 't-ok' }[s] || 't-gray')
+
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = async (table, filters, size, sort) => {
+    if (PRJ_TABLES[table]) filters = Object.assign({}, filters, { project_code: CUR_PRJ })
+    const params = { size: size || 1 }
+    if (filters) params.filters = JSON.stringify(filters)
+    if (sort) params.sort = sort
+    return $mod.$fetch('/tables/' + table, { params })
+  }
+
+  IND_ORDER = ['IND-FUN', 'IND-PER', 'IND-REL', 'IND-SAF', 'IND-MNT', 'IND-TST', 'IND-DIA']
+
+  load = async () => {
+    try {
+      const [t, f, p, n, indsD, runsD, todosD, failD, casesD, blD] = await Promise.all([
+        q('requirements', null, 1),
+        q('requirements', { impl_status: '完整实现' }),
+        q('requirements', { impl_status: '部分实现' }),
+        q('requirements', { impl_status: '未覆盖' }),
+        q('indicators', { level: 1 }, 20),
+        q('verif_runs', null, 20, '-started_at'),
+        q('todo_items', null, 20, 'due'),
+        q('test_cases', { last_result: '失败' }, 5),
+        q('test_cases', null, 200),
+        q('baselines', null, 10),
+      ])
+
+      reqTotal = t.total
+      reqFull = f.total
+      reqPartial = p.total
+      reqNone = n.total
+      coverage = t.total ? ((t.total - n.total) / t.total * 100).toFixed(1) : '0'
+
+      const runs = runsD.items || []
+      run = runs.find(x => x.status === '运行中') || runs[0] || null
+      if (run && run.done) runRate = (run.passed / run.done * 100).toFixed(1)
+      runPassed = run ? run.passed : 0
+      runFailed = run ? run.failed : 0
+      runBlocked = run ? run.blocked : 0
+
+      const inds = (indsD.items || []).sort((a, b) => IND_ORDER.indexOf(a.code) - IND_ORDER.indexOf(b.code))
+      score = inds.reduce((s, x) => s + (x.score || 0) * (x.weight || 0), 0).toFixed(1)
+
+      todos = todosD.items || []
+      failed = failD.items || []
+      baseline = (blD.items || []).find(x => x.status === '当前') || null
+
+      radarOpt = {
+        tooltip: {},
+        legend: { bottom: 0 },
+        radar: {
+          indicator: inds.map(x => ({ name: x.name, max: 100 })),
+          radius: '60%',
+          axisName: { color: '#6b7280', fontSize: 11 },
+          splitArea: { areaStyle: { color: ['rgba(67,97,238,.02)', 'rgba(67,97,238,.05)'] } },
+          splitLine: { lineStyle: { color: 'rgba(209,213,219,.8)' } },
+          axisLine: { lineStyle: { color: 'rgba(209,213,219,.8)' } },
+        },
+        series: [{ type: 'radar', data: [
+          { value: inds.map(x => x.score), name: '当前得分', areaStyle: { color: 'rgba(67,97,238,.16)' }, lineStyle: { width: 2 } },
+          { value: inds.map(() => 85), name: '目标阈值', symbol: 'none', lineStyle: { type: 'dashed', color: '#ef4444' }, itemStyle: { color: '#ef4444' }, areaStyle: { opacity: 0 } },
+        ]}],
+      }
+
+      runsOpt = {
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0 },
+        grid: { left: 48, right: 14, top: 32, bottom: 26 },
+        xAxis: { type: 'category', data: runs.map(r => (r.run_code || '').replace('RUN-', '')) },
+        yAxis: [{ type: 'value' }],
+        series: [
+          { name: '通过', type: 'bar', stack: 's', barWidth: 34, itemStyle: { color: '#22c55e' }, data: runs.map(r => r.passed) },
+          { name: '失败', type: 'bar', stack: 's', itemStyle: { color: '#ef4444' }, data: runs.map(r => r.failed) },
+          { name: '阻塞', type: 'bar', stack: 's', itemStyle: { color: '#fbbf24', borderRadius: [4, 4, 0, 0] }, data: runs.map(r => r.blocked) },
+        ],
+      }
+
+      const cnt = {}
+      ;(casesD.items || []).forEach(c => { cnt[c.source] = (cnt[c.source] || 0) + 1 })
+      srcOpt = {
+        tooltip: {},
+        legend: { bottom: 0 },
+        series: [{
+          type: 'pie', radius: ['46%', '70%'], center: ['50%', '44%'],
+          label: { color: '#6b7280', fontSize: 11 },
+          itemStyle: { borderRadius: 4, borderColor: '#f7fcff', borderWidth: 2 },
+          data: [
+            { value: cnt['模型构建'] || 0, name: '模型参数化构建', itemStyle: { color: '#0ea5e9' } },
+            { value: cnt['进化算法'] || 0, name: '进化算法生成', itemStyle: { color: '#3f37c9' } },
+            { value: cnt['人工'] || 0, name: '人工编写', itemStyle: { color: '#94a3b8' } },
+          ],
+        }],
+      }
+    } catch (e) {
+      $message.error('工作台数据加载失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  load()
+</script>
+</html>

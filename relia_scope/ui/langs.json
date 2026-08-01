@@ -1,0 +1,10 @@
+{
+  "zh-CN": {
+    "app.name": "ReliaScope",
+    "app.sub": "软件可靠性验证平台"
+  },
+  "en-US": {
+    "app.name": "ReliaScope",
+    "app.sub": "Software Reliability Platform"
+  }
+}

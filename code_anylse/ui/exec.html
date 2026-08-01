@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>验证执行中心</title>
+</head>
+<style>
+  .eta-chip{font-size:11.5px;color:var(--text-color-secondary);background:var(--bg-color-tertiary);border:1px solid var(--border-color);border-radius:20px;padding:3px 12px}
+  .status-line{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:12px;color:var(--text-color-secondary)}
+  .run-code{font-family:'Chakra Petch',var(--font-mono);font-weight:700;color:var(--color-primary)}
+  .pbar-mini{width:130px;margin-top:6px}
+</style>
+<body>
+  <local-app-menu page="exec">
+    <div class="rv-crumb">验证体系 / 执行中心</div>
+    <div class="rv-titlebar">
+      <div>
+        <h1>验证执行监控</h1>
+        <div class="status-line" v-if="run">
+          <span class="run-code">{{ run.run_code }}</span>
+          <span class="rv-tag" :class="run.status === '运行中' ? 't-ok' : run.status === '已完成' ? 't-info' : 't-gray'">{{ run.status }}</span>
+          <span v-if="run.status === '运行中'"><i class="rv-dot live"></i>执行中</span>
+          <span class="eta-chip" v-if="taskId">Agent 任务 {{ taskStatus || '执行中' }}</span>
+          <span class="dim">{{ run.scope }} · {{ run.env_name }}</span>
+        </div>
+      </div>
+      <span class="tb-actions">
+        <button class="rv-btn" @click="openNew">＋ 发起验证</button>
+      </span>
+    </div>
+
+    <div v-if="!run" class="rv-panel"><div class="rv-empty">暂无验证轮次，点击右上角发起验证</div></div>
+    <div v-else>
+      <div class="rv-grid g4" style="margin-bottom:14px">
+        <local-kpi-card lab="执行进度" :val="progressPct()" suffix="%" tone="var(--color-primary)">
+          <div class="rv-bar pbar-mini"><i :style="{ width: progressPct() + '%' }"></i></div>
+        </local-kpi-card>
+        <local-kpi-card lab="已执行用例" :val="run.done || 0" :sub="(run.total || 0) + ' 总用例 · 通过 ' + (run.passed || 0)"></local-kpi-card>
+        <local-kpi-card lab="执行并行度" :val="run.parallelism || 0" suffix="节点" tone="var(--color-info)" sub="Agent 分布式调度"></local-kpi-card>
+        <local-kpi-card lab="检出缺陷累计" :val="run.failed || 0" tone="var(--color-danger)" :sub="'阻塞 ' + (run.blocked || 0) + ' 条'"></local-kpi-card>
+      </div>
+
+      <div class="rv-grid g2" style="margin-bottom:14px">
+        <div class="rv-panel"><local-chart-box :option="chLive" height="300px"></local-chart-box></div>
+        <div class="rv-panel acc-cyan">
+          <h3>执行日志（实时轮询）<i class="rv-dot live" style="margin-left:8px" v-if="polling"></i></h3>
+          <div class="rv-log" style="height:236px" ref="elog">
+            <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>
+            <div v-if="!logLines.length" class="dim">等待执行事件…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rv-panel" style="padding:0">
+        <div class="phead" style="padding:14px 18px 0">失败用例 Top（可一键转缺陷）</div>
+        <div class="rv-twrap">
+          <table class="rv-table">
+            <thead><tr><th>用例 ID</th><th>关联需求</th><th>验证方法</th><th>生成策略</th><th>检出缺陷</th><th style="width:110px">操作</th></tr></thead>
+            <tbody>
+              <tr v-for="c in failRows" :key="c.id">
+                <td class="mono" style="color:var(--color-primary);font-weight:600">{{ c.case_id }}</td>
+                <td><a v-if="c.req_id" class="tlink" href="javascript:;" @click="goReq(c.req_id)">{{ c.req_id }}</a><span v-else class="dim">—</span></td>
+                <td>{{ c.method || '—' }}</td>
+                <td><span class="rv-tag t-vio">{{ c.strategy || '—' }}</span></td>
+                <td class="mono" style="color:var(--color-danger)">{{ c.defects || 0 }}</td>
+                <td><button class="rv-btn sm danger" @click="toBug(c)">转缺陷</button></td>
+              </tr>
+              <tr v-if="!failRows.length"><td colspan="6" class="dim" style="text-align:center;padding:24px">暂无失败用例</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  <local-dialog-shell :show="newShow" @close="newShow = false" title="发起验证轮次">
+    <div class="rv-form-grid">
+      <label class="rv-form-item"><span>验证范围</span>
+        <select class="rv-input" v:value="nScope">
+          <option value="全量回归">全量回归（{{ caseTot }} 用例）</option>
+          <option value="增量验证">增量验证（未执行 {{ caseUndo }} 用例）</option>
+          <option value="专项验证">专项验证（失败/阻塞重跑 {{ caseFail }} 用例）</option>
+        </select>
+      </label>
+      <label class="rv-form-item"><span>执行环境</span>
+        <select class="rv-input" v:value="nEnv">
+          <option v-for="e in envs" :key="e.id" :value="e.env_code">{{ e.env_code }}（{{ e.nodes }} 节点）</option>
+        </select>
+      </label>
+      <label class="rv-form-item"><span>并行度</span><input class="rv-input" type="number" v:value="nPar"></label>
+      <label class="rv-form-item"><span>失败策略</span>
+        <select class="rv-input" v:value="nFailPolicy"><option>快速失败 + 自动转缺陷</option><option>继续执行至完成</option></select>
+      </label>
+    </div>
+    <div class="rv-form-foot">
+      <span class="dim" style="margin-right:auto;font-size:12px">将创建 Agent 执行任务，调度 {{ scopeTotal() }} 条用例</span>
+      <button class="rv-btn ghost" @click="newShow = false">取消</button>
+      <button class="rv-btn" :disabled="newBusy" @click="launch">{{ newBusy ? '创建中…' : '启动执行' }}</button>
+    </div>
+  </local-dialog-shell>
+  </local-app-menu>
+</body>
+<script setup>
+  run = null
+  failRows = []
+  envs = []
+  chLive = null
+  logLines = []
+  newShow = false
+  newBusy = false
+  nScope = '全量回归'
+  nEnv = ''
+  nPar = 64
+  nFailPolicy = '快速失败 + 自动转缺陷'
+  timer = null
+  polling = false
+  taskId = ''
+  taskStatus = ''
+  caseTot = 0
+  caseUndo = 0
+  caseFail = 0
+
+  /* 真实进度采样（来自轮询 verif_runs 的实测值） */
+  histT = []
+  histDone = []
+  histPass = []
+  histFail = []
+  lastDone = -1
+  lastStatus = ''
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+  AX = { axisLine: { lineStyle: { color: 'rgba(20,60,90,.15)' } }, axisTick: { show: false }, axisLabel: { color: 'rgba(20,60,90,.55)', fontSize: 10.5 }, splitLine: { lineStyle: { color: 'rgba(20,60,90,.07)' } } }
+
+  nowT = () => new Date().toTimeString().slice(0, 8)
+  progressPct = () => run ? Math.round(run.progress || 0) : 0
+  scopeTotal = () => nScope === '增量验证' ? caseUndo : nScope === '专项验证' ? caseFail : caseTot
+
+  pushLog = (s) => {
+    logLines = logLines.concat('[' + nowT() + '] ' + s).slice(-60)
+    const el = $refs.elog
+    if (el && el.scrollTop !== undefined) el.scrollTop = el.scrollHeight
+  }
+
+  buildLive = () => {
+    chLive = {
+      title: { text: '执行进度跟踪（实测采样）', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['已执行', '通过', '失败'], right: 0, top: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 4, textStyle: { color: 'rgba(20,60,90,.6)', fontSize: 11 } },
+      grid: { left: 48, right: 20, top: 46, bottom: 26 },
+      xAxis: Object.assign({ type: 'category', data: histT.slice(), boundaryGap: false }, AX),
+      yAxis: Object.assign({ type: 'value' }, AX),
+      series: [
+        { name: '已执行', type: 'line', data: histDone.slice(), smooth: true, showSymbol: false, lineStyle: { width: 2.5, color: '#06b6d4' }, itemStyle: { color: '#06b6d4' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(6,182,212,.20)' }, { offset: 1, color: 'rgba(6,182,212,0)' }] } } },
+        { name: '通过', type: 'line', data: histPass.slice(), smooth: true, showSymbol: false, lineStyle: { width: 2, color: '#22c55e' }, itemStyle: { color: '#22c55e' } },
+        { name: '失败', type: 'line', data: histFail.slice(), smooth: true, showSymbol: false, lineStyle: { width: 2, color: '#ef4444' }, itemStyle: { color: '#ef4444' } },
+      ],
+    }
+  }
+
+  sampleRun = (r) => {
+    histT = histT.concat(nowT()).slice(-40)
+    histDone = histDone.concat(r.done || 0).slice(-40)
+    histPass = histPass.concat(r.passed || 0).slice(-40)
+    histFail = histFail.concat(r.failed || 0).slice(-40)
+    buildLive()
+  }
+
+  isTerminal = (s) => s === '已完成' || s === '已中止' || s === '失败'
+
+  /* 轮询轮次记录：状态迁移与进度都落成真实日志 */
+  pollRun = async () => {
+    if (!run || !run.id) return
+    try {
+      const fresh = await $mod.$fetch('/tables/verif_runs/' + run.id)
+      const prev = run
+      run = fresh
+      if (fresh.status !== lastStatus) {
+        pushLog('轮次状态：' + (lastStatus || '—') + ' → ' + fresh.status)
+        lastStatus = fresh.status
+      }
+      if ((fresh.done || 0) !== lastDone) {
+        sampleRun(fresh)
+        if (lastDone >= 0 && (fresh.done - lastDone) >= 100) pushLog('执行推进：+' + (fresh.done - lastDone) + ' 条（累计 ' + fresh.done + '/' + fresh.total + '，失败 ' + (fresh.failed || 0) + '）')
+        lastDone = fresh.done || 0
+      }
+      if (isTerminal(fresh.status)) {
+        pushLog('轮次结束：' + fresh.status + ' · 通过 ' + (fresh.passed || 0) + ' / 失败 ' + (fresh.failed || 0) + ' / 阻塞 ' + (fresh.blocked || 0))
+        loadFails()
+        if (!taskId) stopPoll()
+      }
+    } catch (e) { /* 瞬时错误下拍重试 */ }
+  }
+
+  pollTask = async () => {
+    if (!taskId) return
+    try {
+      const t = await $mod.$fetch('/api/tasks/' + taskId)
+      const st = t.status || ''
+      if (st !== taskStatus) {
+        taskStatus = st
+        pushLog('Agent 任务 ' + taskId + '：' + (st || '未知状态'))
+      }
+      const terminal = st === 'completed' || st === 'closed' || st === 'failed' || st === 'cancelled'
+      if (terminal) {
+        const ok = (st === 'completed' || st === 'closed') && !t.error
+        pushLog(ok ? 'Agent 任务完成，结果已聚合回写' : 'Agent 任务未成功：' + (t.error || st))
+        taskId = ''
+        if (run && isTerminal(run.status)) stopPoll()
+      }
+    } catch (e) {}
+  }
+
+  tickPoll = () => { pollRun(); pollTask() }
+  startPoll = () => { if (!timer) { polling = true; timer = setInterval(tickPoll, 3000) } }
+  stopPoll = () => { if (timer) { clearInterval(timer); timer = null } polling = false }
+
+  loadFails = async () => {
+    try {
+      const d = await q('test_cases', { size: 10, filters: JSON.stringify({ last_result: '失败' }) })
+      failRows = d.items || []
+    } catch (e) {}
+  }
+
+  openNew = async () => {
+    newShow = true
+    try {
+      const [a, b, c] = await Promise.all([
+        q('test_cases', { size: 1 }),
+        q('test_cases', { size: 1, filters: JSON.stringify({ last_result: '未执行' }) }),
+        q('test_cases', { size: 1, filters: JSON.stringify({ last_result: '失败' }) }),
+      ])
+      caseTot = a.total || 0
+      caseUndo = b.total || 0
+      caseFail = c.total || 0
+    } catch (e) {}
+  }
+
+  launch = async () => {
+    newBusy = true
+    try {
+      const env = envs.filter((e) => e.env_code === nEnv)[0]
+      const d = new Date()
+      const ymd = String(d.getFullYear()) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0')
+      const code = 'RUN-' + ymd + '-' + 'BCDEFGHIJKLMN'[Math.floor(Math.random() * 13)]
+      const scopeDesc = nScope === '增量验证' ? 'last_result=未执行 的用例' : nScope === '专项验证' ? 'last_result=失败/阻塞 的用例' : '全部用例'
+      const rec = await $mod.$fetch('/tables/verif_runs', { method: 'POST', body: { data: {
+        run_code: code,
+        scope: nScope,
+        env_name: env ? env.env_code + '（' + env.nodes + ' 节点）' : nEnv,
+        parallelism: +nPar || 64,
+        total: scopeTotal(),
+        done: 0, passed: 0, failed: 0, blocked: 0,
+        progress: 0,
+        status: '排队中',
+        started_at: d.toISOString(),
+      } } })
+      run = rec
+      lastDone = 0
+      lastStatus = rec.status
+      histT = []; histDone = []; histPass = []; histFail = []
+      buildLive()
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: {
+        title: '执行验证轮次 ' + code,
+        goal: '【verif-run】执行 ReqVerif 验证轮次 ' + code + '（范围：' + nScope + '，用例集合：' + scopeDesc + '，并行度 ' + (+nPar || 64) + '，失败策略：' + nFailPolicy + '）。按核心 prompt 中【verif-run】规范执行：驱动 verif_runs 记录至完成并回写用例结果与需求验证状态。',
+        steps: '1. 定位 verif_runs(run_code=' + code + ') 置运行中；2. 分批执行用例并回写 last_result 与批次进度；3. 完成后置已完成并回写需求 verif_status',
+        constraints: '只写 verif_runs / test_cases / requirements 三张表的任务相关字段；保持幂等',
+      } })
+      taskId = (td.task && td.task.id) || ''
+      taskStatus = '已创建'
+      pushLog('验证轮次 ' + code + ' 已创建（' + scopeTotal() + ' 条用例）')
+      if (taskId) pushLog('Agent 任务 ' + taskId + ' 已创建，等待调度执行')
+      newShow = false
+      $message.success('验证轮次 ' + code + ' 已启动，Agent 正在接管执行')
+      startPoll()
+    } catch (e) {
+      $message.error('启动失败：' + e.message)
+    } finally {
+      newBusy = false
+    }
+  }
+
+  toBug = async (c) => {
+    try {
+      const due = new Date(Date.now() + 5 * 864e5)
+      await $mod.$fetch('/tables/todo_items', { method: 'POST', body: { data: {
+        title: '缺陷处置：' + c.case_id + '（' + (c.req_id || '无关联需求') + '，检出 ' + (c.defects || 0) +  '项）',
+        todo_type: '缺陷处置',
+        owner: '待分派',
+        due: due.toISOString(),
+        status: '待处理',
+      } } })
+      $message.success('已生成缺陷处置待办（工作台可见），关联用例 ' + c.case_id)
+    } catch (e) {
+      $message.error('转缺陷失败：' + e.message)
+    }
+  }
+  goReq = (rid) => {
+    if (!rid) return
+    try { $router.push('/i/reqlib?req_id=' + encodeURIComponent(rid)) } catch (e) { location.href = '/i/reqlib?req_id=' + encodeURIComponent(rid) }
+  }
+
+  initPage = async () => {
+    try {
+      const qp = $router.query || {}
+      let r = null
+      if (qp.run_id) {
+        const rs = await q('verif_runs', { size: 1, filters: JSON.stringify({ run_code: qp.run_id }) })
+        r = (rs.items || [])[0] || null
+      }
+      if (!r) {
+        const rs = await q('verif_runs', { size: 1, sort: '-created_at' })
+        r = (rs.items || [])[0] || null
+      }
+      run = r
+      const envD = await q('envs', { size: 20 })
+      envs = envD.items || []
+      if (envs.length) nEnv = envs[0].env_code
+      await loadFails()
+      if (run) {
+        lastStatus = run.status
+        lastDone = run.done || 0
+        sampleRun(run)
+        if (!isTerminal(run.status)) {
+          pushLog('接入轮次 ' + run.run_code + '（' + run.status + '），开始实时跟踪')
+          startPoll()
+        }
+      }
+    } catch (e) {
+      $message.error('加载执行监控失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+<script dispose>
+  stopPoll()
+</script>
+</html>

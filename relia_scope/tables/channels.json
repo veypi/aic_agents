@@ -1,0 +1,44 @@
+{
+  "title": "采集通道",
+  "description": "多源数据采集探针通道的在线状态",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "通道名称",
+      "required": true
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "title": "类别"
+    },
+    {
+      "name": "probe_count",
+      "type": "int",
+      "title": "探针数"
+    },
+    {
+      "name": "latency_ms",
+      "type": "int",
+      "title": "延迟 (ms)"
+    },
+    {
+      "name": "online_rate",
+      "type": "number",
+      "title": "在线率 %"
+    },
+    {
+      "name": "throughput",
+      "type": "number",
+      "title": "日吞吐(万条)",
+      "description": "日吞吐（万条），由采集接口或 T6 同步任务刷新"
+    },
+    {
+      "name": "last_sync",
+      "type": "time",
+      "title": "最近同步",
+      "description": "最近同步时间"
+    }
+  ]
+}

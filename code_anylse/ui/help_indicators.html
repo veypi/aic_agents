@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="帮助文档：软件需求符合性验证指标体系科普" />
+  <title>需求验证指标体系 · 帮助文档</title>
+</head>
+<style>
+  .doc-lead {
+    font-size: 13px;
+    line-height: 2.1;
+    color: var(--text-color-secondary)
+  }
+
+  .doc-lead b {
+    color: var(--text-color)
+  }
+
+  .doc-anchor {
+    scroll-margin-top: 16px
+  }
+
+  .cat-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap
+  }
+
+  .cat-chip {
+    flex: 1;
+    min-width: 200px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    background: var(--bg-color)
+  }
+
+  .cat-chip h5 {
+    margin: 0 0 6px;
+    font-size: 12.5px;
+    color: var(--text-color)
+  }
+
+  .cat-chip p {
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--text-color-tertiary);
+    line-height: 1.8
+  }
+
+  .ind-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px
+  }
+
+  @media(max-width:1100px) {
+    .ind-grid {
+      grid-template-columns: 1fr
+    }
+  }
+
+  .ind-card {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden
+  }
+
+  .ind-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--tone, var(--color-info))
+  }
+
+  .ind-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap
+  }
+
+  .ind-no {
+    font-family: 'Chakra Petch', var(--font-mono);
+    font-weight: 700;
+    color: var(--tone, var(--color-info));
+    font-size: 13px
+  }
+
+  .ind-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-color)
+  }
+
+  .ind-en {
+    font-size: 10.5px;
+    color: var(--text-color-tertiary);
+    font-family: var(--font-mono);
+    letter-spacing: .03em
+  }
+
+  .ind-def {
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: var(--text-color-secondary);
+    margin: 6px 0
+  }
+
+  .formula {
+    font-family: var(--font-mono);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 12px;
+    color: var(--text-color);
+    line-height: 2
+  }
+
+  .formula .fb {
+    color: var(--color-primary);
+    font-weight: 700
+  }
+
+  .ind-note {
+    font-size: 11.5px;
+    color: var(--text-color-tertiary);
+    line-height: 1.8;
+    margin-top: 6px
+  }
+
+  .ind-note b {
+    color: var(--text-color-secondary)
+  }
+
+  .ahp-steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px
+  }
+
+  @media(max-width:1100px) {
+    .ahp-steps {
+      grid-template-columns: 1fr 1fr
+    }
+  }
+
+  .ahp-step {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    background: var(--bg-color)
+  }
+
+  .ahp-step b {
+    display: block;
+    font-size: 12px;
+    color: var(--color-primary);
+    margin-bottom: 4px;
+    font-family: 'Chakra Petch', sans-serif
+  }
+
+  .ahp-step span {
+    font-size: 11.5px;
+    color: var(--text-color-secondary);
+    line-height: 1.7
+  }
+
+  .ref-list {
+    font-size: 12.5px;
+    line-height: 2.2;
+    color: var(--text-color-secondary)
+  }
+
+  .ref-list b {
+    color: var(--text-color);
+    font-family: var(--font-mono);
+    font-size: 11.5px
+  }
+</style>
+
+<body>
+  <local-app-menu page="help_indicators">
+    <div class="doc-wrap">
+      <div class="rv-crumb">帮助文档</div>
+      <div class="rv-titlebar">
+        <h2>需求验证指标</h2>
+        <span class="rv-desc">软件需求符合性验证的通用指标项、含义与计算方式</span>
+      </div>
+
+      <div class="rv-panel acc-primary doc-anchor" id="intro" style="margin-bottom:14px">
+        <h3>什么是需求符合性验证</h3>
+        <div class="doc-lead">
+          需求符合性验证（Requirements Compliance Verification）回答一个朴素的问题：<b>交付的软件，还是不是当初承诺要建的那个软件？</b>
+          它属于软件 V&V（Verification & Validation）体系中的「验证」一侧——以需求规格说明为基准，检查每一条需求是否被实现（追踪覆盖）、被正确实现（验证通过）、以及整体符合程度如何度量（指标聚合）。
+          <br>没有度量就没有管理：指标体系把「差不多做完了」变成可计算、可比较、可追踪趋势的数字。一个健康的需求验证体系通常关注四类指标：
+        </div>
+        <div class="cat-row" style="margin-top:12px">
+          <div class="cat-chip">
+            <h5>覆盖类</h5>
+            <p>需求有没有被实现？覆盖了多少？——需求覆盖率、追踪完整率</p>
+          </div>
+          <div class="cat-chip">
+            <h5>验证类</h5>
+            <p>实现得对不对？验得够不够？——验证覆盖率、通过率、用例密度</p>
+          </div>
+          <div class="cat-chip">
+            <h5>质量类</h5>
+            <p>需求本身写得好不好？缺陷多不多？——可验证性、缺陷密度</p>
+          </div>
+          <div class="cat-chip">
+            <h5>过程类</h5>
+            <p>需求稳不稳定？回归收不收敛？——变更率、重验收敛</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ind-grid">
+        <div class="ind-card doc-anchor" id="i1" style="--tone:var(--color-info)">
+          <div class="ind-head"><span class="ind-no">01</span><span class="ind-name">需求覆盖率</span><span
+              class="ind-en">Requirement Coverage Rate</span></div>
+          <div class="ind-def">需求被设计与代码实现覆盖的程度。一条需求只要存在至少一条有效追踪链接（完整实现 F 或部分实现 P），即视为「已覆盖」。</div>
+          <div class="formula"><span class="fb">RCOV</span> = N<sub>covered</sub> / N<sub>total</sub> × 100%</div>
+          <div class="ind-note">口径要点：分母应排除已废弃条目；「部分实现」是否计入覆盖需在项目级约定。<b>健康阈值：≥ 95%</b>；安全关键领域（适航、军工）通常要求 <b>100%</b>
+            并逐条说明缺口。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i2" style="--tone:var(--color-info)">
+          <div class="ind-head"><span class="ind-no">02</span><span class="ind-name">追踪完整率</span><span
+              class="ind-en">Traceability Completeness</span></div>
+          <div class="ind-def">追踪链路的闭环程度。前向追踪（需求→设计→代码→用例）回答「实现了没有」，后向追踪（代码→需求）回答「为什么存在」。双向均通才算闭环。</div>
+          <div class="formula"><span class="fb">TCR</span> = N<sub>closed</sub> / N<sub>total</sub> × 100%</div>
+          <div class="ind-note">配套监控两个反向信号：<b>孤立需求</b>（无任何出链，可能漏实现）与<b>孤儿构件</b>（无法回溯到需求的代码，可能镀金或漏登记）。DO-178C
+            等标准将追踪完整性作为审定硬性前提。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i3" style="--tone:var(--color-success)">
+          <div class="ind-head"><span class="ind-no">03</span><span class="ind-name">验证覆盖率</span><span
+              class="ind-en">Verification Coverage</span></div>
+          <div class="ind-def">拥有至少一种验证手段（测试 / 分析 / 评审 / 演示）的需求比例。实现覆盖看「做没做」，验证覆盖看「验没验」，两者必须分别统计。</div>
+          <div class="formula"><span class="fb">VCOV</span> = N<sub>with-case</sub> / N<sub>total</sub> × 100%</div>
+          <div class="ind-note">经验法则：<b>高优先级需求验证覆盖应达 100%</b>；仅有实现没有验证手段的需求，在符合性判定中一律按「待验证」处理，不得视为符合。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i4" style="--tone:var(--color-success)">
+          <div class="ind-head"><span class="ind-no">04</span><span class="ind-name">验证通过率</span><span
+              class="ind-en">Verification Pass Rate</span></div>
+          <div class="ind-def">已执行用例中通过的比例，是验证轮次最直观的结果指标。</div>
+          <div class="formula"><span class="fb">VPR</span> = N<sub>pass</sub> / N<sub>executed</sub> × 100%（分母不含未执行）
+          </div>
+          <div class="ind-note">必须配合<b>阻塞率</b>与<b>失败率</b>解读：通过率高但大量阻塞，说明验证环境或前置条件有问题而非质量好。回归基线通常要求通过率 <b>≥ 90%</b> 且关键用例
+            100% 通过。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i5" style="--tone:var(--color-success)">
+          <div class="ind-head"><span class="ind-no">05</span><span class="ind-name">用例密度</span><span
+              class="ind-en">Case Density per Requirement</span></div>
+          <div class="ind-def">每条需求平均拥有的验证用例数，衡量验证的深度而非广度。</div>
+          <div class="formula"><span class="fb">CD</span> = N<sub>cases</sub> / N<sub>req</sub>（按优先级分层统计）</div>
+          <div class="ind-note">密度过低（&lt;1）说明大量需求没有验证手段；密度分层要求常见为：<b>高优先级 ≥ 2 条</b>（正常 + 边界/异常各一），中低优先级 ≥ 1
+            条。密度异常偏高则提示用例冗余。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i6" style="--tone:var(--color-danger)">
+          <div class="ind-head"><span class="ind-no">06</span><span class="ind-name">缺陷密度</span><span
+              class="ind-en">Defect Density</span></div>
+          <div class="ind-def">单位规模内检出的缺陷数，用于在能力域、组件之间横向比较质量水平，识别问题高发区。</div>
+          <div class="formula"><span class="fb">DD</span> = N<sub>defects</sub> / N<sub>req</sub>　（或每 KLOC、每功能点 FP）
+          </div>
+          <div class="ind-note">解读时区分<b>检出密度</b>（验证发现）与<b>遗留密度</b>（交付后发现）。某域密度显著高于均值，通常意味着需求澄清不足或实现复杂度高，应触发专项评审。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i7" style="--tone:var(--color-warning)">
+          <div class="ind-head"><span class="ind-no">07</span><span class="ind-name">需求变更率（稳定性）</span><span
+              class="ind-en">Requirement Volatility</span></div>
+          <div class="ind-def">统计窗口内基线需求被增、改、删的比例，反映需求集的稳定程度。</div>
+          <div class="formula"><span class="fb">RV</span> = (N<sub>add</sub> + N<sub>mod</sub> + N<sub>del</sub>) /
+            N<sub>baseline</sub> × 100%</div>
+          <div class="ind-note">变更本身不是坏事，但 <b>每次变更都要级联重验</b>：受影响的需求、追踪链接与用例需重新确认。变更率持续偏高（如单迭代
+            &gt;10%）提示需求获取不充分或外部约束剧烈波动。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i8" style="--tone:var(--color-warning)">
+          <div class="ind-head"><span class="ind-no">08</span><span class="ind-name">需求可验证性</span><span
+              class="ind-en">Requirement Verifiability</span></div>
+          <div class="ind-def">需求本身的质量：是否含有可量化、可判定的验收准则。「系统应快速响应」无法验证，「响应时间 ≤ 200ms」可以。</div>
+          <div class="formula"><span class="fb">VQ</span> = N<sub>verifiable</sub> / N<sub>total</sub> × 100%　（弱词率反向监控）
+          </div>
+          <div class="ind-note">常用检查手段：弱词扫描（「尽量」「适当」「灵活」「用户友好」）、原子性（一条只说一件事）、无歧义性与一致性评审。ISO/IEC/IEEE 29148
+            给出了良好需求语句的九特性。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i9" style="--tone:var(--color-secondary)">
+          <div class="ind-head"><span class="ind-no">09</span><span class="ind-name">加权符合性总分</span><span
+              class="ind-en">Weighted Compliance Score</span></div>
+          <div class="ind-def">把多维指标聚合成一个可判定总分：各一级指标得分（0-100）按权重加权求和，与判定阈值比较得出「符合 / 偏离」结论。</div>
+          <div class="formula"><span class="fb">S</span> = Σ (w<sub>i</sub> × s<sub>i</sub>)，其中 Σ w<sub>i</sub> =
+            1，判定线通常取 <span class="fb">85</span></div>
+          <div class="ind-note">权重 w<sub>i</sub> 不能拍脑袋，工程上常用 <b>AHP 层次分析法</b>确定（见下节）。总分应随基线沉淀，形成跨版本趋势，而非一次性快照。</div>
+        </div>
+
+        <div class="ind-card doc-anchor" id="i10" style="--tone:var(--color-secondary)">
+          <div class="ind-head"><span class="ind-no">10</span><span class="ind-name">重验收敛度</span><span
+              class="ind-en">Re-verification Convergence</span></div>
+          <div class="ind-def">变更触发级联重验后，重验工作清零的速度与彻底程度，衡量验证体系的回归能力。</div>
+          <div class="formula"><span class="fb">RCV</span> = N<sub>reverified</sub> / N<sub>need-reverify</sub> ×
+            100%　（辅以清零时长 T<sub>clr</sub>）</div>
+          <div class="ind-note">待重验积压是隐性风险：它意味着当前「符合性」结论建立在过期证据上。发布前应要求 <b>RCV = 100%</b>，即不存在未重验的变更影响项。</div>
+        </div>
+      </div>
+
+      <div class="rv-panel acc-vio doc-anchor" id="ahp" style="margin-top:14px">
+        <h3>指标聚合与赋权：AHP 层次分析法</h3>
+        <div class="doc-lead">
+          多个指标如何合成一个总分？关键是<b>权重从哪来</b>。AHP（Analytic Hierarchy
+          Process）把「哪个指标更重要」的主观判断结构化：两两比较构造判断矩阵，求特征向量得权重，并用一致性比率检验判断是否自洽。
+        </div>
+        <div class="ahp-steps">
+          <div class="ahp-step"><b>① 两两比较</b><span>按 1-9 标度对指标两两打分：1=同等重要，3=稍重要，5=明显重要，9=极端重要，倒数表反向。</span></div>
+          <div class="ahp-step"><b>② 构造判断矩阵</b><span>n×n 正互反矩阵 A = (a<sub>ij</sub>)，a<sub>ij</sub> =
+              1/a<sub>ji</sub>，对角线恒为 1。</span></div>
+          <div class="ahp-step"><b>③ 求权重</b><span>计算最大特征值 λ<sub>max</sub> 及其特征向量，归一化后即为各指标权重 w<sub>i</sub>。</span></div>
+          <div class="ahp-step"><b>④ 一致性检验</b><span>CI = (λ<sub>max</sub> − n)/(n − 1)，CR = CI/RI；CR &lt; 0.1
+              判定通过，否则重新比较。</span></div>
+        </div>
+        <div class="formula" style="margin-top:12px">CR = CI / RI &lt; 0.1　　CI = (λ<sub>max</sub> − n) / (n − 1)　　RI
+          查表：n=3 → 0.58，n=5 → 1.12，n=7 → 1.32</div>
+        <div class="ind-note">聚合前还需把口径各异的底层指标<b>归一化</b>到 0-100：正向指标常用 阈值法 s = min(100, x / 目标值 × 100)；负向指标（如缺陷密度）用反向映射 s
+          = max(0, 100 × (1 − x / 容忍上限))。本平台当前判断矩阵 <b>CR = 0.041</b>，通过一致性检验。</div>
+      </div>
+
+      <div class="rv-grid g2" style="margin-top:14px">
+        <div class="rv-panel acc-cyan doc-anchor" id="mapping">
+          <h3>概念到平台的映射</h3>
+          <div class="rv-kv"><b>需求覆盖率</b><span>工作台 KPI · 追踪矩阵「仅看缺口」</span></div>
+          <div class="rv-kv"><b>追踪完整率</b><span>追踪矩阵 F/P/未覆盖三态 · 代码证据（@req 标签）</span></div>
+          <div class="rv-kv"><b>验证通过率</b><span>验证执行中心轮次统计 · 工作台对比图</span></div>
+          <div class="rv-kv"><b>用例密度</b><span>用例库按 req_id 聚合 · 需求详情抽屉</span></div>
+          <div class="rv-kv"><b>变更率 / 级联</b><span>变更与版本页事件流 · need_reverify 标记</span></div>
+          <div class="rv-kv"><b>加权总分</b><span>指标体系管理页（AHP 赋权）· 符合性报告页</span></div>
+          <div class="rv-kv"><b>重验收敛</b><span>变更级联标记 → 专项验证轮次 → 缺陷待办闭环</span></div>
+        </div>
+        <div class="rv-panel acc-warn doc-anchor" id="refs">
+          <h3>参考标准与剪裁提示</h3>
+          <div class="ref-list">
+            <div><b>ISO/IEC/IEEE 29148</b>　需求工程过程与需求规格说明编制指南（良好需求特性）</div>
+            <div><b>IEEE 1012</b>　软件验证与确认（V&V）过程标准</div>
+            <div><b>ISO/IEC 25010 / 25024</b>　系统与软件质量模型及测量</div>
+            <div><b>DO-178C</b>　机载软件适航审定（追踪与覆盖率的最严实践）</div>
+            <div><b>GJB 438B / GJB 5235</b>　军用软件文档与配置管理相关要求</div>
+          </div>
+          <div class="ind-note" style="margin-top:10px">本页内容为通用方法学科普。具体指标口径、权重与阈值应按项目关键性、领域标准与合同约定剪裁，切忌不加论证直接套用。</div>
+        </div>
+      </div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  /* 纯静态科普页：无数据请求，内容由文档维护者直接编辑本文件 */
+</script>
+
+</html>

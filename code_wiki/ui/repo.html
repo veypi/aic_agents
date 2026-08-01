@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="Repo Chat" />
+  <title>Repo Explorer</title>
+  <script src="/assets/mermaid.min.js"></script>
+  <script src="/assets/echarts.min.js"></script>
+</head>
+<style>
+  body {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .back-link {
+    padding: 10px 20px;
+    color: var(--text-color-tertiary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  .back-link:hover {
+    color: var(--color-primary);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+  }
+
+  .badge-success {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .badge-danger {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .badge-neutral {
+    background: var(--bg-color-tertiary);
+    color: var(--text-color-tertiary);
+  }
+
+  .badge-entry {
+    background: #ede9fe;
+    color: #5b21b6;
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+
+  /* ===== SPLASH ===== */
+  .splash {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    padding: 40px 20px;
+    box-sizing: border-box;
+  }
+
+  .splash-card {
+    width: 100%;
+    max-width: 620px;
+    text-align: center;
+  }
+
+  .splash-card .repo-name {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: 6px;
+    word-break: break-all;
+  }
+
+  .splash-card .repo-url {
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    font-family: var(--font-mono);
+    margin-bottom: 12px;
+  }
+
+  .splash-card .repo-meta {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    font-size: var(--font-size-xs);
+    color: var(--text-color-tertiary);
+  }
+
+  .splash-card .repo-summary {
+    font-size: var(--font-size-sm);
+    color: var(--text-color-secondary);
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+
+  .splash-input-wrap {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .splash-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    font-size: var(--font-size-md);
+    outline: none;
+    font-family: inherit;
+    background: #fff;
+    transition: border-color var(--transition-fast);
+  }
+
+  .splash-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
+  }
+
+  .splash-send {
+    padding: 12px 24px;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-xl);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .splash-send:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .splash-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ===== CHAT LAYOUT ===== */
+  .chat-layout {
+    display: none;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-layout.active {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-left {
+    flex: 1 1 33.333%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-right: 1px solid var(--border-color);
+  }
+
+  .chat-right {
+    flex: 1 1 66.667%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-y: auto;
+  }
+
+  .chat-box-wrap {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ===== ANALYZING STATE ===== */
+  .analyzing-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 40px;
+    text-align: center;
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--bg-color-tertiary);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .analyzing-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+  }
+
+  .analyzing-sub {
+    font-size: var(--font-size-sm);
+    color: var(--text-color-secondary);
+    max-width: 400px;
+    line-height: 1.5;
+  }
+
+  .analyzing-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    text-align: left;
+    min-width: 280px;
+  }
+
+  .analyzing-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--font-size-sm);
+    color: var(--text-color-tertiary);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-color-secondary);
+  }
+
+  .analyzing-step.done {
+    color: var(--color-success);
+    background: #f0fdf4;
+  }
+
+  .analyzing-step .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-color);
+    flex-shrink: 0;
+  }
+
+  .analyzing-step.done .dot {
+    background: var(--color-success);
+  }
+
+  .analyzing-step .dot.pulse {
+    background: var(--color-primary);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.5;
+      transform: scale(0.8);
+    }
+  }
+
+  /* ===== COMPLETED RIGHT PANEL ===== */
+  .right-inner {
+    padding: 20px 24px;
+  }
+
+  /* Header card */
+  .repo-header-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+
+  .repo-header-card .rh-title {
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    color: var(--color-primary);
+    margin-bottom: 8px;
+    word-break: break-all;
+  }
+
+  .repo-header-card .rh-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+
+  /* Quick stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .stat-box {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 14px 6px;
+    text-align: center;
+  }
+
+  .stat-box .val {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+  }
+
+  .stat-box .lbl {
+    font-size: var(--font-size-xs);
+    color: var(--text-color-tertiary);
+    margin-top: 4px;
+  }
+
+  /* Two-column: chart + tree */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .two-col .col {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .mermaid-wrap {
+    max-height: 220px;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mermaid-wrap svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Dependencies */
+  .dep-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dep-group-title {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .dep-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dep-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    color: var(--text-color-secondary);
+  }
+
+  .dep-tag small {
+    color: var(--text-color-tertiary);
+    font-size: 10px;
+  }
+
+  /* Summary block */
+  .summary-block {
+    background: var(--bg-color-secondary);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 12px 16px;
+    font-size: var(--font-size-sm);
+    color: var(--text-color-secondary);
+    line-height: 1.6;
+  }
+
+  /* Section titles */
+  .section-title {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-color-tertiary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .section-title .count {
+    background: var(--bg-color-tertiary);
+    color: var(--text-color-secondary);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+  }
+
+  /* Insights tabs */
+  .insight-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .insight-tab {
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: var(--text-color-tertiary);
+    background: var(--bg-color-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+  }
+
+  .insight-tab:hover {
+    background: var(--bg-color-tertiary);
+  }
+
+  .insight-tab.active {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+  }
+
+  /* Insight cards */
+  .insight-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .insight-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .insight-card .ic-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .insight-card .ic-cat {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: var(--font-weight-medium);
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+
+  .insight-card .ic-conf {
+    font-size: 10px;
+    color: var(--text-color-tertiary);
+  }
+
+  .insight-card .ic-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+    margin: 0 0 6px;
+  }
+
+  .insight-card .ic-body {
+    font-size: var(--font-size-xs);
+    color: var(--text-color-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .insight-card .ic-body.mermaid-body {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    overflow: auto;
+    white-space: normal;
+    max-height: 360px;
+  }
+
+  .insight-card .ic-body.mermaid-body svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Files */
+  .file-list {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .file-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 14px;
+    font-size: var(--font-size-xs);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .file-item:last-child {
+    border-bottom: none;
+  }
+
+  .file-item:hover {
+    background: var(--bg-color-secondary);
+  }
+
+  .file-item .fp {
+    font-family: var(--font-mono);
+    color: var(--color-primary);
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+
+  .file-item .fs {
+    color: var(--text-color-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .file-more {
+    font-size: 11px;
+    color: var(--text-color-tertiary);
+    padding: 8px 14px;
+    text-align: center;
+    background: var(--bg-color-secondary);
+  }
+
+  /* Steps timeline */
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .step-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 6px 8px;
+    font-size: var(--font-size-xs);
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
+    cursor: pointer;
+  }
+
+  .step-item:hover {
+    background: var(--bg-color-secondary);
+  }
+
+  .step-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .step-item .sn {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color-tertiary);
+    min-width: 28px;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+
+  .step-item .sa {
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+
+  .sa-grep {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .sa-find {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .sa-read {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .sa-ls {
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+
+  .sa-glob {
+    background: #fce7f3;
+    color: #9d174d;
+  }
+
+  .sa-inspect {
+    background: #e0e7ff;
+    color: #3730a3;
+  }
+
+  .step-item .st {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-color-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .step-finding {
+    margin-top: 6px;
+    margin-left: 36px;
+    padding: 8px 12px;
+    background: var(--bg-color-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    color: var(--text-color-secondary);
+    line-height: 1.5;
+    border-left: 2px solid var(--color-primary);
+  }
+
+  /* File preview float */
+  .explorer-float {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    min-height: 200px;
+    position: absolute;
+    top: 10%;
+    left: 10%;
+    height: 80%;
+    width: 80%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .loading-text {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-color-tertiary);
+  }
+
+  .right-section {
+    margin-bottom: 20px;
+  }
+
+  .empty-box {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-color-tertiary);
+    font-size: var(--font-size-xs);
+  }
+</style>
+
+<body>
+  <div class="back-link" @click="$router.push('/i')">&larr; Explorer</div>
+
+  <div class="loading-text" v-if="loading">Loading...</div>
+  <div class="loading-text" v-if="error" style="color:var(--color-danger);">{{ error }}</div>
+
+  <!-- CHAT LAYOUT -->
+  <div class="chat-layout active" v-if="!loading && !error && repo">
+    <!-- Left: Chat or Input -->
+    <div class="chat-left">
+      <ai-box v-if="chatSessionId" :id="chatSessionId" :agent_id="$router.params.agent_id" :wrap_user_msg="wrapUserMsg"
+        :hide_header="true"></ai-box>
+      <div class="splash" v-if="!chatSessionId">
+        <div class="splash-card">
+          <div class="repo-summary" style="color:var(--text-color-secondary);margin-bottom:16px;">Ask anything about this repository to start exploring.</div>
+          <div class="splash-input-wrap">
+            <input class="splash-input" v:value="chatInput" placeholder="Ask anything about this repository..."
+              @keydown="onSplashKey" />
+            <button class="splash-send" @click="sendFirstMsg()"
+              :disabled="!chatInput.trim() || sessionLoading">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Repo Info -->
+    <div class="chat-right">
+
+      <!-- ========== ANALYZING STATE ========== -->
+      <div class="analyzing-panel" v-if="repo.status !== 'completed'">
+        <div class="spinner"></div>
+        <div class="analyzing-title">Analyzing repository...</div>
+        <div class="analyzing-sub">{{ repo.url }}</div>
+        <div class="analyzing-steps">
+          <div
+            :class="['analyzing-step', repo.status === 'cloning' || repo.status === 'exploring' || repo.status === 'completed' ? 'done' : '']">
+            <span class="dot" :class="repo.status === 'pending' ? 'pulse' : ''"></span>
+            <span>Clone pending</span>
+          </div>
+          <div :class="['analyzing-step', repo.status === 'exploring' || repo.status === 'completed' ? 'done' : '']">
+            <span class="dot" :class="repo.status === 'cloning' ? 'pulse' : ''"></span>
+            <span>Cloning</span>
+          </div>
+          <div :class="['analyzing-step', repo.status === 'completed' ? 'done' : '']">
+            <span class="dot" :class="repo.status === 'exploring' ? 'pulse' : ''"></span>
+            <span>Exploring</span>
+          </div>
+        </div>
+        <div v-if="repo.status === 'exploring' && steps.length > 0"
+          style="margin-top:8px;font-size:12px;color:var(--text-color-tertiary);">
+          {{ steps.length }} steps executed so far
+        </div>
+      </div>
+
+      <!-- ========== COMPLETED STATE ========== -->
+      <div class="right-inner" v-if="repo.status === 'completed'">
+
+        <!-- Repo Header Card -->
+        <div class="repo-header-card">
+          <div class="rh-title">{{ repo.url }}</div>
+          <div class="rh-badges">
+            <span :class="statusClass(repo.status)">{{ repo.status }}</span>
+            <span class="badge badge-neutral">{{ repo.primary_lang || '?' }}</span>
+            <span class="badge badge-neutral">{{ repo.file_count || 0 }} files</span>
+            <span class="badge badge-neutral" v-if="repo.license">{{ repo.license }}</span>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-row">
+          <div class="stat-box" v-for="s in quickStats">
+            <div class="val">{{ s.val }}</div>
+            <div class="lbl">{{ s.label }}</div>
+          </div>
+        </div>
+
+        <!-- Chart + Directory Tree -->
+        <div class="two-col" v-if="files.length > 0">
+          <div class="col">
+            <div class="section-title">Languages</div>
+            <div ref="langChartEl" style="height:200px;"></div>
+          </div>
+          <div class="col">
+            <div class="section-title">Directory</div>
+            <div class="mermaid-wrap" v-if="treeSvg" v-html="treeSvg"></div>
+            <div class="empty-box" v-else>Rendering...</div>
+          </div>
+        </div>
+
+        <!-- Dependencies -->
+        <div class="right-section" v-if="deps.length > 0">
+          <div class="section-title">Dependencies <span class="count">{{ depCount }}</span></div>
+          <div class="dep-groups">
+            <div class="dep-group" v-for="g in depGroups">
+              <div class="dep-group-title">{{ g.type }}</div>
+              <div class="dep-tags">
+                <span class="dep-tag" v-for="d in g.items">{{ d.name }}<small>{{ d.version }}</small></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="right-section" v-if="repo.summary">
+          <div class="section-title">About</div>
+          <div class="summary-block">{{ repo.summary }}</div>
+        </div>
+
+        <!-- Insights with Filter -->
+        <div class="right-section" v-if="insights.length > 0">
+          <div class="section-title">Insights <span class="count">{{ insightCount }}</span></div>
+          <div class="insight-tabs">
+            <span :class="['insight-tab', activeCategory === '' ? 'active' : '']"
+              @click="activeCategory = ''">All</span>
+            <span :class="['insight-tab', activeCategory === cat ? 'active' : '']" v-for="cat in insightCategories"
+              @click="activeCategory = cat">{{ cat }}</span>
+          </div>
+          <div class="insight-card" v-for="ins in filteredInsights">
+            <div class="ic-header">
+              <span class="ic-cat">{{ ins.category }}</span>
+              <span class="ic-conf">{{ ins.confidence }}</span>
+              <span class="badge badge-info" v-if="ins.content_type === 'mermaid'"
+                style="font-size:10px;">DIAGRAM</span>
+            </div>
+            <h4 class="ic-title">{{ ins.title }}</h4>
+            <div class="ic-body" v-if="ins.content_type !== 'mermaid'">{{ ins.content }}</div>
+            <div class="ic-body mermaid-body" v-if="ins.content_type === 'mermaid'"
+              v-html="insightSvgs[ins.id] || '<div style=\'padding:20px;color:var(--text-color-tertiary);font-size:12px;\'>Rendering diagram...</div>'">
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Files -->
+        <div class="right-section" v-if="files.length > 0">
+          <div class="section-title">Key Files <span class="count">{{ fileCount }}</span></div>
+          <div class="file-list">
+            <div class="file-item" v-for="f in files.slice(0, 30)" @click="setRootPath(f.file_path)">
+              <span class="badge badge-entry" v-if="f.is_entry">ENTRY</span>
+              <span class="fp">{{ f.file_path }}</span>
+              <span class="fs">{{ f.summary }}</span>
+            </div>
+            <div class="file-more" v-if="files.length > 30">... and {{ files.length - 30 }} more</div>
+          </div>
+
+          <!-- File Preview -->
+          <div @outerclick='rootPath=""' class="explorer-float" v-if="rootPath">
+            <ai-explorer style="width: 100%;" v-show="rootPath" :root="rootPath"></ai-explorer>
+          </div>
+        </div>
+
+        <!-- Exploration Log -->
+        <div class="right-section" v-if="steps.length > 0">
+          <div class="section-title">Exploration Log <span class="count">{{ stepCount }}</span></div>
+          <div class="steps-list">
+            <div class="step-item" v-for="step in steps.slice(-20)" @click="toggleStep(step.id)">
+              <div class="step-main">
+                <span class="sn">#{{ step.step_num }}</span>
+                <span :class="['sa', 'sa-' + step.action]">{{ step.action }}</span>
+                <span class="st">{{ step.target }}</span>
+              </div>
+              <div class="step-finding" v-if="expandedSteps[step.id] && step.finding">{{ step.finding }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+<script setup>
+  repo = null; loading = true; error = ''
+  files = []; fileCount = 0
+  insights = []; insightCount = 0
+  steps = []; stepCount = 0
+  deps = []; depCount = 0
+  rootPath = ''
+
+  chatSessionId = ''
+  chatInput = ''
+  sessionLoading = false
+
+  repoId = $router.query.id
+
+  /* UI state */
+  activeCategory = ''
+  expandedSteps = {}
+  treeSvg = ''
+  langChartInstance = null
+  insightSvgs = {}
+
+  /* ---- Loaders ---- */
+  loadRepo = async () => {
+    loading = true; error = ''
+    repoId = $router.query.id
+    if (!repoId) {error = 'No repo id provided'; loading = false; return }
+    try {
+      const res = await fetch('/tables/repos/' + repoId)
+      if (!res.ok) {error = 'Repo not found'; loading = false; return }
+      repo = await res.json()
+    } catch (e) {error = 'Failed to load repo: ' + e.message}
+    loading = false
+    loadInsights()
+    loadFiles()
+    loadSteps()
+    loadDeps()
+    checkExistingSession()
+  }
+
+  loadFiles = async () => {
+    try {
+      const res = await fetch('/tables/repo_files?filters=' + encodeURIComponent(JSON.stringify({repo_id: repoId})) + '&size=200')
+      const data = await res.json()
+      files = data.items || []; fileCount = data.total || files.length
+    } catch (e) {files = []}
+  }
+
+  loadInsights = async () => {
+    try {
+      const res = await fetch('/tables/repo_insights?filters=' + encodeURIComponent(JSON.stringify({repo_id: repoId})) + '&size=50')
+      const data = await res.json()
+      insights = data.items || []; insightCount = data.total || insights.length
+      await renderInsightSvgs()
+    } catch (e) {insights = []}
+  }
+
+  renderInsightSvgs = async () => {
+    if (typeof mermaid === 'undefined' || insights.length === 0) return
+    const newSvgs = {}
+    for (const ins of insights) {
+      if (ins.content_type === 'mermaid' && ins.content && !insightSvgs[ins.id]) {
+        try {
+          const result = await mermaid.render('mermaid-ins-' + ins.id, ins.content)
+          newSvgs[ins.id] = result.svg
+        } catch (e) {
+          const src = String(ins.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          newSvgs[ins.id] = '<div style="padding:12px;color:var(--color-danger);font-size:12px;">Diagram render failed</div><pre style="padding:12px;background:var(--bg-color-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);font-size:12px;overflow:auto;white-space:pre-wrap;">' + src + '</pre>'
+        }
+      }
+    }
+    if (Object.keys(newSvgs).length > 0) {
+      insightSvgs = {...insightSvgs, ...newSvgs}
+    }
+  }
+
+  loadSteps = async () => {
+    try {
+      const res = await fetch('/tables/exploration_steps?filters=' + encodeURIComponent(JSON.stringify({repo_id: repoId})) + '&size=200&sort=step_num')
+      const data = await res.json()
+      steps = data.items || []; stepCount = data.total || steps.length
+    } catch (e) {steps = []}
+  }
+
+  loadDeps = async () => {
+    try {
+      const res = await fetch('/tables/repo_deps?filters=' + encodeURIComponent(JSON.stringify({repo_id: repoId})) + '&size=200')
+      const data = await res.json()
+      deps = data.items || []; depCount = data.total || deps.length
+    } catch (e) {deps = []}
+  }
+
+  /* ---- Computed helpers (as methods) ---- */
+  quickStats = () => {
+    if (!repo) return []
+    return [
+      {label: 'Language', val: repo.primary_lang || '?'},
+      {label: 'Files', val: repo.file_count || 0},
+      {label: 'LOC', val: repo.loc_total != null ? repo.loc_total.toLocaleString() : '?'},
+      {label: 'License', val: repo.license || '?'},
+      {label: 'Tests', val: repo.has_tests ? (repo.test_count || 'Yes') : 'No'},
+    ]
+  }
+
+  insightCategories = () => {
+    const set = new Set()
+    insights.forEach(i => set.add(i.category))
+    return Array.from(set).sort()
+  }
+
+  filteredInsights = () => {
+    if (!activeCategory) return insights
+    return insights.filter(i => i.category === activeCategory)
+  }
+
+  depGroups = () => {
+    const map = {}
+    deps.forEach(d => {
+      const t = d.dep_type || 'runtime'
+      if (!map[t]) map[t] = []
+      map[t].push(d)
+    })
+    return Object.keys(map).sort().map(k => ({type: k, items: map[k]}))
+  }
+
+  /* ---- Charts & Tree ---- */
+  initLangChart = () => {
+    if (!window.echarts || !$refs.langChartEl) return
+    if (langChartInstance) {langChartInstance.dispose(); langChartInstance = null}
+    const chart = window.echarts.init($refs.langChartEl)
+    langChartInstance = chart
+    const data = getLangChartData()
+    chart.setOption({
+      tooltip: {trigger: 'item', formatter: '{b}: {c} ({d}%)'},
+      series: [{
+        type: 'pie',
+        radius: ['38%', '70%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: {borderRadius: 4, borderColor: '#fff', borderWidth: 2},
+        label: {show: true, fontSize: 11, color: '#333'},
+        labelLine: {show: true, length: 10, length2: 8},
+        emphasis: {label: {show: true, fontSize: 13, fontWeight: 'bold'}},
+        data: data
+      }]
+    })
+  }
+
+  getLangChartData = () => {
+    if (repo && repo.loc_by_lang) {
+      try {
+        const obj = JSON.parse(repo.loc_by_lang)
+        return Object.keys(obj).map(k => ({name: k, value: obj[k]}))
+      } catch (e) { }
+    }
+    const map = {}
+    files.forEach(f => {
+      const lang = f.language || 'unknown'
+      map[lang] = (map[lang] || 0) + 1
+    })
+    return Object.keys(map).map(k => ({name: k, value: map[k]}))
+  }
+
+  buildTreeMermaid = () => {
+    if (files.length === 0) return ''
+    const dirs = new Set()
+    const filePaths = new Set()
+    files.forEach(f => {
+      const parts = f.file_path.split('/')
+      let path = ''
+      parts.forEach((part, i) => {
+        path = path ? path + '/' + part : part
+        if (i === parts.length - 1) {
+          filePaths.add(path)
+        } else {
+          dirs.add(path)
+        }
+      })
+    })
+
+    const children = {}
+    dirs.forEach(d => {if (!children[d]) children[d] = []})
+    filePaths.forEach(f => {
+      const lastSlash = f.lastIndexOf('/')
+      const parent = lastSlash > 0 ? f.slice(0, lastSlash) : ''
+      if (parent) {
+        if (!children[parent]) children[parent] = []
+        children[parent].push(f)
+      } else {
+        if (!children['']) children[''] = []
+        children[''].push(f)
+      }
+    })
+
+    let lines = ['graph TD']
+    let id = 0
+    const ids = {}
+    const getId = (path) => {
+      if (!ids[path]) ids[path] = 'n' + (id++)
+      return ids[path]
+    }
+
+    dirs.forEach(d => {
+      const name = d.split('/').pop()
+      lines.push(`  ${getId(d)}["${name}/"]`)
+    })
+    filePaths.forEach(f => {
+      const name = f.split('/').pop()
+      lines.push(`  ${getId(f)}["${name}"]`)
+    })
+
+    dirs.forEach(d => {
+      const lastSlash = d.lastIndexOf('/')
+      const parent = lastSlash > 0 ? d.slice(0, lastSlash) : ''
+      if (parent && dirs.has(parent)) {
+        lines.push(`  ${getId(parent)} --> ${getId(d)}`)
+      } else if (!parent && children['']?.length > 0) {
+        // root level dirs connect from a virtual root
+      }
+    })
+
+    filePaths.forEach(f => {
+      const lastSlash = f.lastIndexOf('/')
+      const parent = lastSlash > 0 ? f.slice(0, lastSlash) : ''
+      if (parent && dirs.has(parent)) {
+        lines.push(`  ${getId(parent)} --> ${getId(f)}`)
+      }
+    })
+
+    // connect root-level items to a root node
+    const rootItems = (children[''] || []).filter(p => !dirs.has(p))
+    const rootDirs = Array.from(dirs).filter(d => !d.includes('/'))
+    if (rootItems.length > 0 || rootDirs.length > 0) {
+      lines.push(`  root["${repo ? (repo.repo_path ? repo.repo_path.split('/').pop() : 'root') : 'root'}"]`)
+      rootItems.forEach(f => lines.push(`  root --> ${getId(f)}`))
+      rootDirs.forEach(d => lines.push(`  root --> ${getId(d)}`))
+    }
+
+    return lines.join('\n')
+  }
+
+  renderTree = async () => {
+    if (typeof mermaid === 'undefined') {
+      treeSvg = ''
+      return
+    }
+    const code = buildTreeMermaid()
+    if (!code) {treeSvg = ''; return }
+    try {
+      const result = await mermaid.render('tree-diagram', code)
+      treeSvg = result.svg
+    } catch (e) {
+      const src = String(code || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      treeSvg = '<div style="color:var(--text-color-tertiary);padding:12px;font-size:12px;">Unable to render tree</div><pre style="padding:12px;background:var(--bg-color-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);font-size:12px;overflow:auto;white-space:pre-wrap;">' + src + '</pre>'
+    }
+  }
+
+  /* ---- Session & Chat ---- */
+  checkExistingSession = async () => {
+    if (!repo) return
+    try {
+      const res = await fetch('/api/sessions?name=' + encodeURIComponent(repo.url) + '&hide=true')
+      const data = await res.json()
+      const items = data.items || []
+      const found = items.find(s => s.title === repo.url)
+      if (found) {chatSessionId = found.id}
+    } catch (e) { }
+  }
+
+  ensureSession = async () => {
+    if (chatSessionId) return
+    sessionLoading = true
+    try {
+      let found = null
+      const res = await fetch('/api/sessions?name=' + encodeURIComponent(repo.url) + '&hide=true')
+      const data = await res.json()
+      const items = data.items || []
+      found = items.find(s => s.title === repo.url)
+      if (found) {
+        chatSessionId = found.id
+      } else {
+        const cr = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({title: repo.url, model: '', tools: {}, env_vars: {}, active_env_id: '', hide: true})
+        })
+        if (cr.ok) {
+          const s = await cr.json()
+          chatSessionId = s.id
+        }
+      }
+    } catch (e) { }
+    sessionLoading = false
+  }
+
+  sendFirstMsg = async () => {
+    if (!chatInput.trim() || sessionLoading) return
+    await ensureSession()
+    if (!chatSessionId) return
+    try {
+      const wrapped = wrapUserMsg(chatInput.trim())
+      await fetch('/api/sessions/' + chatSessionId + '/messages', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: wrapped, images: [], model: '', audio: ''})
+      })
+      chatInput = ''
+    } catch (e) { }
+  }
+
+  onSplashKey = (e) => {if (e.key === 'Enter') {e.preventDefault(); sendFirstMsg()} }
+
+  wrapUserMsg = (content) => '[' + repo.url + ':' + content + ']'
+
+  setRootPath = (filePath) => {
+    if (!repo || !repo.clone_dir) return
+    rootPath = repo.clone_dir.replace('$AGENT', './fs/agents/' + $router.params.agent_id) + '/' + filePath
+  }
+
+  toggleStep = (id) => {
+    expandedSteps[id] = !expandedSteps[id]
+    // trigger reactivity
+    expandedSteps = {...expandedSteps}
+  }
+
+  statusClass = (s) => {
+    const map = {completed: 'badge badge-success', exploring: 'badge badge-warning', pending: 'badge badge-neutral', failed: 'badge badge-danger', cloning: 'badge badge-info'}
+    return map[s] || 'badge badge-neutral'
+  }
+
+  formatTime = (t) => t ? new Date(t).toLocaleDateString() : ''
+
+  /* ---- Post-load visuals ---- */
+  refreshVisuals = async () => {
+    await new Promise(r => setTimeout(r, 50))
+    initLangChart()
+    await renderTree()
+  }
+</script>
+
+<script>
+  loadRepo()
+  // after data loads, init charts & tree
+  $watch(() => files.length, async () => {
+    if (files.length > 0 && repo && repo.status === 'completed') {
+      await refreshVisuals()
+    }
+  })
+  // render mermaid diagrams when insights load
+  $watch(() => insights.length, async () => {
+    if (insights.length > 0) await renderInsightSvgs()
+  })
+</script>
+
+</html>

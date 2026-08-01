@@ -1,0 +1,109 @@
+{
+  "title": "验证轮次",
+  "description": "分布式验证执行轮次的进度与结果聚合",
+  "fields": [
+    {
+      "name": "run_code",
+      "type": "string",
+      "title": "轮次编号",
+      "description": "形如 RUN-20260722-A",
+      "required": true
+    },
+    {
+      "name": "scope",
+      "type": "string",
+      "title": "验证范围"
+    },
+    {
+      "name": "env_name",
+      "type": "string",
+      "title": "执行环境"
+    },
+    {
+      "name": "parallelism",
+      "type": "int",
+      "title": "并行度",
+      "default": 64
+    },
+    {
+      "name": "total",
+      "type": "int",
+      "title": "用例总数",
+      "default": 0
+    },
+    {
+      "name": "done",
+      "type": "int",
+      "title": "已执行",
+      "default": 0
+    },
+    {
+      "name": "passed",
+      "type": "int",
+      "title": "通过",
+      "default": 0
+    },
+    {
+      "name": "failed",
+      "type": "int",
+      "title": "失败",
+      "default": 0
+    },
+    {
+      "name": "blocked",
+      "type": "int",
+      "title": "阻塞",
+      "default": 0
+    },
+    {
+      "name": "progress",
+      "type": "number",
+      "title": "进度 %",
+      "description": "0-100",
+      "default": 0
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"排队\""
+    },
+    {
+      "name": "started_at",
+      "type": "time",
+      "title": "启动时间"
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    },
+    {
+      "name": "commit",
+      "type": "string",
+      "title": "commit",
+      "description": "执行时的 commit"
+    },
+    {
+      "name": "runner",
+      "type": "string",
+      "title": "执行器",
+      "description": "执行器：agent-judge/repo-test"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "run_code"
+      ],
+      "unique": true
+    },
+    {
+      "fields": [
+        "status"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

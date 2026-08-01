@@ -1,0 +1,52 @@
+{
+  "title": "追踪链接",
+  "description": "系统需求 × 软件组件的追踪关系，F=完整实现 P=部分实现；无记录即为未覆盖",
+  "fields": [
+    {
+      "name": "req_id",
+      "type": "string",
+      "title": "需求ID",
+      "required": true
+    },
+    {
+      "name": "comp_code",
+      "type": "string",
+      "title": "组件代码",
+      "required": true
+    },
+    {
+      "name": "link_type",
+      "type": "string",
+      "title": "关联类型",
+      "required": true
+    },
+    {
+      "name": "need_reverify",
+      "type": "bool",
+      "title": "待重验",
+      "description": "由需求变更级联标记",
+      "default": false
+    },
+    {
+      "name": "evidence",
+      "type": "text",
+      "title": "证据",
+      "description": "代码分析证据（文件+符号清单）"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "req_id",
+        "comp_code"
+      ],
+      "unique": true
+    },
+    {
+      "fields": [
+        "comp_code"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

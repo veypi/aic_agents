@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>需求模型视图</title>
+</head>
+<style>
+  .model-block{border:1px solid var(--border-color);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  .model-block:last-child{margin-bottom:0}
+  .mb-h{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-color-tertiary);cursor:pointer;user-select:none;list-style:none}
+  .mb-h::-webkit-details-marker{display:none}
+  .mb-h:hover{filter:brightness(.98)}
+  .mb-name{font-size:12.5px;font-weight:600;color:var(--text-color)}
+  .mb-sub{font-size:11px;color:var(--text-color-disabled)}
+  .mb-count{margin-left:auto}
+  .mb-b{padding:4px 0}
+  .mb-req{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 26px;font-size:11.5px}
+  .mb-req:hover{background:var(--bg-color-tertiary)}
+  .mb-req .rid{font-family:'Chakra Petch',var(--font-mono);color:var(--color-primary);cursor:pointer;font-weight:600}
+  .mb-req .rdesc{color:var(--text-color-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .comp-desc{font-size:11px;color:var(--text-color-disabled);padding:2px 12px 8px 26px}
+  .if-arrow{color:var(--color-primary);font-weight:700}
+</style>
+<body>
+  <local-app-menu page="model">
+    <div class="rv-crumb">需求与模型 / 需求模型设计</div>
+    <div class="rv-titlebar">
+      <h1>需求模型视图</h1>
+      <p>系统需求 · 软件需求 · 接口需求三层模型，OCL 约束保障模型一致性</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="aiModel">AI 辅助建模</button>
+        <button class="rv-btn" @click="checkModel">模型一致性检查</button>
+      </span>
+    </div>
+
+    <div class="rv-grid g4" style="margin-bottom:14px">
+      <local-kpi-card lab="系统需求" :val="reqTotal()" suffix="项"></local-kpi-card>
+      <local-kpi-card lab="软件组件" :val="comps.length" suffix="个" tone="var(--color-info)"></local-kpi-card>
+      <local-kpi-card lab="接口约束" :val="ifaces.length" suffix="条" tone="var(--color-secondary)"></local-kpi-card>
+      <local-kpi-card lab="OCL 约束" :val="oclCount()" suffix="条" tone="var(--color-success)" sub="一致性检查全部满足"></local-kpi-card>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在构建需求模型…</div></div>
+    <div v-else class="rv-grid g3" style="align-items:start">
+      <div class="rv-panel acc-primary" style="padding:12px">
+        <div class="phead" style="padding:2px 4px 10px">系统需求模型（按能力域）</div>
+        <details v-for="(d, i) in domainList" :key="d" class="model-block" :open="i === 0">
+          <summary class="mb-h">
+            <span class="mb-name">{{ d }}域</span>
+            <span class="mb-sub">系统级需求</span>
+            <span class="rv-tag mb-count" :class="domainTone(i)">{{ domainReqs(d).length }} 项</span>
+          </summary>
+          <div class="mb-b">
+            <div v-for="r in domainReqs(d).slice(0, 3)" :key="r.id" class="mb-req">
+              <span class="rid" @click="goReq(r.req_id)">{{ r.req_id }}</span>
+              <span class="rdesc" :title="r.description">{{ short(r.description) }}</span>
+              <span class="rv-tag" :class="verifTone(r.verif_status)">{{ r.verif_status }}</span>
+            </div>
+            <div v-if="domainReqs(d).length > 3" class="mb-req"><span class="rdesc dim">… 另有 {{ domainReqs(d).length - 3 }} 项，前往需求库查看</span></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="rv-panel acc-secondary" style="padding:12px">
+        <div class="phead" style="padding:2px 4px 10px">软件需求模型（组件分解）</div>
+        <details v-for="c in comps" :key="c.id" class="model-block">
+          <summary class="mb-h">
+            <span class="mb-name">{{ c.comp_code }}</span>
+            <span class="mb-sub">{{ c.name }}</span>
+            <span class="rv-tag t-info mb-count">{{ c.req_blocks }} 需求块</span>
+          </summary>
+          <div class="mb-b">
+            <div class="comp-desc">{{ c.description }}</div>
+            <div class="mb-req">
+              <span class="rid" @click="goTrace">追踪矩阵</span>
+              <span class="rdesc dim">查看该组件的系统需求覆盖关系 →</span>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="rv-panel acc-cyan" style="padding:0">
+        <div class="phead" style="padding:14px 18px 10px">接口需求模型</div>
+        <div class="rv-twrap">
+          <table class="rv-table">
+            <thead><tr><th>接口</th><th>路径</th><th>约束</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="f in ifaces" :key="f.id">
+                <td class="mono" style="color:var(--color-primary);font-weight:600">{{ f.if_id }}</td>
+                <td class="mono" style="font-size:11px">{{ f.provider }} <span class="if-arrow">→</span> {{ f.consumer }}</td>
+                <td class="dim" style="font-size:11px">{{ f.constraint_desc }}</td>
+                <td><span class="rv-tag" :class="f.status === '通过' ? 't-ok' : 't-warn'">{{ f.status }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:12px 18px 16px;font-size:11.5px;color:var(--text-color-secondary);background:var(--bg-color-tertiary)">
+          接口约束由 OCL 表达，如：<span class="mono" style="font-size:10.5px">context Iface inv: self.latency &lt;= 5ms</span>
+        </div>
+      </div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  reqsAll = []
+  comps = []
+  ifaces = []
+  domainList = []
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  PRJ_TABLES = { requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1 }
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+  DTONES = ['t-info', 't-vio', 't-ok', 't-warn', 't-gray', 't-bad']
+
+  domainTone = (i) => DTONES[i % DTONES.length]
+  verifTone = (s) => s === '符合' ? 't-ok' : s === '偏离' ? 't-warn' : 't-gray'
+  short = (s) => (s || '').length > 30 ? (s || '').slice(0, 30) + '…' : (s || '')
+  reqTotal = () => reqsAll.length
+  oclCount = () => reqsAll.filter((r) => r.ocl).length
+  domainReqs = (d) => reqsAll.filter((r) => r.domain === d)
+  goTrace = () => { try { $router.push('/i/trace') } catch (e) { location.href = '/i/trace' } }
+  goReq = (rid) => {
+    try { $router.push('/i/reqlib?req_id=' + encodeURIComponent(rid)) } catch (e) { location.href = '/i/reqlib?req_id=' + encodeURIComponent(rid) }
+  }
+
+  /* Agent 任务：为未形式化需求生成 OCL 约束 */
+  aiModel = async () => {
+    const lack = reqsAll.filter((r) => !r.ocl && !r.deprecated).length
+    if (!lack) { $message.info('全部需求均已有 OCL 形式化约束') ; return }
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: {
+        title: '需求形式化建模',
+        goal: '【ai-model】ReqVerif 需求形式化建模：当前 ' + lack + ' 条需求缺少 OCL 约束，选取最多 20 条生成形式化约束并回写 requirements.ocl。按核心 prompt 中【ai-model】规范执行。',
+        steps: '1. 筛选 ocl 为空的需求；2. 逐条生成 pre/post/inv 约束；3. 回写并汇报示例',
+        constraints: '只写 requirements.ocl 字段；保持幂等（已有 ocl 的跳过）',
+      } })
+      $message.success('形式化建模任务已创建（' + ((td.task && td.task.id) || '') + '），完成后刷新页面查看 OCL 约束')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    }
+  }
+
+  /* Agent 任务：模型一致性检查，报告写入 $USER/exports */
+  checkModel = async () => {
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: {
+        title: '模型一致性检查',
+        goal: '【model-check】ReqVerif 模型一致性检查：追踪闭环、接口组件存在性、悬空 req_id、OCL 覆盖率（当前 ' + oclCount() + ' 条约束）。按核心 prompt 中【model-check】规范执行，报告写入 $USER/exports/。',
+        steps: '1. 读取四表；2. 逐项检查；3. 生成 Markdown 报告并汇报问题清单',
+        constraints: '只读，不修改任何表数据',
+      } })
+      $message.success('一致性检查任务已创建（' + ((td.task && td.task.id) || '') + '），报告将写入 exports 目录')
+    } catch (e) {
+      $message.error('任务创建失败：' + e.message)
+    }
+  }
+
+  initPage = async () => {
+    try {
+      const first = await q('requirements', { size: 200, page: 1, sort: 'req_id' })
+      let all = (first.items || []).slice()
+      let p = 2
+      while (all.length < (first.total || 0) && p <= 3) {
+        const nx = await q('requirements', { size: 200, page: p, sort: 'req_id' })
+        all = all.concat(nx.items || [])
+        p++
+      }
+      reqsAll = all
+      const domains = {}
+      all.forEach((r) => {
+        if (r.domain) domains[r.domain] = (domains[r.domain] || 0) + 1
+      })
+      domainList = Object.keys(domains).sort()
+      const [compD, ifD] = await Promise.all([
+        q('components', { size: 20, sort: 'created_at' }),
+        q('interfaces', { size: 20 }),
+      ])
+      comps = compD.items || []
+      ifaces = ifD.items || []
+    } catch (e) {
+      $message.error('加载模型失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+</html>

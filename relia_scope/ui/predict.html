@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 故障预测" />
+<title>故障预测 · ReliaScope</title>
+</head>
+<style>
+.health{display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid rgba(209,213,219,.45);cursor:pointer;border-radius:8px;transition:all var(--transition-fast)}
+.health:hover{background:rgba(67,97,238,.045);padding-left:9px}
+.health:last-child{border:none}
+.empty-box{padding:40px 0;text-align:center;color:var(--text-color-disabled);font-size:12px;line-height:2}
+</style>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">可靠性工程 · Forecast</div>
+        <h1>故障预测</h1>
+      </div>
+      <div class="right">
+        <button class="btn" :disabled="training" @click="retrain()">{{ training ? '重训中…' : '重训预测模型' }}</button>
+      </div>
+    </header>
+
+    <div class="g g4">
+      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+        <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
+        <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span></div>
+        <div class="tr" :class="k.up ? 'up' : 'down'">{{ k.up ? '▲' : '▼' }} {{ k.tr }} <em>{{ k.hint }}</em></div>
+        <div class="spark" :id="'sp' + i"></div>
+      </div>
+    </div>
+
+    <div class="g g23" style="margin-top:15px">
+      <div class="card">
+        <h3>故障水平与预测 <span class="tag">NHPP 外推</span></h3>
+        <div class="desc">实线为 failures 表日聚合真实历史 · 虚线与区间为 predictions 表预测（无预测时仅显示历史）</div>
+        <div id="ch-forecast" class="chart" style="height:330px"></div>
+      </div>
+      <div class="card">
+        <h3>剩余无故障寿命 RUL 排行 <span class="tag">predictions 表</span></h3>
+        <div class="desc">预测下一次故障前的剩余运行时长 · 点击进入单目标验证</div>
+        <div v-if="!ruls.length" class="empty-box">暂无预测数据<br>点击右上角「重训预测模型」，由 Agent 拟合后生成</div>
+        <div>
+          <div class="health" v-for="r in ruls" :key="r.id" @click="goTarget(r.id)">
+            <div style="flex:1">
+              <div style="font-size:12.5px;font-weight:600;color:var(--ink)">{{ r.name }}</div>
+              <div class="bar" style="margin-top:6px;width:100%"><i :style="{width: r.pct + '%', background: r.col}"></i></div>
+            </div>
+            <div style="text-align:right;min-width:96px">
+              <div class="mono" style="font-weight:800;font-size:14px" :style="{color: r.col}">{{ r.rul.toLocaleString() }} h</div>
+              <div style="font-size:10.5px;color:var(--text-color-tertiary)">就绪度 {{ r.ready }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g g2" style="margin-top:15px">
+      <div class="card">
+        <h3>剩余缺陷数预测（Goel-Okumoto NHPP）</h3>
+        <div class="desc">前端对 failures 表累计样本实时最小二乘拟合 · 虚线为缺陷总量估计 a</div>
+        <div id="ch-nhpp" class="chart" style="height:290px"></div>
+      </div>
+      <div class="card">
+        <h3>风险预警矩阵 <span class="tag">由 failures 实算</span></h3>
+        <div class="desc">发生概率（模式频次）× 影响程度（严重度加权） · 气泡大小为失效计数</div>
+        <div id="ch-risk" class="chart" style="height:290px"></div>
+      </div>
+    </div>
+    <div class="footer-note">预测产物由 Agent 重训任务写入 predictions / model_metrics 表 · 历史与拟合曲线前端实时计算</div>
+</app-menu>
+</body>
+<script setup>
+kpis = []
+ruls = []
+training = false
+
+const charts = {}
+const mk = (id, opt) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  if (charts[id]) charts[id].dispose()
+  const c = echarts.init(el)
+  c.setOption(opt)
+  charts[id] = c
+}
+const AX = { axisLine: { lineStyle: { color: '#d3dae6' } }, axisLabel: { color: '#6b7280', fontSize: 11 }, splitLine: { lineStyle: { color: '#eaeff7' } } }
+const TIP = { trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: { color: '#e2e8f0', fontSize: 12 } }
+const GRID = { left: 48, right: 22, top: 38, bottom: 30 }
+const R720 = (lam) => Math.exp(-Number(lam || 0) * 0.72)
+
+goTarget = (id) => {
+  $router.push('/i/target?software_id=' + id)
+}
+
+/* ---------- Agent 任务执行器 ---------- */
+const runTask = async (payload) => {
+  const r = await $fetch('/api/tasks', { method: 'POST', body: payload })
+  const id = r.task && r.task.id
+  if (!id) throw new Error('任务创建失败')
+  const t0 = Date.now()
+  while (Date.now() - t0 < 300000) {
+    await new Promise(r2 => setTimeout(r2, 3000))
+    const t = await $fetch('/api/tasks/' + id)
+    if (t.status === 'completed') return t
+    if (t.status === 'failed' || t.status === 'canceled') throw new Error(t.error || '任务执行失败')
+  }
+  throw new Error('任务执行超时，可稍后在任务中心查看结果')
+}
+retrain = async () => {
+  if (training) return
+  training = true
+  try {
+    await runTask({
+      title: 'NHPP 模型重训与故障预测',
+      goal: '读取 failures 全部样本与 softwares，全局及按软件分组拟合 G-O / Musa-Okumoto / J-M / Crow-AMSAA / Weibull 模型并计算 AIC 选优；将各模型参数与拟合优度写入 model_metrics 表，将每软件 30 天故障预测（P50/P90/剩余缺陷/RUL/发布就绪度）写入 predictions 表。',
+      steps: '1. table.list failures(size=200) 与 softwares → 2. 统计 T、n、累计失效序列 → 3. 按 index.md 方法拟合五类模型并算 AIC → 4. 清理同(software_id,model)旧行后写入 model_metrics → 5. 按 software_id 覆盖写入 predictions → 6. 返回最优模型、AIC 排序与写入行数',
+      constraints: '只写 model_metrics 与 predictions；禁止修改 failures；predictions 每软件仅保留一行；样本不足（n<5）的对象不生成预测并在摘要说明',
+      schedule_type: 'once'
+    })
+    await load()
+    $message.success('模型重训完成，预测产物已更新')
+  } catch (e) { $message.error('重训任务：' + e.message) }
+  training = false
+}
+
+const countUp = (id, target, dec) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  const t0 = performance.now(), dur = 900
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / dur)
+    const v = target * (1 - Math.pow(1 - p, 3))
+    el.textContent = dec > 0 ? v.toFixed(dec) : Math.round(v).toLocaleString()
+    if (p < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+const spark = (id, color, data) => {
+  const d = data && data.length > 1 ? data : [0, 0]
+  mk(id, { grid: { left: 0, right: 0, top: 4, bottom: 0 }, animationDuration: 1200,
+    xAxis: { type: 'category', show: false, data: d.map((_, i) => i) }, yAxis: { show: false, min: 'dataMin' },
+    series: [{ type: 'line', data: d, smooth: true, showSymbol: false, lineStyle: { color, width: 1.5 }, areaStyle: { color: color + '26' } }] })
+}
+const dayKey = (t) => {
+  const d = new Date(t)
+  return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+
+const draw = (hist, predDaily, goFit, pts) => {
+  /* 历史 + 预测 */
+  const days = hist.map(d => d[0].slice(5))
+  const futureN = predDaily ? predDaily.p50.length : 0
+  const fdays = [...days]
+  for (let i = 1; i <= futureN; i++) fdays.push('D+' + i)
+  const histData = hist.map(d => d[1])
+  const series = [
+    { name: '历史故障(日)', type: 'line', data: histData, smooth: true, showSymbol: false, lineStyle: { color: '#0891b2', width: 2.5 }, areaStyle: { color: 'rgba(8,145,178,.07)' } }
+  ]
+  if (predDaily) {
+    series.push({ name: 'P90 上限', type: 'line', data: [...Array(days.length - 1).fill(null), histData[histData.length - 1], ...predDaily.p90], lineStyle: { opacity: 0 }, stack: 'b', showSymbol: false, silent: true })
+    series.push({ name: '预测区间 P50–P90', type: 'line', stack: 'b', showSymbol: false, silent: true,
+      areaStyle: { color: 'rgba(67,97,238,.12)' }, lineStyle: { opacity: 0 },
+      data: [...Array(days.length).fill(null), ...predDaily.p90.map((v, i) => +(v - predDaily.p50[i]).toFixed(2))] })
+    series.push({ name: 'P50 预测', type: 'line', data: [...Array(days.length - 1).fill(null), histData[histData.length - 1], ...predDaily.p50], smooth: true, showSymbol: false, lineStyle: { color: '#4361ee', width: 2.5, type: 'dashed' } })
+  }
+  mk('ch-forecast', { tooltip: TIP, animationDuration: 900,
+    legend: { textStyle: { color: '#6b7280' }, top: 0 }, grid: GRID,
+    xAxis: { type: 'category', data: fdays, ...AX, axisLabel: { ...AX.axisLabel, interval: Math.ceil(fdays.length / 15) } },
+    yAxis: { type: 'value', name: '故障数/日', ...AX, minInterval: 0 }, series })
+  /* NHPP G-O 前端实拟合 */
+  if (goFit && pts.length >= 3) {
+    const maxT = pts[pts.length - 1].T
+    mk('ch-nhpp', { tooltip: TIP, legend: { textStyle: { color: '#6b7280' }, top: 0 }, grid: GRID,
+      xAxis: { type: 'value', name: '测试时间(h)', nameTextStyle: { color: '#6b7280' }, ...AX },
+      yAxis: { type: 'value', name: '累计检出缺陷', ...AX },
+      series: [
+        { name: '实测', type: 'scatter', symbolSize: 6, itemStyle: { color: '#d97706' }, data: pts.map(p => [p.T, p.n]) },
+        { name: 'G-O 拟合/外推', type: 'line', smooth: true, showSymbol: false, lineStyle: { color: '#7c3aed', width: 2.5 },
+          data: Array.from({ length: 40 }, (_, i) => { const t = (i + 1) * maxT * 1.35 / 40; return [Math.round(t), +(goFit.a * (1 - Math.exp(-goFit.b * t))).toFixed(1)] }) },
+        { name: '总缺陷估计 a=' + Math.round(goFit.a), type: 'line', showSymbol: false, lineStyle: { color: '#dc2626', type: 'dashed' }, data: [[0, goFit.a], [Math.round(maxT * 1.35), goFit.a]] }
+      ] })
+  }
+  /* 风险矩阵（真实模式统计） */
+  const mc = {}
+  RAWF.forEach(f => {
+    const o = mc[f.mode] || (mc[f.mode] = { n: 0, sev: 0 })
+    o.n++
+    o.sev += f.severity === '致命' ? 5 : f.severity === '严重' ? 4 : f.severity === '一般' ? 2.5 : 1
+  })
+  const modes = Object.keys(mc)
+  const maxN = Math.max(1, ...modes.map(m => mc[m].n))
+  const rd = modes.map(m => [+(0.5 + mc[m].n / maxN * 4.5).toFixed(1), +(mc[m].sev / mc[m].n).toFixed(1), mc[m].n, m])
+  mk('ch-risk', { tooltip: { formatter: (p) => p.data[3] + '<br/>频次 ' + p.data[2] + ' · 概率 ' + p.data[0] + ' · 影响 ' + p.data[1] },
+    grid: { left: 48, right: 22, top: 20, bottom: 46 },
+    xAxis: { type: 'value', name: '发生概率', max: 5.5, nameTextStyle: { color: '#6b7280' }, ...AX },
+    yAxis: { type: 'value', name: '影响程度', max: 5.5, nameTextStyle: { color: '#6b7280' }, ...AX },
+    series: [{ type: 'scatter', symbolSize: (d) => Math.max(10, d[2] * 6),
+      itemStyle: { color: (p) => { const v = (p.value || p)[0] * (p.value || p)[1]; return v >= 15 ? '#dc2626' : v >= 8 ? '#d97706' : '#059669' }, opacity: .7, shadowBlur: 10, shadowColor: 'rgba(15,28,61,.25)' },
+      label: { show: true, formatter: (p) => p.data[3], position: 'top', color: '#6b7280', fontSize: 10 },
+      data: rd }] })
+  /* sparks */
+  const smp = (arr) => { if (!arr || !arr.length) return [0, 0]; const r = []; for (let i = 0; i < 20; i++) r.push(arr[Math.floor(i * arr.length / 20)] ?? 0); return r }
+  spark('sp0', '#059669', smp(histData))
+  spark('sp1', '#dc2626', smp(pts.map(p => +(p.T / p.n).toFixed(0))))
+  spark('sp2', '#7c3aed', pts.map(p => p.n))
+  spark('sp3', '#0891b2', ruls.map(r => r.ready))
+  kpis.forEach((k, i) => { if (!k.na) countUp('kv' + i, k.raw, k.dec) })
+}
+
+let RAWF = []
+
+load = async () => {
+  try {
+    const [sw, fl, pr, mm] = await Promise.all([
+      $fetch('/tables/softwares', { params: { size: 200 } }),
+      $fetch('/tables/failures', { params: { size: 200 } }),
+      $fetch('/tables/predictions', { params: { size: 200 } }),
+      $fetch('/tables/model_metrics', { params: { size: 200, sort: '-trained_at' } })
+    ])
+    const softs = sw.items || []
+    const fails = (fl.items || []).filter(f => f.counted)
+    RAWF = fails
+    const preds = pr.items || []
+    const mets = mm.items || []
+    const hasPred = preds.length > 0
+    const swNm = {}
+    softs.forEach(s => { swNm[s.id] = s.name })
+    /* RUL 排行（predictions 驱动） */
+    const maxRul = Math.max(1, ...preds.map(p => Number(p.rul_h || 0)))
+    ruls = preds.map(p => ({
+      id: p.software_id, name: swNm[p.software_id] || p.software_id,
+      rul: Math.round(Number(p.rul_h || 0)),
+      ready: Math.round(Number(p.readiness || 0)),
+      pct: Math.max(4, Math.round(Number(p.rul_h || 0) / maxRul * 100)),
+      col: Number(p.rul_h || 0) < 800 ? '#dc2626' : Number(p.rul_h || 0) < 2500 ? '#d97706' : '#059669'
+    })).sort((a, b) => a.rul - b.rul).slice(0, 6)
+    /* 历史 60 天日聚合 */
+    const days = Array.from({ length: 60 }, (_, i) => dayKey(Date.now() - (59 - i) * 864e5))
+    const idx = {}
+    days.forEach((d, i) => { idx[d] = i })
+    const cnt = days.map(() => 0)
+    fails.forEach(f => { const i = idx[dayKey(f.created_at)]; if (i != null) cnt[i]++ })
+    const hist = days.map((d, i) => [d, cnt[i]])
+    /* 预测日均（predictions 的 30 天合计摊到每天） */
+    let predDaily = null
+    if (hasPred) {
+      const p50sum = preds.reduce((a, p) => a + Number(p.p50_30d || 0), 0)
+      const p90sum = preds.reduce((a, p) => a + Number(p.p90_30d || 0), 0)
+      predDaily = {
+        p50: Array.from({ length: 30 }, () => +(p50sum / 30).toFixed(2)),
+        p90: Array.from({ length: 30 }, () => +(p90sum / 30).toFixed(2))
+      }
+    }
+    /* G-O 前端最小二乘拟合 */
+    const seq = [...fails].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    let cum = 0
+    const pts = seq.map((f, i) => { cum += Number(f.delta_t || 0); return { T: cum, n: i + 1 } }).filter(p => p.T > 1)
+    let goFit = null
+    if (pts.length >= 3) {
+      let best = { sse: 1e18, a: pts.length, b: 0.001 }
+      for (let bi = 1; bi <= 200; bi++) {
+        const b = bi * 0.00005
+        let sg = 0, sgg = 0
+        pts.forEach(p => { const g = 1 - Math.exp(-b * p.T); sg += p.n * g; sgg += g * g })
+        const a = sgg > 0 ? sg / sgg : pts.length
+        const sse = pts.reduce((s, p) => { const m = a * (1 - Math.exp(-b * p.T)); return s + (p.n - m) * (p.n - m) }, 0)
+        if (sse < best.sse) best = { sse, a, b }
+      }
+      goFit = best
+    }
+    /* KPI */
+    const accRow = mets.find(m => m.accuracy != null && Number(m.accuracy) > 0)
+    const high = softs.map(s => ({ ...s, r: R720(s.lam) })).filter(s => s.r < 0.85).length
+    const resid = hasPred ? Math.round(preds.reduce((a, p) => a + Number(p.residual || 0), 0)) : (goFit ? Math.max(0, Math.round(goFit.a - pts.length)) : 0)
+    const readyAvg = hasPred ? Math.round(preds.reduce((a, p) => a + Number(p.readiness || 0), 0) / preds.length) : null
+    kpis = [
+      { lb: '预测准确率(30天)', v: accRow ? Number(accRow.accuracy).toFixed(1) : '—', un: accRow ? '%' : '', tr: accRow ? (accRow.model || '最优模型') : '未重训', hint: accRow ? 'model_metrics' : '点击重训生成', up: !!accRow, c: '#059669', raw: accRow ? Number(accRow.accuracy) : 0, dec: 1, na: !accRow },
+      { lb: '高风险软件', v: String(high), un: '个', tr: 'R(720h) < 0.85', hint: '由 λ 基线实算', up: high <= 1, c: '#dc2626', raw: high, dec: 0 },
+      { lb: '预计剩余缺陷', v: String(resid), un: '个', tr: hasPred ? 'predictions 汇总' : 'G-O 前端估计', hint: 'NHPP', up: true, c: '#7c3aed', raw: resid, dec: 0 },
+      { lb: '发布就绪度', v: readyAvg != null ? String(readyAvg) : '—', un: readyAvg != null ? '分' : '', tr: readyAvg != null ? 'predictions 均值' : '未重训', hint: readyAvg != null ? 'predictions 表' : '点击重训生成', up: readyAvg != null && readyAvg >= 70, c: '#0891b2', raw: readyAvg || 0, dec: 0, na: readyAvg == null }
+    ]
+    setTimeout(() => draw(hist, predDaily, goFit, pts), 60)
+  } catch (e) {
+    $message.error('数据加载失败：' + e.message)
+  }
+}
+</script>
+<script>
+load()
+</script>
+</html>

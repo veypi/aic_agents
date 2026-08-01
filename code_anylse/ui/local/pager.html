@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="分页器：页码窗口 + 总数显示，向父组件 emit change" />
+  <title>Pager</title>
+</head>
+<style>
+  local-pager {
+    display: block
+  }
+</style>
+
+<body>
+  <div class="rv-pager">
+    <span class="rv-ptotal">共 {{ total }} 条</span>
+    <button :disabled="page <= 1" @click="goto(page - 1)">‹</button>
+    <template :key="'p' + n" v-for="n in pageList()">
+      <button :class="{ cur: n === page }" @click="goto(n)">{{ n }}</button>
+    </template>
+    <button :disabled="page >= pages()" @click="goto(page + 1)">›</button>
+  </div>
+</body>
+<script setup>
+  page = 1
+  size = 20
+  total = 0
+
+  pages = () => Math.max(1, Math.ceil((total || 0) / (size || 20)))
+
+  pageList = () => {
+    const p = pages(), cur = page || 1
+    let s = Math.max(1, cur - 2)
+    const e = Math.min(p, s + 4)
+    s = Math.max(1, e - 4)
+    const arr = []
+    for (let i = s; i <= e; i++) arr.push(i)
+    return arr
+  }
+
+  goto = (n) => {
+    if (n < 1 || n > pages() || n === page) return
+    $emit('update', n)
+  }
+</script>
+
+</html>

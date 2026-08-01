@@ -1,0 +1,79 @@
+{
+  "title": "软件资产",
+  "description": "在管软件资产台账：基础信息、可靠性基线指标与评估状态",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "软件名称",
+      "required": true
+    },
+    {
+      "name": "code",
+      "type": "string",
+      "title": "短码",
+      "description": "如 TQ / PS"
+    },
+    {
+      "name": "stype",
+      "type": "string",
+      "title": "软件类型"
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "title": "当前版本"
+    },
+    {
+      "name": "lam",
+      "type": "number",
+      "title": "失效率 λ (/kh)",
+      "description": "每千小时失效率"
+    },
+    {
+      "name": "mtbf",
+      "type": "int",
+      "title": "基准 MTBF (h)"
+    },
+    {
+      "name": "avail",
+      "type": "number",
+      "title": "可用度 A"
+    },
+    {
+      "name": "weight",
+      "type": "number",
+      "title": "业务权重",
+      "description": "用于加权平均可靠度计算"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "评估状态",
+      "enum": [
+        "通过",
+        "观察中",
+        "整改中"
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "string",
+      "title": "负责人"
+    },
+    {
+      "name": "brief",
+      "type": "text",
+      "title": "简介"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_sw_name",
+      "fields": [
+        "name"
+      ],
+      "unique": true
+    }
+  ]
+}

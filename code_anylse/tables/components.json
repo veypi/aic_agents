@@ -1,0 +1,51 @@
+{
+  "title": "软件组件",
+  "description": "软件需求模型中的组件（SWC），追踪矩阵的列",
+  "fields": [
+    {
+      "name": "comp_code",
+      "type": "string",
+      "title": "组件代码",
+      "description": "形如 SWC-NAV",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "组件名称",
+      "required": true
+    },
+    {
+      "name": "req_blocks",
+      "type": "int",
+      "title": "需求块数",
+      "default": 0
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "title": "职责描述"
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    },
+    {
+      "name": "repo_path",
+      "type": "string",
+      "title": "代码路径",
+      "description": "组件对应代码目录，如 src/nav"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "comp_code"
+      ],
+      "unique": true
+    }
+  ],
+  "max_records_per_user": 0
+}

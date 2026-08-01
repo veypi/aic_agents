@@ -1,0 +1,51 @@
+{
+  "title": "质量评估",
+  "description": "Agent 数据质量评估任务的评估结果（每次评估一行）；数据采集中心从本表读取最新评估",
+  "fields": [
+    {
+      "name": "integrity",
+      "type": "number",
+      "title": "完整性"
+    },
+    {
+      "name": "consistency",
+      "type": "number",
+      "title": "一致性"
+    },
+    {
+      "name": "timeliness",
+      "type": "number",
+      "title": "时效性"
+    },
+    {
+      "name": "accuracy",
+      "type": "number",
+      "title": "准确性"
+    },
+    {
+      "name": "uniqueness",
+      "type": "number",
+      "title": "唯一性"
+    },
+    {
+      "name": "compliance",
+      "type": "number",
+      "title": "合规性"
+    },
+    {
+      "name": "total",
+      "type": "number",
+      "title": "综合质量分"
+    },
+    {
+      "name": "blocked_n",
+      "type": "int",
+      "title": "异常样本拦截数"
+    },
+    {
+      "name": "detail",
+      "type": "text",
+      "title": "评估说明"
+    }
+  ]
+}

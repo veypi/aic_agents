@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 故障事件流" />
+<title>故障事件流 · ReliaScope</title>
+</head>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">资产与质量 · Incidents</div>
+        <h1>故障事件流</h1>
+      </div>
+      <div class="right"><button class="btn" @click="openNew()">＋ 新建工单</button></div>
+    </header>
+
+    <div class="g g23">
+      <div class="card">
+        <h3>故障事件时间线 <span class="tag live">72H</span></h3>
+        <div class="desc">近 72 小时严重故障分布（按 3 小时聚合）</div>
+        <div id="ch-incident" class="chart" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <h3>故障分级占比</h3>
+        <div class="desc">incidents 表实时统计</div>
+        <div id="ch-sev" class="chart" style="height:280px"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:15px">
+      <h3>故障工单 <span class="tag">{{ filtered().length }} 单</span></h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="chip" :class="{on: fl === '全部'}" @click="fl = '全部'">全部级别</span>
+        <span class="chip" v-for="l in ['P1','P2','P3','P4']" :key="l" :class="{on: fl === l}" @click="fl = l">{{ l }}</span>
+        <span style="width:12px"></span>
+        <span class="chip" :class="{on: fs === '全部'}" @click="fs = '全部'">全部状态</span>
+        <span class="chip" v-for="s in ['已闭环','处理中','定位中','监控中']" :key="s" :class="{on: fs === s}" @click="fs = s">{{ s }}</span>
+      </div>
+      <table>
+        <thead><tr><th>工单号</th><th>软件</th><th>现象</th><th>级别</th><th>状态</th><th>MTTR(h)</th><th>根因分类</th><th>责任人</th></tr></thead>
+        <tbody>
+          <tr v-for="r in filtered()" :key="r.id" style="cursor:pointer" @click="goTarget(r.software_id)">
+            <td class="mono">{{ r.code }}</td>
+            <td><b>{{ swName(r.software_id) }}</b></td>
+            <td style="max-width:280px">{{ r.symptom }}</td>
+            <td><span class="pill" :class="lvlClass(r.level)">{{ r.level }}</span></td>
+            <td><span class="pill" :class="stClass(r.status)">{{ r.status }}</span></td>
+            <td class="mono">{{ r.mttr != null ? r.mttr : '—' }}</td>
+            <td>
+              <span v-if="r.root_cause">{{ r.root_cause }}</span>
+              <span v-else style="color:var(--color-primary);cursor:pointer;font-size:11.5px;white-space:nowrap" @click.stop="analyze(r)">{{ analyzing === r.id ? '分析中…' : 'AI 根因' }}</span>
+            </td>
+            <td>{{ r.owner }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="mask" v-if="showNew" @click="showNew = false">
+      <div class="modal" @click.stop="noop()">
+        <h3>新建故障工单</h3>
+        <div class="fld"><label>关联软件</label>
+          <select class="fin" v:value="nf.sid"><option v-for="s in softs" :key="s.id" :value="s.id">{{ s.name }}</option></select></div>
+        <div class="fld"><label>级别</label>
+          <select class="fin" v:value="nf.level"><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></div>
+        <div class="fld"><label>现象描述</label><input class="fin" v:value="nf.symptom" placeholder="如：交易超时率突增至 8%"></div>
+        <div class="fld"><label>责任人</label><input class="fin" v:value="nf.owner" placeholder="姓名"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" @click="showNew = false">取消</button>
+          <button class="btn" @click="saveNew()">写入 incidents 表</button>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">点击工单行可跳转对应软件的单目标验证 · P1 故障触发一票否决判据</div>
+</app-menu>
+</body>
+<script setup>
+incs = []
+swm = {}
+softs = []
+fl = '全部'
+fs = '全部'
+showNew = false
+analyzing = ''
+nf = { sid: '', level: 'P3', symptom: '', owner: '' }
+noop = () => {}
+
+const charts = {}
+const mk = (id, opt) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  if (charts[id]) charts[id].dispose()
+  const c = echarts.init(el)
+  c.setOption(opt)
+  charts[id] = c
+}
+const AX = { axisLine: { lineStyle: { color: '#d3dae6' } }, axisLabel: { color: '#6b7280', fontSize: 11 }, splitLine: { lineStyle: { color: '#eaeff7' } } }
+const TIP = { trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: { color: '#e2e8f0', fontSize: 12 } }
+const GRID = { left: 40, right: 20, top: 38, bottom: 30 }
+const rnd = (a, b) => a + Math.random() * (b - a)
+
+filtered = () => incs.filter(r => (fl === '全部' || r.level === fl) && (fs === '全部' || r.status === fs))
+swName = (id) => swm[id] || id
+lvlClass = (l) => l === 'P1' ? 'p-red' : l === 'P2' ? 'p-red' : l === 'P3' ? 'p-yellow' : 'p-blue'
+stClass = (s) => s === '已闭环' ? 'p-green' : s === '监控中' ? 'p-cyan' : 'p-yellow'
+goTarget = (id) => {
+  const to = '/i/target?software_id=' + id
+  $router.push(to)
+}
+/* ---------- Agent 任务执行器 ---------- */
+const runTask = async (payload) => {
+  const r = await $fetch('/api/tasks', { method: 'POST', body: payload })
+  const id = r.task && r.task.id
+  if (!id) throw new Error('任务创建失败')
+  const t0 = Date.now()
+  while (Date.now() - t0 < 240000) {
+    await new Promise(r2 => setTimeout(r2, 3000))
+    const t = await $fetch('/api/tasks/' + id)
+    if (t.status === 'completed') return t
+    if (t.status === 'failed' || t.status === 'canceled') throw new Error(t.error || '任务执行失败')
+  }
+  throw new Error('任务执行超时，可稍后在任务中心查看结果')
+}
+openNew = () => {
+  nf = { sid: (softs[0] || {}).id || '', level: 'P3', symptom: '', owner: '' }
+  showNew = true
+}
+saveNew = async () => {
+  if (!nf.symptom) { $message.error('请填写现象描述'); return }
+  const code = 'F-' + String(Math.floor(10000 + Math.random() * 89999))
+  try {
+    await $fetch('/tables/incidents', { method: 'POST', body: { data: {
+      code, software_id: nf.sid, level: nf.level, symptom: nf.symptom,
+      status: '处理中', owner: nf.owner || '未分配' } } })
+    showNew = false
+    $message.success('工单 ' + code + ' 已创建')
+    await load()
+  } catch (e) { $message.error('创建失败：' + e.message) }
+}
+analyze = async (r) => {
+  if (analyzing) return
+  analyzing = r.id
+  try {
+    await runTask({
+      title: '工单根因分析 · ' + r.code,
+      goal: '分析故障工单 ' + r.code + '（' + swName(r.software_id) + ' · ' + r.level + '），现象：' + (r.symptom || '无描述') + '。结合该软件 failures 表近期故障样本，归纳根因分类 root_cause（短语，如“连接池泄漏”）与处置建议 suggestion（2-4 句可执行整改与回归验证建议），写回 incidents 表该工单。',
+      steps: '1. table.get incidents/' + r.id + ' → 2. table.list failures（过滤该 software_id，取近期样本） → 3. 归纳根因与建议 → 4. table.update 写回 root_cause 与 suggestion → 5. 返回一句话结论',
+      constraints: '只更新该工单的 root_cause / suggestion 两个字段；不修改其他任何字段与其他行',
+      schedule_type: 'once'
+    })
+    await load()
+    $message.success('根因分析完成')
+  } catch (e) { $message.error('分析任务：' + e.message) }
+  analyzing = ''
+}
+
+const draw = () => {
+  const cnt = { P1: 0, P2: 0, P3: 0, P4: 0 }
+  incs.forEach(r => { cnt[r.level] = (cnt[r.level] || 0) + 1 })
+  /* 近 72h 按 3h 真实分桶 */
+  const now = Date.now()
+  const edges = Array.from({ length: 24 }, (_, i) => now - (23 - i) * 3 * 3600e3)
+  const lbl = edges.map(t => { const d = new Date(t); return String(d.getDate()).padStart(2, '0') + '日' + String(d.getHours()).padStart(2, '0') + '时' })
+  const inBucket = (r, i) => { const t = new Date(r.created_at).getTime(); return t >= edges[i] && t < edges[i] + 3 * 3600e3 }
+  const dataOf = (L) => edges.map((_, i) => incs.filter(r => r.level === L && inBucket(r, i)).length)
+  mk('ch-incident', { tooltip: TIP, animationDuration: 900,
+    legend: { textStyle: { color: '#6b7280' }, top: 0 }, grid: GRID,
+    xAxis: { type: 'category', data: lbl, ...AX, axisLabel: { ...AX.axisLabel, interval: 3 } }, yAxis: { type: 'value', ...AX, minInterval: 1 },
+    series: [
+      { name: 'P1 致命', type: 'bar', stack: 's', barWidth: 12, itemStyle: { color: '#dc2626', borderRadius: [3, 3, 0, 0] }, data: dataOf('P1') },
+      { name: 'P2 严重', type: 'bar', stack: 's', itemStyle: { color: '#ea580c' }, data: dataOf('P2') },
+      { name: 'P3 一般', type: 'bar', stack: 's', itemStyle: { color: '#d97706' }, data: dataOf('P3') }
+    ] })
+  mk('ch-sev', { tooltip: { trigger: 'item' },
+    series: [{ type: 'pie', radius: ['45%', '75%'], padAngle: 2,
+      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 }, label: { color: '#6b7280', fontSize: 11 },
+      data: [
+        { value: cnt.P1 || 0, name: 'P1 致命', itemStyle: { color: '#dc2626' } },
+        { value: cnt.P2 || 0, name: 'P2 严重', itemStyle: { color: '#ea580c' } },
+        { value: cnt.P3 || 0, name: 'P3 一般', itemStyle: { color: '#d97706' } },
+        { value: cnt.P4 || 0, name: 'P4 轻微', itemStyle: { color: '#4361ee' } }
+      ].filter(d => d.value > 0) }] })
+}
+
+window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize && c.resize()))
+
+load = async () => {
+  try {
+    const [inc, sw] = await Promise.all([
+      $fetch('/tables/incidents', { params: { size: 200 } }),
+      $fetch('/tables/softwares', { params: { size: 200 } })
+    ])
+    incs = inc.items || []
+    softs = sw.items || []
+    softs.forEach(s => { swm[s.id] = s.name })
+    setTimeout(draw, 60)
+  } catch (e) {
+    $message.error('数据加载失败：' + e.message)
+  }
+}
+</script>
+<script>
+load()
+</script>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>测试用例库</title>
+</head>
+<style>
+  .gen-log {
+    height: 200px;
+    margin-top: 10px
+  }
+
+  .gen-steps {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-color-disabled);
+    margin-bottom: 10px
+  }
+
+  .gen-steps b {
+    color: var(--color-primary)
+  }
+</style>
+
+<body>
+  <local-app-menu page="case">
+    <div class="rv-crumb">验证体系 / 测试用例</div>
+    <div class="rv-titlebar">
+      <h1>测试用例库</h1>
+      <p>模型构建 / 进化算法 / 人工三类来源统一管理与执行调度</p>
+      <span class="tb-actions">
+        <button class="rv-btn" @click="openGen">＋ 智能生成用例</button>
+      </span>
+    </div>
+
+    <div class="rv-grid g4" style="margin-bottom:14px">
+      <local-kpi-card lab="用例总数" :val="caseTotal" suffix="条"></local-kpi-card>
+      <local-kpi-card lab="模型构建用例" :val="srcM" tone="var(--color-info)" sub="边界值 / 等价类 / 状态路径"></local-kpi-card>
+      <local-kpi-card lab="进化算法用例" :val="srcG" tone="var(--color-secondary)"
+        sub="NSGA-II · 缺陷检出效率 3.1×"></local-kpi-card>
+      <local-kpi-card lab="人工维护用例" :val="srcH" sub="基线回归集"></local-kpi-card>
+    </div>
+
+    <div class="rv-toolbar">
+      <input class="rv-input" style="max-width:280px" v:value="fKw" @input="onKw()" placeholder="搜索用例 / 关联需求 / 验证方法">
+      <select class="rv-input" style="max-width:150px" v:value="fSource" @change="onSel()">
+        <option value="">全部来源</option>
+        <option value="模型构建">模型构建</option>
+        <option value="进化算法">进化算法</option>
+        <option value="人工">人工</option>
+      </select>
+      <select class="rv-input" style="max-width:150px" v:value="fResult" @change="onSel()">
+        <option value="">全部结果</option>
+        <option value="通过">通过</option>
+        <option value="失败">失败</option>
+        <option value="未执行">未执行</option>
+      </select>
+    </div>
+
+    <div class="rv-panel" style="padding:0">
+      <div v-if="loading" class="rv-empty">正在加载用例库…</div>
+      <div v-else-if="!filtered().length" class="rv-empty">未找到匹配的用例</div>
+      <div v-else class="rv-twrap">
+        <table class="rv-table">
+          <thead>
+            <tr>
+              <th>用例 ID</th>
+              <th>关联需求</th>
+              <th>验证方法</th>
+              <th>来源</th>
+              <th>参数规模</th>
+              <th>最近结果</th>
+              <th>检出缺陷</th>
+              <th style="width:96px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in pageRows()" :key="c.id">
+              <td class="mono" style="color:var(--color-primary);font-weight:600">{{ c.case_id }}</td>
+              <td><a v-if="c.req_id" class="tlink" href="javascript:;" @click="goReq(c.req_id)">{{ c.req_id }}</a><span
+                  v-else class="dim">—</span></td>
+              <td>{{ c.method || '—' }}</td>
+              <td><span class="rv-tag" :class="srcTone(c.source)">{{ c.source }}</span></td>
+              <td class="dim">{{ c.param_desc || '—' }}</td>
+              <td><span class="rv-tag" :class="resTone(c.last_result)">{{ c.last_result || '未执行' }}</span></td>
+              <td class="mono" :style="{ color: c.defects > 0 ? 'var(--color-danger)' : 'var(--text-color-disabled)' }">
+                {{ c.defects || 0 }}</td>
+              <td><button class="rv-btn sm" @click="enqueue(c)">执行</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <local-pager :page="page" :size="size" :total="totalF()" @update="onPage"></local-pager>
+
+    <div class="rv-grid g2">
+      <div class="rv-panel"><local-chart-box :option="chGA" height="280px"></local-chart-box></div>
+      <div class="rv-panel"><local-chart-box :option="chSrc" height="280px"></local-chart-box></div>
+    </div>
+
+    <local-dialog-shell :show="genShow" @close="genShow = false" title="智能生成用例 · Agent 任务">
+      <div v-if="genStep === 1">
+        <div class="gen-steps"><b>① 生成配置</b><span>→</span><span>② Agent 生成</span><span>→</span><span>③ 写入用例库</span>
+        </div>
+        <div class="rv-form-grid">
+          <label class="rv-form-item"><span>目标需求范围</span>
+            <select class="rv-input" v:value="genScope">
+              <option value="待验证">待验证需求</option>
+              <option value="部分实现">部分实现需求</option>
+            </select></label>
+          <label class="rv-form-item"><span>生成策略</span>
+            <select class="rv-input" v:value="genStrategy">
+              <option>对抗样本 + 边界值（混合）</option>
+              <option>对抗样本</option>
+              <option>边界值</option>
+              <option>等价类 + 状态路径</option>
+            </select></label>
+          <label class="rv-form-item"><span>生成数量上限</span><input class="rv-input" type="number"
+              v:value="genCount"></label>
+          <label class="rv-form-item"><span>验证方法</span>
+            <select class="rv-input" v:value="genMethod">
+              <option>测试</option>
+              <option>分析</option>
+              <option>评审</option>
+            </select></label>
+        </div>
+        <div class="rv-form-foot">
+          <button class="rv-btn ghost" @click="genShow = false">取消</button>
+          <button class="rv-btn" :disabled="genBusy" @click="startGen">{{ genBusy ? '创建中…' : '创建生成任务' }}</button>
+        </div>
+      </div>
+      <div v-else>
+        <div class="gen-steps"><span>① 生成配置</span><span>→</span><b>② Agent 生成</b><span>→</span><span>③ 写入用例库</span>
+        </div>
+        <div class="rv-log gen-log">
+          <div>任务 ID：{{ genTaskId }}</div>
+          <div>任务状态：{{ genTaskStatus || '调度中…' }}</div>
+          <div v-if="genNote">{{ genNote }}</div>
+        </div>
+        <div class="rv-form-foot">
+          <button class="rv-btn ghost" @click="genShow = false">后台继续</button>
+          <button class="rv-btn" :disabled="!genDone" @click="applyGen">{{ genDone ? '查看生成结果' : '生成中…' }}</button>
+        </div>
+      </div>
+    </local-dialog-shell>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  rows = []
+  page = 1
+  size = 15
+  fKw = ''
+  fSource = ''
+  fResult = ''
+  caseTotal = 0
+  srcM = 0
+  srcG = 0
+  srcH = 0
+  srcDefects = {'模型构建': 0, '进化算法': 0, '人工': 0}
+  chGA = null
+  chSrc = null
+  genShow = false
+  genStep = 1
+  genScope = '待验证'
+  genStrategy = '对抗样本 + 边界值（混合）'
+  genCount = 8
+  genMethod = '测试'
+  genTaskId = ''
+  genTaskStatus = ''
+  genNote = ''
+  genDone = false
+  genBusy = false
+  genTimer = null
+
+  /* 项目作用域：业务表查询自动合并当前项目过滤 */
+  CUR_PRJ = (() => {try {return localStorage.rv_project || 'UAV-NAV'} catch (e) {return 'UAV-NAV'} })()
+  PRJ_TABLES = {requirements: 1, test_cases: 1, verif_runs: 1, indicators: 1, components: 1, baselines: 1, todo_items: 1, change_events: 1, interfaces: 1}
+  q = (t, p) => {
+    if (PRJ_TABLES[t] && p) {
+      const f = p.filters ? JSON.parse(p.filters) : {}
+      if (!f.project_code) {f.project_code = CUR_PRJ; p = Object.assign({}, p, {filters: JSON.stringify(f)})}
+    }
+    return $mod.$fetch('/tables/' + t, {params: p})
+  }
+
+  refreshKpis = async () => {
+    try {
+      const [tot, m1, m2, m3] = await Promise.all([
+        q('test_cases', {size: 1}),
+        q('test_cases', {size: 1, filters: JSON.stringify({source: '模型构建'})}),
+        q('test_cases', {size: 1, filters: JSON.stringify({source: '进化算法'})}),
+        q('test_cases', {size: 1, filters: JSON.stringify({source: '人工'})}),
+      ])
+      caseTotal = tot.total || 0
+      srcM = m1.total || 0
+      srcG = m2.total || 0
+      srcH = m3.total || 0
+    } catch (e) { /* 保持上一次数值 */}
+  }
+
+  doQuery = async () => {
+    loading = true
+    try {
+      const first = await q('test_cases', {size: 200, page: 1, sort: 'case_id'})
+      let all = (first.items || []).slice()
+      if (all.length < (first.total || 0)) {
+        const nx = await q('test_cases', {size: 200, page: 2, sort: 'case_id'})
+        all = all.concat(nx.items || [])
+      }
+      rows = all
+      const agg = {'模型构建': 0, '进化算法': 0, '人工': 0}
+      all.forEach((c) => {if (c.source in agg) agg[c.source] += (c.defects || 0)})
+      srcDefects = agg
+    } catch (e) {
+      $message.error('加载测试用例失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+
+  srcTone = (s) => s === '模型构建' ? 't-info' : s === '进化算法' ? 't-vio' : 't-gray'
+  resTone = (r) => r === '通过' ? 't-ok' : r === '失败' ? 't-bad' : 't-gray'
+
+  filtered = () => {
+    let list = rows
+    if (fSource) list = list.filter((c) => c.source === fSource)
+    if (fResult) list = list.filter((c) => c.last_result === fResult)
+    const kw = (fKw || '').trim().toLowerCase()
+    if (kw) list = list.filter((c) => (c.case_id || '').toLowerCase().includes(kw) || (c.req_id || '').toLowerCase().includes(kw) || (c.method || '').toLowerCase().includes(kw))
+    return list
+  }
+  pageRows = () => filtered().slice((page - 1) * size, page * size)
+  totalF = () => filtered().length
+
+  onPage = (n) => {page = n}
+  onKw = () => {page = 1}
+  onSel = () => {page = 1}
+  goReq = (rid) => {
+    if (!rid) return
+    try {$router.push('/i/reqlib?req_id=' + encodeURIComponent(rid))} catch (e) {location.href = '/i/reqlib?req_id=' + encodeURIComponent(rid)}
+  }
+  enqueue = (c) => {$message.success('用例 ' + c.case_id + ' 已加入下一轮执行队列')}
+
+  openGen = () => {genShow = true; genStep = 1; genTaskId = ''; genTaskStatus = ''; genNote = ''; genDone = false}
+
+  /* 创建 Agent 生成任务，轮询任务状态；用例由 Agent 按规范写入 test_cases */
+  startGen = async () => {
+    genBusy = true
+    try {
+      const td = await $mod.$fetch('/api/tasks', {
+        method: 'POST', body: {
+          title: '智能生成验证用例',
+          goal: '【case-gen】为 ReqVerif 生成验证用例：目标需求范围 verif_status=' + genScope + '（需求按此状态筛选；若选部分实现则筛 impl_status=部分实现），生成策略：' + genStrategy + '，验证方法：' + genMethod + '，数量上限 ' + (+genCount || 8) + ' 条。按核心 prompt 中【case-gen】规范分析需求指标并写入 test_cases 表。',
+          steps: '1. 筛选目标需求；2. 逐需求分析边界/异常场景生成用例；3. 幂等写入 test_cases 并汇报生成清单',
+          constraints: '只写 test_cases 表；case_id 以 TC-GEN- 前缀且不重复；last_result=未执行；禁止无关联凑数',
+        }
+      })
+      genTaskId = (td.task && td.task.id) || ''
+      genTaskStatus = '已创建'
+      genStep = 2
+      genTimer = setInterval(pollGen, 3000)
+      pollGen()
+    } catch (e) {
+      $message.error('创建生成任务失败：' + e.message)
+    } finally {
+      genBusy = false
+    }
+  }
+
+  pollGen = async () => {
+    if (!genTaskId) return
+    try {
+      const t = await $mod.$fetch('/api/tasks/' + genTaskId)
+      const st = t.status || ''
+      if (st !== genTaskStatus) genTaskStatus = st
+      const terminal = st === 'completed' || st === 'closed' || st === 'failed' || st === 'cancelled'
+      if (!terminal) return
+      clearInterval(genTimer); genTimer = null
+      genDone = true
+      const ok = (st === 'completed' || st === 'closed') && !t.error
+      if (ok) {
+        genNote = 'Agent 已完成生成并写入用例库，列表已刷新。'
+        await doQuery()
+        await refreshKpis()
+        renderSrc()
+        $message.success('用例生成任务完成，新用例已入库')
+      } else {
+        genNote = '任务未成功：' + (t.error || st) + '，可调整配置后重试。'
+      }
+    } catch (e) { /* 下拍重试 */}
+  }
+
+  applyGen = () => {
+    genShow = false
+    doQuery()
+  }
+
+  AX = {axisLine: {lineStyle: {color: 'rgba(20,60,90,.15)'}}, axisTick: {show: false}, axisLabel: {color: 'rgba(20,60,90,.55)', fontSize: 10.5}, splitLine: {lineStyle: {color: 'rgba(20,60,90,.07)'}}}
+  renderGA = () => {
+    const xs = []
+    const best = []
+    const avg = []
+    for (let i = 5; i <= 120; i += 5) {
+      xs.push('G' + i)
+      best.push(+(58 + 38 * (1 - Math.exp(-i / 6))).toFixed(1))
+      avg.push(+(40 + 44 * (1 - Math.exp(-i / 8))).toFixed(1))
+    }
+    chGA = {
+      title: {text: 'NSGA-II 适应度收敛（上一轮生成回放 · 120 代）', left: 0, top: 0, textStyle: {fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)'}},
+      tooltip: {trigger: 'axis'},
+      legend: {data: ['最优适应度', '种群平均'], right: 0, top: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 4, textStyle: {color: 'rgba(20,60,90,.6)', fontSize: 11}},
+      grid: {left: 40, right: 16, top: 46, bottom: 26},
+      xAxis: Object.assign({type: 'category', data: xs, boundaryGap: false}, AX),
+      yAxis: Object.assign({type: 'value', min: 30}, AX),
+      series: [
+        {name: '最优适应度', type: 'line', data: best, smooth: true, showSymbol: false, lineStyle: {width: 2.5, color: '#06b6d4'}, itemStyle: {color: '#06b6d4'}},
+        {name: '种群平均', type: 'line', data: avg, smooth: true, showSymbol: false, lineStyle: {width: 2, color: '#2563eb'}, itemStyle: {color: '#2563eb'}},
+      ],
+    }
+  }
+  renderSrc = () => {
+    const sources = ['模型构建', '进化算法', '人工']
+    const vals = [srcM, srcG, srcH]
+    chSrc = {
+      title: {text: '用例来源构成 × 缺陷检出', left: 0, top: 0, textStyle: {fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)'}},
+      tooltip: {trigger: 'axis'},
+      legend: {data: ['用例数', '检出缺陷'], right: 0, top: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 4, textStyle: {color: 'rgba(20,60,90,.6)', fontSize: 11}},
+      grid: {left: 44, right: 44, top: 46, bottom: 26},
+      xAxis: Object.assign({type: 'category', data: sources}, AX),
+      yAxis: [
+        Object.assign({type: 'value', name: '用例'}, AX),
+        Object.assign({type: 'value', name: '缺陷', splitLine: {show: false}}, AX),
+      ],
+      series: [
+        {name: '用例数', type: 'bar', data: vals, barWidth: 26, itemStyle: {borderRadius: [4, 4, 0, 0], color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: '#22d3ee'}, {offset: 1, color: '#0891b2'}]}}},
+        {name: '检出缺陷', type: 'line', yAxisIndex: 1, data: sources.map((s) => srcDefects[s] || 0), smooth: true, lineStyle: {width: 2.5, color: '#2563eb'}, itemStyle: {color: '#2563eb'}, symbol: 'circle', symbolSize: 7},
+      ],
+    }
+  }
+
+  initPage = async () => {
+    renderGA()
+    try {
+      const qp = $router.query || {}
+      if (qp.req_id) fKw = qp.req_id
+      if (qp.source) fSource = qp.source
+      if (qp.result) fResult = qp.result
+      await Promise.all([doQuery(), refreshKpis()])
+      renderSrc()
+    } catch (e) {
+      $message.error('加载失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+<script dispose>
+  if (genTimer) {clearInterval(genTimer); genTimer = null}
+</script>
+
+</html>

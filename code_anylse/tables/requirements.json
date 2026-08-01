@@ -1,0 +1,126 @@
+{
+  "title": "需求库",
+  "description": "系统需求条目，由需求规格说明书 Agent 智能解析 + 人工校对",
+  "fields": [
+    {
+      "name": "req_id",
+      "type": "string",
+      "title": "需求ID",
+      "description": "形如 SR-NAV-104",
+      "required": true
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "title": "需求描述",
+      "required": true
+    },
+    {
+      "name": "domain",
+      "type": "string",
+      "title": "所属域",
+      "required": true
+    },
+    {
+      "name": "level",
+      "type": "string",
+      "title": "层级",
+      "default": "\"系统级\""
+    },
+    {
+      "name": "priority",
+      "type": "string",
+      "title": "优先级",
+      "default": "\"中\""
+    },
+    {
+      "name": "impl_status",
+      "type": "string",
+      "title": "实现状态",
+      "required": true
+    },
+    {
+      "name": "verif_status",
+      "type": "string",
+      "title": "验证状态",
+      "required": true
+    },
+    {
+      "name": "impl_components",
+      "type": "string",
+      "title": "实现组件",
+      "description": "逗号分隔的组件代码，未覆盖时为空"
+    },
+    {
+      "name": "ocl",
+      "type": "text",
+      "title": "OCL 形式化约束"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "title": "文档出处",
+      "description": "如《系统需求规格说明书 V3.3》§4.2"
+    },
+    {
+      "name": "confidence",
+      "type": "number",
+      "title": "解析置信度",
+      "description": "0-100"
+    },
+    {
+      "name": "deprecated",
+      "type": "bool",
+      "title": "已废弃",
+      "default": false
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    },
+    {
+      "name": "src_file",
+      "type": "string",
+      "title": "来源文件",
+      "description": "来源文档路径（仓库内）"
+    },
+    {
+      "name": "src_anchor",
+      "type": "string",
+      "title": "文档锚点",
+      "description": "文档内锚点（标题）"
+    },
+    {
+      "name": "src_commit",
+      "type": "string",
+      "title": "来源commit",
+      "description": "解析时的 commit"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "req_id"
+      ],
+      "unique": true
+    },
+    {
+      "fields": [
+        "domain"
+      ]
+    },
+    {
+      "fields": [
+        "impl_status"
+      ]
+    },
+    {
+      "fields": [
+        "verif_status"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

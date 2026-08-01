@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="ReliaScope 可靠性驾驶舱" />
+  <title>可靠性驾驶舱 · ReliaScope</title>
+</head>
+<style>
+  .gauge-wrap {
+    position: relative
+  }
+
+  .feed-empty {
+    padding: 36px 0;
+    text-align: center;
+    color: var(--text-color-disabled);
+    font-size: 12px;
+    line-height: 2
+  }
+</style>
+
+<body>
+  <app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">可靠性工作台 · Overview</div>
+        <h1>可靠性驾驶舱</h1>
+      </div>
+      <div class="right">
+        <button class="btn ghost" @click="refresh()">刷新数据</button>
+        <button class="btn" @click="goTarget('')">＋ 新建验证任务</button>
+      </div>
+    </header>
+
+    <div class="g g4">
+      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+        <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
+        <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
+        </div>
+        <div class="tr" :class="k.up ? 'up' : 'down'">{{ k.up ? '▲' : '▼' }} {{ k.tr }} <em>{{ k.hint }}</em></div>
+        <div class="spark" :id="'sp' + i"></div>
+      </div>
+    </div>
+
+    <div class="srow">
+      <h2>全局可靠性态势</h2>
+      <div class="ln"></div>
+      <div class="filter">
+        <span class="chip on" @click="setRange($event)">近30天</span>
+        <span class="chip" @click="setRange($event)">近90天</span>
+        <span class="chip" @click="setRange($event)">近一年</span>
+      </div>
+    </div>
+    <div class="g g23">
+      <div class="card">
+        <h3>系统群故障密度与修复趋势 <span class="tag live">LIVE</span></h3>
+        <div class="desc">每日新发现（failures 入库）与闭环（incidents 闭环）数量</div>
+        <div id="ch-trend" class="chart" style="height:300px"></div>
+      </div>
+      <div class="card">
+        <h3>软件类型可靠度分布</h3>
+        <div class="desc">按软件门类统计平均可靠度 R(t) · 源自资产库失效率实时换算</div>
+        <div id="ch-type" class="chart" style="height:300px"></div>
+      </div>
+    </div>
+
+    <div class="g g3" style="margin-top:15px">
+      <div class="card">
+        <h3>验证任务健康度</h3>
+        <div id="ch-gauge" class="chart" style="height:228px"></div>
+      </div>
+      <div class="card">
+        <h3>高可靠软件 TOP5</h3>
+        <div class="desc">按当前 R(720h) 排序 · 点击进入单目标验证</div>
+        <div>
+          <div class="sitem" v-for="(s, i) in top5" :key="s.id" @click="goTarget(s.id)">
+            <svg class="ring" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="#e8edf5" stroke-width="4" />
+              <circle cx="20" cy="20" r="16" fill="none" :stroke="ringColor(i)" stroke-width="4"
+                :stroke-dasharray="ringDash(s.r)" stroke-linecap="round" transform="rotate(-90 20 20)" />
+            </svg>
+            <div>
+              <div class="nm">{{ s.name }}</div>
+              <div class="tp">{{ s.stype }} · {{ s.version }}</div>
+            </div>
+            <div class="rt">
+              <div class="rv" :style="{color: ringColor(i)}">{{ pct(s.r) }}</div>
+              <div class="tp">R(720h)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>实时事件流 <span class="tag live">STREAM</span></h3>
+        <div class="feed" id="liveFeed"></div>
+      </div>
+    </div>
+
+    <div class="footer-note">ReliaScope v3.2 · 软件可靠性验证平台 · 指标由 AgentDB 原始故障样本实时计算</div>
+  </app-menu>
+</body>
+<script setup>
+  kpis = []
+  top5 = []
+  timer = 0
+
+  const PAL = ['#059669', '#0891b2', '#4361ee', '#7c3aed', '#d97706', '#db2777', '#ea580c', '#0d9488']
+  const charts = {}
+  const mk = (id, opt) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (charts[id]) charts[id].dispose()
+    const c = echarts.init(el)
+    c.setOption(opt)
+    charts[id] = c
+  }
+  const AX = {axisLine: {lineStyle: {color: '#d3dae6'}}, axisLabel: {color: '#6b7280', fontSize: 11}, splitLine: {lineStyle: {color: '#eaeff7'}}}
+  const TIP = {trigger: 'axis', backgroundColor: '#0f172a', borderColor: '#1e293b', textStyle: {color: '#e2e8f0', fontSize: 12}}
+  const GRID = {left: 46, right: 22, top: 38, bottom: 30}
+  const R720 = (lam) => Math.exp(-Number(lam || 0) * 0.72)
+
+  ringColor = (i) => PAL[i % PAL.length]
+  ringDash = (r) => (r * 100.5).toFixed(1) + ' 100.5'
+  pct = (r) => (r * 100).toFixed(2) + '%'
+  goTarget = (id) => {
+    $router.push('/i/target' + (id ? '?software_id=' + id : ''))
+  }
+  setRange = (ev) => {
+    document.querySelectorAll('.srow .chip').forEach(c => c.classList.remove('on'))
+    ev.target.classList.add('on')
+    drawTrend(ev.target.textContent)
+  }
+  refresh = () => {load(); loadEvents(); $message.success('数据已刷新')}
+
+  const countUp = (id, target, dec) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    const t0 = performance.now(), dur = 900
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const v = target * (1 - Math.pow(1 - p, 3))
+      el.textContent = dec > 0 ? v.toFixed(dec) : Math.round(v).toLocaleString()
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+  const spark = (id, color, data) => {
+    const d = data && data.length > 1 ? data : [0, 0]
+    mk(id, {
+      grid: {left: 0, right: 0, top: 4, bottom: 0}, animationDuration: 1200,
+      xAxis: {type: 'category', show: false, data: d.map((_, i) => i)}, yAxis: {show: false, min: 'dataMin'},
+      series: [{type: 'line', data: d, smooth: true, showSymbol: false, lineStyle: {color, width: 1.5}, areaStyle: {color: color + '26'}}]
+    })
+  }
+
+  /* ---------- 真实日聚合 ---------- */
+  const dayKey = (t) => {
+    const d = new Date(t)
+    if (isNaN(d)) return ''
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  }
+  const lastDays = (n) => Array.from({length: n}, (_, i) => dayKey(Date.now() - (n - 1 - i) * 864e5))
+
+  let RAW = {softs: [], fails: [], incs: []}
+  let typeData = []
+  let gaugeVal = 0
+
+  const buildDaily = (n) => {
+    const days = lastDays(n)
+    const idx = {}
+    days.forEach((d, i) => {idx[d] = i})
+    const inj = days.map(() => 0), fix = days.map(() => 0)
+    RAW.fails.forEach(f => {const i = idx[dayKey(f.created_at)]; if (i != null) inj[i]++})
+    RAW.incs.filter(x => x.status === '已闭环').forEach(x => {const i = idx[dayKey(x.updated_at || x.created_at)]; if (i != null) fix[i]++})
+    const density = inj.map((v, i) => +(v * 0.6 + fix[i] * 0.5 + (v + fix[i] > 0 ? 10 : 0)).toFixed(1))
+    /* 逐日累计口径的衍生序列 */
+    const cumSw = days.map((_, i) => RAW.softs.filter(s => idx[dayKey(s.created_at)] != null && idx[dayKey(s.created_at)] <= i).length || RAW.softs.length)
+    const openInc = days.map((_, i) => {
+      let c = 0
+      RAW.incs.forEach(x => {
+        const ci = idx[dayKey(x.created_at)]
+        if (ci == null || ci > i) return
+        if (x.status !== '已闭环') c++
+        else {const fi = idx[dayKey(x.updated_at || x.created_at)]; if (fi != null && fi > i) c++}
+      })
+      return c
+    })
+    const cumMtbf = days.map((_, i) => {
+      let T = 0, nn = 0
+      RAW.fails.forEach(f => {const di = idx[dayKey(f.created_at)]; if (di != null && di <= i) {T += Number(f.delta_t || 0); if (f.counted) nn++} })
+      return nn > 0 ? Math.round(T / nn) : 0
+    })
+    const cumR = days.map((_, i) => {
+      const ss = RAW.softs.filter(s => {const di = idx[dayKey(s.created_at)]; return di == null || di <= i})
+      if (!ss.length) return 0
+      let w = 0, r = 0
+      ss.forEach(s => {const ww = Number(s.weight || 1); w += ww; r += R720(s.lam) * ww})
+      return +(r / w).toFixed(4)
+    })
+    return {days, inj, fix, density, cumSw, openInc, cumMtbf, cumR}
+  }
+
+  drawTrend = (range) => {
+    const n = range === '近90天' ? 90 : range === '近一年' ? 365 : 30
+    const d = buildDaily(n)
+    const step = n > 90 ? 30 : 4
+    mk('ch-trend', {
+      tooltip: TIP, animationDuration: 800,
+      legend: {textStyle: {color: '#6b7280'}, top: 0}, grid: GRID,
+      xAxis: {type: 'category', data: d.days.map(s => s.slice(5)), ...AX, axisLabel: {...AX.axisLabel, interval: step}},
+      yAxis: {type: 'value', ...AX, minInterval: 1},
+      series: [
+        {name: '新发现故障', type: 'bar', data: d.inj, barWidth: n > 90 ? 3 : 8, itemStyle: {color: 'rgba(220,38,38,.65)', borderRadius: [3, 3, 0, 0]}},
+        {name: '闭环故障', type: 'bar', data: d.fix, barWidth: n > 90 ? 3 : 8, itemStyle: {color: 'rgba(5,150,105,.65)', borderRadius: [3, 3, 0, 0]}},
+        {name: '故障密度指数', type: 'line', data: d.density, smooth: true, lineStyle: {color: '#0891b2', width: 2}, showSymbol: false, areaStyle: {color: 'rgba(8,145,178,.08)'}}
+      ]
+    })
+  }
+
+  const drawRest = () => {
+    mk('ch-type', {
+      tooltip: {trigger: 'item', backgroundColor: '#0f172a', textStyle: {color: '#e2e8f0'}},
+      legend: {bottom: 0, textStyle: {color: '#6b7280', fontSize: 11}, type: 'scroll'},
+      series: [{
+        type: 'pie', radius: ['40%', '68%'], center: ['50%', '44%'], padAngle: 2,
+        itemStyle: {borderRadius: 6, borderColor: '#fff', borderWidth: 2},
+        label: {color: '#6b7280', fontSize: 11, formatter: '{b}\n{d}%'},
+        data: typeData.map((dd, i) => ({...dd, itemStyle: {color: PAL[i % PAL.length]}}))
+      }]
+    })
+    mk('ch-gauge', {
+      series: [{
+        type: 'gauge', startAngle: 210, endAngle: -30, min: 0, max: 100, radius: '98%', center: ['50%', '62%'],
+        progress: {show: true, width: 15, itemStyle: {color: {type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{offset: 0, color: '#4361ee'}, {offset: 1, color: '#0891b2'}]}}},
+        axisLine: {lineStyle: {width: 15, color: [[1, 'rgba(67,97,238,.1)']]}},
+        axisTick: {show: false}, splitLine: {show: false}, axisLabel: {show: false}, pointer: {show: false}, anchor: {show: false},
+        title: {color: '#6b7280', fontSize: 12, offsetCenter: [0, '34%']},
+        detail: {valueAnimation: true, fontSize: 34, fontWeight: 800, color: '#101c3d', offsetCenter: [0, '-4%'], formatter: '{value}%', fontFamily: '"DIN Alternate","Bahnschrift",monospace'},
+        data: [{value: gaugeVal, name: '验证任务综合达成率'}]
+      }]
+    })
+    const d30 = buildDaily(20)
+    kpis.forEach((k, i) => spark('sp' + i, k.c, [d30.cumSw, d30.cumR, d30.cumMtbf, d30.openInc][i]))
+    kpis.forEach((k, i) => countUp('kv' + i, k.raw, k.dec))
+  }
+
+  /* ---------- 事件流（events 表驱动） ---------- */
+  const EICON = {
+    '探针上报': ['OK', '#059669'], '异常检测': ['AL', '#d97706'], '故障闭环': ['FX', '#dc2626'],
+    '模型重训': ['ML', '#7c3aed'], '混沌实验': ['CE', '#ea580c'], '数据接入': ['IN', '#0891b2'],
+    '指标达成': ['GO', '#059669'], '验证任务': ['TT', '#4361ee']
+  }
+  const fmtT = (t) => {
+    const d = new Date(t)
+    if (isNaN(d)) return ''
+    return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0')
+  }
+  loadEvents = async () => {
+    const el = document.getElementById('liveFeed')
+    if (!el) return
+    try {
+      const ev = await $fetch('/tables/events', {params: {size: 9, sort: '-ts'}})
+      const items = ev.items || []
+      if (!items.length) {
+        el.innerHTML = '<div class="feed-empty">暂无事件 · events 表为空<br>等待采集接口 / 后台任务写入后自动呈现</div>'
+        return
+      }
+      el.innerHTML = items.map(f => {
+        const ic = EICON[f.etype] || ['EV', '#4361ee']
+        const col = f.level === 'critical' ? '#dc2626' : f.level === 'warn' ? '#d97706' : ic[1]
+        return '<div class="feed-item"><div class="ic" style="background:' + col + '1a;color:' + col + '">' + ic[0] + '</div>' +
+          '<div class="tx"><div><b style="color:' + col + '">' + (f.etype || '事件') + '</b> · ' + (f.summary || '') + '</div>' +
+          '<div class="tm">' + fmtT(f.ts) + (f.channel ? ' · ' + f.channel : '') + '</div></div></div>'
+      }).join('')
+    } catch (e) { /* 静默，保持当前内容 */}
+  }
+
+  window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize && c.resize()))
+
+  load = async () => {
+    try {
+      const [sw, fl, inc, rp] = await Promise.all([
+        $fetch('/tables/softwares', {params: {size: 200}}),
+        $fetch('/tables/failures', {params: {size: 200}}),
+        $fetch('/tables/incidents', {params: {size: 200}}),
+        $fetch('/tables/reports', {params: {size: 200}})
+      ])
+      const softs = sw.items || [], fails = fl.items || [], incs = inc.items || [], reps = rp.items || []
+      RAW = {softs, fails, incs}
+      const stat = {}
+      fails.forEach(f => {
+        const o = stat[f.software_id] || (stat[f.software_id] = {n: 0, T: 0})
+        o.n++; o.T += Number(f.delta_t || 0)
+      })
+      let wsum = 0, wr = 0, hn = 0, hd = 0
+      softs.forEach(s => {
+        const w = Number(s.weight || 1)
+        wsum += w
+        wr += R720(s.lam) * w
+        const o = stat[s.id]
+        if (o && o.n) {hn += o.n; hd += o.n * o.n / o.T}
+      })
+      const open = incs.filter(x => x.status !== '已闭环').length
+      gaugeVal = Math.round(reps.reduce((a, b) => a + Number(b.progress || 0), 0) / Math.max(1, reps.length) * 10) / 10
+      const avgR = wr / Math.max(0.001, wsum)
+      const hm = hn / Math.max(0.001, hd)
+      const new30 = softs.filter(s => Date.now() - new Date(s.created_at).getTime() < 30 * 864e5).length
+      kpis = [
+        {lb: '在管软件系统', v: String(softs.length), un: '个', tr: '+' + new30 + ' 个新增', hint: '近30天', up: true, c: '#4361ee', raw: softs.length, dec: 0},
+        {lb: '加权平均可靠度', v: avgR.toFixed(4), un: 'R(720h)', tr: 'Σ(Rᵢ·wᵢ)/Σwᵢ', hint: '业务权重口径', up: avgR >= 0.9, c: '#059669', raw: avgR, dec: 4},
+        {lb: '全网 MTBF', v: Math.round(hm).toLocaleString(), un: 'h', tr: 'Σn/Σ(n/MTBFᵢ)', hint: '调和平均', up: true, c: '#0891b2', raw: hm, dec: 0},
+        {lb: '未闭环故障', v: String(open), un: '单', tr: open <= 3 ? '处置率良好' : '处置压力偏高', hint: open + ' 单待闭环', up: open <= 3, c: '#dc2626', raw: open, dec: 0}
+      ]
+      const groups = {}
+      softs.forEach(s => {(groups[s.stype] = groups[s.stype] || []).push(R720(s.lam))})
+      typeData = Object.keys(groups).map(k => ({name: k.replace(/系统|软件/g, ''), value: +(groups[k].reduce((a, b) => a + b, 0) / groups[k].length).toFixed(3)}))
+      top5 = softs.map(s => ({...s, r: R720(s.lam)})).sort((a, b) => b.r - a.r).slice(0, 5)
+      setTimeout(() => {drawTrend('近30天'); drawRest()}, 60)
+    } catch (e) {
+      $message.error('数据加载失败：' + e.message)
+    }
+  }
+</script>
+<script>
+  load()
+  setTimeout(() => {loadEvents(); timer = setInterval(loadEvents, 10000)}, 300)
+</script>
+<script dispose>
+  clearInterval(timer)
+</script>
+
+</html>

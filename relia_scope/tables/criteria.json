@@ -1,0 +1,47 @@
+{
+  "title": "验证判据",
+  "description": "单目标验证的判据配置，验证结论卡据此自动判定",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "title": "判据名称",
+      "required": true
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "title": "判据类型",
+      "description": "r720/mtbf/fatal/dq/n/conf"
+    },
+    {
+      "name": "spec",
+      "type": "string",
+      "title": "判据值",
+      "description": "展示用，如 ≥ 0.9500"
+    },
+    {
+      "name": "threshold",
+      "type": "number",
+      "title": "阈值",
+      "description": "数值阈值，供自动判定"
+    },
+    {
+      "name": "enabled",
+      "type": "bool",
+      "title": "启用",
+      "default": true
+    },
+    {
+      "name": "forced",
+      "type": "bool",
+      "title": "强制",
+      "default": false
+    },
+    {
+      "name": "sort",
+      "type": "int",
+      "title": "排序"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "title": "待办与风险",
+  "description": "工作台待办事项与风险跟踪",
+  "fields": [
+    {
+      "name": "title",
+      "type": "string",
+      "title": "事项",
+      "required": true
+    },
+    {
+      "name": "todo_type",
+      "type": "string",
+      "title": "类型"
+    },
+    {
+      "name": "owner",
+      "type": "string",
+      "title": "负责人"
+    },
+    {
+      "name": "due",
+      "type": "time",
+      "title": "截止日期"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"未开始\""
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "status"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

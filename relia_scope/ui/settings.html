@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="ReliaScope 平台设置" />
+<title>平台设置 · ReliaScope</title>
+</head>
+<style>
+.sw{width:38px;height:21px;border-radius:99px;background:#cbd5e1;position:relative;cursor:pointer;transition:background var(--transition-fast);display:inline-block;flex-shrink:0}
+.sw i{position:absolute;top:2.5px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left var(--transition-fast);box-shadow:0 1px 3px rgba(15,23,42,.25)}
+.sw.on{background:var(--color-primary)}
+.sw.on i{left:19px}
+.edit-link{color:var(--color-primary);cursor:pointer;font-size:11.5px;white-space:nowrap}
+.edit-link:hover{text-decoration:underline}
+</style>
+<body>
+<app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">系统 · Settings</div>
+        <h1>平台设置</h1>
+      </div>
+      <div class="right"><button class="btn ghost" :disabled="resetting" @click="resetAll()">{{ resetting ? '重置中…' : '恢复出厂判据' }}</button></div>
+    </header>
+
+    <div class="g g2">
+      <div class="card">
+        <h3>验证判据配置 <span class="tag">criteria 表</span></h3>
+        <div class="desc">开关与阀值实时写回数据库 · 单目标验证页即时生效</div>
+        <table>
+          <thead><tr><th>判据</th><th>判据值</th><th>状态</th><th>启用</th></tr></thead>
+          <tbody>
+            <tr v-for="c in criterias" :key="c.id">
+              <td>{{ c.name }} <span v-if="c.forced" class="pill p-red" style="margin-left:4px">强制</span></td>
+              <td class="mono">{{ c.spec }}</td>
+              <td>
+                <span class="pill" :class="c.enabled !== false ? 'p-green' : 'p-gray'">{{ c.enabled !== false ? '启用' : '停用' }}</span>
+                <span v-if="c.kind !== 'conf'" class="edit-link" style="margin-left:8px" @click="editSpec(c)">修改阀值</span>
+              </td>
+              <td>
+                <span class="sw" :class="{on: c.enabled !== false && !c.forced}" @click="toggle(c)"><i></i></span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>接入与通知 <span class="tag">integrations 表</span></h3>
+        <div class="desc">外部系统集成状态 · 由采集接口对接后更新</div>
+        <table>
+          <tbody>
+            <tr><td>采集探针总数</td><td><span class="pill p-green">{{ probeTotal }} 个在线 · {{ channels }} 类通道</span></td></tr>
+            <tr v-for="g in intgs" :key="g.id">
+              <td>{{ g.name }}<div style="font-size:10.5px;color:var(--text-color-disabled);margin-top:2px">{{ g.detail }}</div></td>
+              <td><span class="pill" :class="intgClass(g.status)">{{ g.status }}{{ g.link_count ? ' · ' + g.link_count + ' 条' : '' }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="desc" style="margin-top:14px">
+          判据中的「强制」项（如 P1 一票否决）不可停用；阀值修改后，所有验证对象的结论卡将按新标准重新判定。
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">配置变更即时生效 · 全部操作写入 AgentDB criteria 表</div>
+</app-menu>
+</body>
+<script setup>
+criterias = []
+probeTotal = 0
+channels = 0
+intgs = []
+resetting = false
+
+intgClass = (s) => s === '已连接' ? 'p-green' : s === '运行中' ? 'p-cyan' : s === '异常' ? 'p-red' : 'p-gray'
+
+/* 出厂判据（按 kind 重置阈值并全部启用） */
+const FACTORY = {
+  r720: [0.95, '≥ 0.9500'],
+  mtbf: [500, '≥ 500 h'],
+  fatal: [0, '致命故障 = 0'],
+  dq: [85, 'DQ ≥ 85 分'],
+  n: [8, 'n ≥ 8'],
+  conf: [90, '90%（双侧）']
+}
+resetAll = async () => {
+  const ok = await $message.confirm('将所有判据恢复为出厂阈值并全部启用？单目标验证页将按新标准重新判定。')
+  if (!ok) return
+  resetting = true
+  try {
+    for (const c of criterias) {
+      const f = FACTORY[c.kind]
+      if (!f) continue
+      await $fetch('/tables/criteria/' + c.id, { method: 'PATCH', body: { data: { threshold: f[0], spec: f[1], enabled: true } } })
+    }
+    await loadCriterias()
+    $message.success('已恢复出厂判据')
+  } catch (e) { $message.error('重置失败：' + e.message) }
+  resetting = false
+}
+
+toggle = async (c) => {
+  if (c.forced) { $message.error('强制判据不可停用'); return }
+  const nv = c.enabled === false
+  try {
+    await $fetch('/tables/criteria/' + c.id, { method: 'PATCH', body: { data: { enabled: nv } } })
+    await loadCriterias()
+    $message.success('「' + c.name + '」已' + (nv ? '启用' : '停用'))
+  } catch (e) { $message.error('更新失败：' + e.message) }
+}
+editSpec = async (c) => {
+  const v = await $message.prompt('修改「' + c.name + '」阀值', String(c.threshold))
+  if (v == null || v === '') return
+  const num = Number(v)
+  if (isNaN(num)) { $message.error('请输入数值'); return }
+  try {
+    await $fetch('/tables/criteria/' + c.id, { method: 'PATCH', body: { data: { threshold: num, spec: '≥ ' + v } } })
+    await loadCriterias()
+    $message.success('「' + c.name + '」阀值已更新为 ' + v)
+  } catch (e) { $message.error('更新失败：' + e.message) }
+}
+
+loadCriterias = async () => {
+  const cr = await $fetch('/tables/criteria', { params: { size: 100 } })
+  criterias = (cr.items || []).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0))
+}
+load = async () => {
+  try {
+    await loadCriterias()
+    const ch = await $fetch('/tables/channels', { params: { size: 100 } })
+    channels = (ch.items || []).length
+    probeTotal = (ch.items || []).reduce((s, x) => s + Number(x.probe_count || 0), 0)
+    const ig = await $fetch('/tables/integrations', { params: { size: 100 } })
+    intgs = ig.items || []
+  } catch (e) {
+    $message.error('数据加载失败：' + e.message)
+  }
+}
+</script>
+<script>
+load()
+</script>
+</html>

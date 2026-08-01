@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="description" content="弹窗壳：遮罩 + 模态面板，表单内容经默认插槽投射，v:show 双向绑定" />
+  <title>Dialog Shell</title>
+</head>
+<style>
+  local-dialog-shell{display:block}
+</style>
+<body>
+  <div class="rv-mask" :class="{ show: show }" @click="onMask($event)">
+    <div class="rv-modal">
+      <h3>{{ title }}</h3>
+      <vslot></vslot>
+    </div>
+  </div>
+</body>
+<script setup>
+  show = false
+  title = ''
+
+  close = () => { show = false; $emit('close') }
+
+  onMask = (e) => {
+    if (e.target === e.currentTarget) close()
+  }
+</script>
+</html>

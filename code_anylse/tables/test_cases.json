@@ -1,0 +1,95 @@
+{
+  "title": "验证用例",
+  "description": "验证用例库，来源：模型参数化构建 / 进化算法 / 人工",
+  "fields": [
+    {
+      "name": "case_id",
+      "type": "string",
+      "title": "用例ID",
+      "description": "形如 TC-NAV-1042",
+      "required": true
+    },
+    {
+      "name": "req_id",
+      "type": "string",
+      "title": "关联需求",
+      "required": true
+    },
+    {
+      "name": "method",
+      "type": "string",
+      "title": "验证方法"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "title": "来源",
+      "required": true
+    },
+    {
+      "name": "strategy",
+      "type": "string",
+      "title": "构建策略",
+      "description": "边界值 / 等价类 / 状态路径 / 对抗样本 / 场景等"
+    },
+    {
+      "name": "param_desc",
+      "type": "string",
+      "title": "参数组"
+    },
+    {
+      "name": "last_result",
+      "type": "string",
+      "title": "最近结果",
+      "default": "\"未执行\""
+    },
+    {
+      "name": "defects",
+      "type": "int",
+      "title": "检出缺陷数",
+      "default": 0
+    },
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码"
+    },
+    {
+      "name": "code_refs",
+      "type": "text",
+      "title": "关联代码",
+      "description": "关联测试/实现文件路径，逗号分隔"
+    },
+    {
+      "name": "verdict_reason",
+      "type": "text",
+      "title": "判定理由",
+      "description": "证据驱动判定的理由"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "case_id"
+      ],
+      "unique": true
+    },
+    {
+      "fields": [
+        "req_id"
+      ]
+    },
+    {
+      "fields": [
+        "last_result"
+      ]
+    },
+    {
+      "fields": [
+        "source"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

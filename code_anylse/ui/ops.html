@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>执行集群运维</title>
+</head>
+<body>
+  <local-app-menu page="ops">
+    <div class="rv-crumb">平台运维 / 云环境与微服务</div>
+    <div class="rv-titlebar">
+      <h1>验证执行集群运维</h1>
+      <p>K8s 执行集群 · 常驻 + 动态环境 · 微服务弹性伸缩</p>
+      <span class="tb-actions">
+        <button class="rv-btn" :disabled="busyEnv" @click="createEnv">{{ busyEnv ? '创建中…' : '＋ 创建动态环境' }}</button>
+      </span>
+    </div>
+
+    <div v-if="loading" class="rv-panel"><div class="rv-empty">正在加载集群状态…</div></div>
+    <div v-else>
+      <div class="rv-grid g2" style="margin-bottom:14px">
+        <div class="rv-panel"><local-chart-box :option="chTp" height="300px"></local-chart-box></div>
+        <div class="rv-panel acc-secondary" style="padding:0">
+          <div class="phead" style="padding:14px 18px 0">执行环境实例</div>
+          <div class="rv-twrap">
+            <table class="rv-table">
+              <thead><tr><th>环境</th><th>类型</th><th>节点</th><th>用途</th><th>状态</th><th style="width:84px">操作</th></tr></thead>
+              <tbody>
+                <tr v-for="e in envs" :key="e.id">
+                  <td class="mono" style="color:var(--color-primary);font-weight:600">{{ e.env_code }}</td>
+                  <td><span class="rv-tag" :class="envTone(e.env_type)">{{ e.env_type }}</span></td>
+                  <td class="mono">{{ e.nodes }}</td>
+                  <td class="dim">{{ e.purpose }}</td>
+                  <td><span class="rv-tag" :class="stTone(e.status)">{{ e.status }}</span></td>
+                  <td><button class="rv-btn sm ghost" @click="configEnv(e)">配置</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="rv-panel acc-cyan" style="padding:0">
+        <div class="phead" style="padding:14px 18px 0">平台微服务（HPA 弹性伸缩）</div>
+        <div class="rv-twrap">
+          <table class="rv-table">
+            <thead><tr><th>服务</th><th>职责</th><th>实例数</th><th style="min-width:150px">CPU 负载</th><th>P99</th><th>状态</th><th style="width:96px">操作</th></tr></thead>
+            <tbody>
+              <tr v-for="s in services" :key="s.id">
+                <td class="mono" style="color:var(--color-primary);font-weight:600">{{ s.svc_name }}</td>
+                <td class="dim">{{ s.duty }}</td>
+                <td class="mono">{{ s.instances }}</td>
+                <td><span class="mono" style="font-size:11px">{{ s.cpu_pct }}%</span><div class="rv-bar" style="width:110px;margin-top:4px"><i :style="{ width: (s.cpu_pct || 0) + '%', background: cpuColor(s.cpu_pct || 0) }"></i></div></td>
+                <td class="mono" :style="{ color: (s.cpu_pct || 0) >= 85 ? 'var(--color-warning)' : 'inherit' }">{{ s.p99 }}</td>
+                <td><span class="rv-tag" :class="stTone(s.status)">{{ s.status }}</span></td>
+                <td><button class="rv-btn sm" :disabled="busySvc === s.id" @click="scaleUp(s)">{{ busySvc === s.id ? '扩容中' : '扩容 +2' }}</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </local-app-menu>
+</body>
+<script setup>
+  loading = true
+  envs = []
+  services = []
+  chTp = null
+  busyEnv = false
+  busySvc = ''
+
+  q = (t, p) => $mod.$fetch('/tables/' + t, { params: p })
+  AX = { axisLine: { lineStyle: { color: 'rgba(20,60,90,.15)' } }, axisTick: { show: false }, axisLabel: { color: 'rgba(20,60,90,.55)', fontSize: 10.5 }, splitLine: { lineStyle: { color: 'rgba(20,60,90,.07)' } } }
+
+  envTone = (t) => t === '常驻' ? 't-gray' : 't-vio'
+  stTone = (s) => s === '运行中' || s === '健康' ? 't-ok' : s === '扩容中' || s === '创建中' ? 't-warn' : 't-gray'
+  cpuColor = (v) => v >= 85 ? 'var(--color-danger)' : v >= 60 ? 'var(--color-warning)' : 'var(--color-success)'
+
+  renderTp = () => {
+    const xs = []
+    const tp = []
+    const wd = []
+    for (let h = 0; h < 24; h++) {
+      xs.push(String(h).padStart(2, '0') + ':00')
+      const wave = Math.sin((h - 6) / 24 * Math.PI * 2)
+      tp.push(Math.max(20, Math.round(140 + wave * 90 + (h > 9 && h < 18 ? 60 : 0))))
+      wd.push(Math.max(10, Math.round(120 + wave * 80 + (h > 9 && h < 18 ? 55 : 0))))
+    }
+    chTp = {
+      title: { text: '集群执行吞吐（24h 采样回放）', left: 0, top: 0, textStyle: { fontSize: 13, fontWeight: 600, color: 'rgba(15,50,80,.9)' } },
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['用例执行', '判定写入'], right: 0, top: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 4, textStyle: { color: 'rgba(20,60,90,.6)', fontSize: 11 } },
+      grid: { left: 44, right: 16, top: 46, bottom: 26 },
+      xAxis: Object.assign({ type: 'category', data: xs, boundaryGap: false }, AX),
+      yAxis: Object.assign({ type: 'value', name: '条/小时' }, AX),
+      series: [
+        { name: '用例执行', type: 'line', data: tp, smooth: true, showSymbol: false, lineStyle: { width: 2.5, color: '#06b6d4' }, itemStyle: { color: '#06b6d4' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(6,182,212,.2)' }, { offset: 1, color: 'rgba(6,182,212,0)' }] } } },
+        { name: '判定写入', type: 'line', data: wd, smooth: true, showSymbol: false, lineStyle: { width: 2, color: '#2563eb' }, itemStyle: { color: '#2563eb' } },
+      ],
+    }
+  }
+
+  createEnv = async () => {
+    busyEnv = true
+    try {
+      const rec = await $mod.$fetch('/tables/envs', { method: 'POST', body: { data: {
+        env_code: 'env-tmp-' + String(Date.now()).slice(-5),
+        env_type: '动态',
+        nodes: 8,
+        purpose: '专项验证（按需创建）',
+        status: '创建中',
+        ttl_hours: 4,
+      } } })
+      const d = await q('envs', { size: 20 })
+      envs = d.items || []
+      $message.success('动态环境 ' + rec.env_code + ' 创建中，预计 45s 就绪（TTL 4h）')
+    } catch (e) {
+      $message.error('创建失败：' + e.message)
+    } finally {
+      busyEnv = false
+    }
+  }
+
+  scaleUp = async (s) => {
+    busySvc = s.id
+    try {
+      const n = (s.instances || 0) + 2
+      await $mod.$fetch('/tables/services/' + s.id, { method: 'PATCH', body: { data: { instances: n, status: '扩容中' } } })
+      services = services.map((x) => x.id === s.id ? Object.assign({}, x, { instances: n, status: '扩容中' }) : x)
+      $message.success(s.svc_name + ' 已扩容至 ' + n + ' 实例，预计 90s 后负载回落')
+    } catch (e) {
+      $message.error('扩容失败：' + e.message)
+    } finally {
+      busySvc = ''
+    }
+  }
+
+  configEnv = (e) => { $message.info('环境 ' + e.env_code + '：' + e.nodes + ' 节点 · 用途 ' + e.purpose + (e.ttl_hours ? ' · TTL ' + e.ttl_hours + 'h' : '')) }
+
+  initPage = async () => {
+    try {
+      const [envD, svcD] = await Promise.all([q('envs', { size: 20 }), q('services', { size: 20 })])
+      envs = envD.items || []
+      services = svcD.items || []
+      renderTp()
+    } catch (e) {
+      $message.error('加载运维数据失败：' + e.message)
+    } finally {
+      loading = false
+    }
+  }
+</script>
+<script>
+  initPage()
+</script>
+</html>

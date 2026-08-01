@@ -1,0 +1,42 @@
+{
+  "access_mode": "public_read",
+  "title": "repo_deps",
+  "fields": [
+    {
+      "name": "repo_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "version",
+      "type": "string"
+    },
+    {
+      "name": "dep_type",
+      "type": "string"
+    },
+    {
+      "name": "source",
+      "type": "string"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "repo_id"
+      ]
+    },
+    {
+      "fields": [
+        "repo_id",
+        "name"
+      ],
+      "unique": true
+    }
+  ]
+}
