@@ -937,7 +937,7 @@ endmodule
   aiSessionId = $router.current.query.session_id || ''
   aiOpen = window.innerWidth >= 860
   sessionFiles = []
-  uiRunUnsubs = []
+  pe = null   // page_exec instance
   lsDel('last_run_meta')
   lsDel('last_vcd')
 
@@ -1111,9 +1111,8 @@ endmodule
     return s
   }
   readUfsText = async (ufsPath) => {
-    const r = await $mod.fs_get(resolvePath(ufsPath));
-    if (!r.ok) throw new Error("read ufs failed: HTTP " + r.status);
-    return await r.text();
+    const r = await $mod.$cloud_fs.get(resolvePath(ufsPath));
+    return typeof r.content === 'string' ? r.content : await r.content.text();
   }
   loadSessionFiles = async () => {
     if (!aiSessionId) {
@@ -1121,19 +1120,17 @@ endmodule
       return {ok: false, text: 'no ai session'}
     }
     try {
-      const r = await $mod.fs_get('/sessions/' + aiSessionId)
-      if (!r.ok) {
-        if (r.status === 404) {sessionFiles = []; return {ok: true, total: 0}}
-        throw new Error('HTTP ' + r.status)
-      }
-      const d = await r.json()
-      const items = d && d.items ? d.items : []
+      const r = await $mod.$cloud_fs.get('/sessions/' + aiSessionId)
+      const items = r && r.dir && r.items ? r.items : []
       sessionFiles = items.filter(x => x && !x.dir && /\.(v|sv|txt)$/i.test(x.name || ''))
       return {ok: true, total: sessionFiles.length}
     } catch (e) {
+      // 目录不存在（404）视为空会话，不报错
+      const msg = e && e.message ? e.message : String(e)
+      if (/404|not found/i.test(msg)) {sessionFiles = []; return {ok: true, total: 0}}
       sessionFiles = []
-      log(() => $t('log.sessionFilesFail', {msg: e && e.message ? e.message : e}), 'wrn')
-      return {ok: false, error: e && e.message ? e.message : String(e)}
+      log(() => $t('log.sessionFilesFail', {msg: msg}), 'wrn')
+      return {ok: false, error: msg}
     }
   }
   loadSessionFile = async (name) => {
@@ -1860,43 +1857,51 @@ endmodule
   }
 
   bindUiRun = (sid) => {
-    uiRunUnsubs.forEach(u => {
-      try {
-        if (typeof u === 'function') u()
-        else if (u && u.unsub) u.unsub()
-      } catch (_) { }
-    })
-    uiRunUnsubs = []
+    pe?.stop()
+    pe = null
     if (!sid) return
-    if (!$mod.$nc || !$mod.$nc.sub) {
+    if (!$mod.$page_exec) {
       log(tt('log.aiNoChannel'), 'wrn')
       return
     }
-    const on = (action, fn) => {
-      const sub = $mod.$nc.sub('s.' + sid + '.ui_run.' + action, (err, msg) => {
-        (async () => {
-          try {
-            const args = JSON.parse(msg.string() || '{}')
-            const result = await fn(args || {})
-            msg.respond(JSON.stringify(result))
-          } catch (e) {
-            const text = action + ' 失败: ' + (e && e.message ? e.message : String(e))
-            log(text, 'err')
-            msg.respond(JSON.stringify({ok: false, text, error: e && e.message ? e.message : String(e)}))
-          }
-        })()
-      })
-      uiRunUnsubs.push(sub)
+    // exec argv 原样透传（数组）→ 旧 args 对象（--key val / 位置参数）
+    const argvToArgs = (argv) => {
+      const args = {}
+      const pos = []
+      for (let i = 0; i < argv.length; i++) {
+        const a = String(argv[i])
+        if (a.startsWith('--') && i + 1 < argv.length) {
+          args[a.slice(2)] = argv[i + 1]
+          i++
+        } else {
+          pos.push(a)
+        }
+      }
+      pos.forEach((v, i) => { if (!(String(i) in args)) args[String(i)] = v })
+      return args
     }
-    on('sim_code', simCode)
-    on('sim_file', simFile)
-    on('synth_file', synthFile)
-    on('show_pane', (args) => showPane(args.pane || args[0] || 'wave'))
-    on('clear_console', () => clearConsole())
+    const wrap = (action, fn) => async (argv) => {
+      try {
+        const args = argvToArgs(argv)
+        const result = await fn(args || {})
+        return {content: JSON.stringify(result)}
+      } catch (e) {
+        const text = action + ' 失败: ' + (e && e.message ? e.message : String(e))
+        log(text, 'err')
+        return {content: JSON.stringify({ok: false, text, error: e && e.message ? e.message : String(e)})}
+      }
+    }
+    pe = $mod.$page_exec(sid, [
+      {name: 'sim_code', description: '运行仿真代码（--code 代码，--top 顶层，--pane 结果页）', handler: wrap('sim_code', simCode)},
+      {name: 'sim_file', description: '运行仿真文件（--file 文件，--tb testbench，--top，--pane）', handler: wrap('sim_file', simFile)},
+      {name: 'synth_file', description: '综合文件（--file，--top，--pane）', handler: wrap('synth_file', synthFile)},
+      {name: 'show_pane', description: '切换结果页（--pane wave/sch/synth）', handler: wrap('show_pane', (args) => showPane(args.pane || args['0'] || 'wave'))},
+      {name: 'clear_console', description: '清空控制台', handler: wrap('clear_console', () => clearConsole())},
+    ])
+    pe.start()
     log(tt('log.aiLinked'), 'sys')
   }
 </script>
-
 <script>
   const loadScript = (src) => new Promise((resolve, reject) => {
     const s = document.createElement('script')

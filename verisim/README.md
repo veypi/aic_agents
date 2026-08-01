@@ -49,4 +49,4 @@ VeriSim Pro 是一个全客户端的数字 IC 学习/验证平台。传统流程
 - 前端：AgentUI（vhtml）单页应用，入口 `ui/index.html`，详见 `ui/启动说明.md`；
 - 引擎：Icarus Verilog WASM（仿真）、YoWASP Yosys 0.64 WASM（综合）、netlistsvg + ELK（原理图）；
 - 引擎分发：镜像源列表统一配置于 `ui/js/sources.js`（国内镜像 → 海外镜像 → 服务器相对地址）；
-- AI 接入：`ai-box` 对话组件 + `ui_run` 事件（sim_code / sim_file / synth_file / show_pane / clear_console），事件文档见 `index.md`。
+- AI 接入：`ai-box` 对话组件 + `exec 1host=page` 页面指令（sim_code / sim_file / synth_file / show_pane / clear_console），指令文档见 `index.md`。
