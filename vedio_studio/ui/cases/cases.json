@@ -1,3 +1,16 @@
 [
-  { "id": "product-pitch", "title": "产品宣传片", "desc": "标题入场 + 增长图表 + 关键帧动画 + 片尾，覆盖核心元素与动画能力", "scenes": 4, "duration": 16.5 }
+  {
+    "id": "showreel",
+    "title": "Showreel · 引擎能力巡礼",
+    "desc": "复刻 Remotion Showreel：逐字弹簧 / 贝塞尔 / countUp / 图表 / 粒子爆发 / 走马灯，29 秒 7 场景 133 元素",
+    "scenes": 7,
+    "duration": 29
+  },
+  {
+    "id": "product-pitch",
+    "title": "产品宣传片",
+    "desc": "标题入场 + 增长图表 + 关键帧动画 + 片尾，覆盖核心元素与动画能力",
+    "scenes": 4,
+    "duration": 16.5
+  }
 ]

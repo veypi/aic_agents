@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <meta name="description" content="Vedio Studio — 浏览器端视频工作台：时间轴项目（page_fs 本地存储）+ 预览舞台 + 浏览器导出 MP4 + AI 助手" />
+  <meta name="description" content="Vedio Studio — 浏览器端视频工作台：场景编排 + 时间轴编辑 + 舞台预览 + 浏览器导出 MP4 + AI 助手" />
   <title>Vedio Studio</title>
 </head>
 <style>
@@ -46,11 +46,16 @@
   .doc-title {
     font-size: var(--font-size-md);
     color: var(--text-color);
-    max-width: 260px;
+    max-width: 240px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     margin-left: var(--spacing-sm);
+    cursor: pointer;
   }
-  .doc-title.empty { color: var(--text-color-disabled); }
+  .doc-title.empty { color: var(--text-color-disabled); cursor: default; }
+  .doc-title:hover { color: #c7d2fe; }
+  .save-state { font-size: 11px; color: #64748b; white-space: nowrap; }
+  .save-state.dirty { color: #fbbf24; }
+  .save-state.fail { color: #f87171; }
 
   .spacer { flex: 1; }
 
@@ -73,28 +78,28 @@
   .tbtn.primary:hover { filter: brightness(1.12); }
   .tbtn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .main {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    gap: 0;
+  /* ---- 工作区三栏 ---- */
+  .ws { flex: 1; min-height: 0; display: flex; }
+  .left { flex: none; width: 196px; border-right: 1px solid rgba(255, 255, 255, 0.08); display: flex; min-height: 0; }
+  .left video-scenes { flex: 1; min-height: 0; display: flex; }
+  .center { flex: 1; min-width: 0; min-height: 0; display: flex; }
+  .center video-stage { flex: 1; min-height: 0; display: flex; }
+  .right {
+    flex: none; width: 322px; border-left: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 17, 28, 0.9); display: flex; flex-direction: column; min-height: 0;
   }
-  .stage-wrap {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
+  .rtabs { flex: none; display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+  .rtabs button {
+    flex: 1; border: none; background: transparent; color: #64748b;
+    font-size: 13px; padding: 9px 0; cursor: pointer; border-bottom: 2px solid transparent;
   }
-  .side {
-    flex: none;
-    width: 340px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(13, 17, 28, 0.9);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .side ai-box { flex: 1; min-height: 0; display: flex; }
+  .rtabs button.on { color: #e0e7ff; border-bottom-color: #4361ee; background: rgba(67, 97, 238, 0.08); }
+  .rbody { flex: 1; min-height: 0; display: flex; }
+  .rbody video-inspector { flex: 1; min-height: 0; display: flex; }
+  .rbody ai-box { flex: 1; min-height: 0; display: flex; }
+
+  .bottom { flex: none; height: 188px; display: flex; }
+  .bottom video-timeline { flex: 1; min-height: 0; display: flex; }
 
   .popover {
     position: absolute;
@@ -116,12 +121,13 @@
     border-radius: 8px;
     cursor: pointer;
     color: #cbd5e1;
+    position: relative;
   }
   .pop-item:hover { background: rgba(67, 97, 238, 0.16); }
   .pop-item .t { font-size: 13.5px; font-weight: 600; color: #e2e8f0; }
   .pop-item .d { font-size: 11.5px; color: #64748b; }
   .pop-item .del {
-    margin-left: auto; color: #94a3b8; font-size: 12px; padding: 2px 6px; border-radius: 6px;
+    position: absolute; right: 8px; top: 9px; color: #94a3b8; font-size: 12px; padding: 2px 6px; border-radius: 6px;
   }
   .pop-item .del:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
   .pop-title { padding: 6px 8px 4px; font-size: 11px; color: #64748b; letter-spacing: 0.5px; }
@@ -145,10 +151,11 @@
 <body>
   <div class="topbar">
     <div class="brand"><span class="logo">▶</span> Vedio Studio</div>
-    <div class="doc-title" :class="{ empty: !curName && !curTitle }">{{ curTitle || curName || '未打开项目' }}</div>
+    <div class="doc-title" :class="{ empty: !curName && !curTitle }" @click="selNone()" title="点击查看项目设置">{{ curTitle || curName || '未打开项目' }}</div>
+    <span class="save-state" :class="{ dirty: saveState === '未保存', fail: saveState === '保存失败' }">{{ saveState }}</span>
     <div class="spacer"></div>
-    <button class="tbtn" @click="showCases = !showCases">样例</button>
-    <button class="tbtn" @click="showProjects = !showProjects; refreshProjects()">项目</button>
+    <button class="tbtn" @click="showCases = !showCases; showProjects = false">样例</button>
+    <button class="tbtn" @click="showProjects = !showProjects; showCases = false; refreshProjects()">项目</button>
     <button class="tbtn" @click="newProject()">新建</button>
     <button class="tbtn primary" @click="exportMp4()" :disabled="exporting || !doc">导出 MP4</button>
   </div>
@@ -162,49 +169,73 @@
   </div>
 
   <div class="popover" v-if="showProjects">
-    <div class="pop-title">我的项目（浏览器本地 page_fs）</div>
-    <div v-if="!projects.length" class="pop-item"><div class="d">暂无项目，点击「新建」或让 AI 创建</div></div>
+    <div class="pop-title">我的项目（云端会话存储）</div>
+    <div v-if="!projects.length" class="pop-item"><div class="d">暂无项目，点击「新建」开始创作</div></div>
     <div v-for="p in projects" :key="p.name" class="pop-item" @click="openProject(p.name)">
-      <div class="t" :class="{ active: p.name === curName }">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s</span></div>
+      <div class="t">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s · {{ p.scenes }} 场景</span></div>
       <div class="d">{{ p.name }}</div>
       <span class="del" @click.stop="deleteProject(p.name)">删除</span>
     </div>
   </div>
 
-  <div class="main">
-    <div class="stage-wrap">
-      <video-stage ref="stage"></video-stage>
+  <div class="ws">
+    <div class="left">
+      <video-scenes :scenes="doc ? doc.scenes : []" :cur="activeSceneIdx()" :readonly="!curName" :ver="sceneVer"
+        @pick="onPickScene" @add="addScene" @dup="dupScene" @del="delScene" @move="moveScene"></video-scenes>
     </div>
-    <div class="side">
-      <ai-box v:id="sid"></ai-box>
+    <div class="center">
+      <video-stage ref="stage" :editable="!!curName && !exporting" :selid="sel.kind === 'element' ? sel.elId : ''"
+        @select="onStageSelect" @mutate="onStageChange"></video-stage>
     </div>
+    <div class="right">
+      <div class="rtabs">
+        <button :class="{ on: rtab === 'props' }" @click="rtab = 'props'">属性</button>
+        <button :class="{ on: rtab === 'ai' }" @click="rtab = 'ai'">AI 助手</button>
+      </div>
+      <div class="rbody">
+        <video-inspector v-show="rtab === 'props'" :doc="doc" :sel="sel" :frame="curFrame" :readonly="!curName"
+          :uploadasset="uploadAsset"
+          @mutate="onDocChange" @saveas="saveAsProject" @pickel="onPickEl"
+          @delel="delElement" @dupel="dupElement"></video-inspector>
+        <ai-box v-show="rtab === 'ai'" v:id="sid"></ai-box>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer"
+      @seek="onSeek" @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl"></video-timeline>
   </div>
 
   <div class="toast" v-if="toast">{{ toast }}</div>
 </body>
 
 <script setup>
-  import { starterDoc, normalizeDoc } from './video/engine.js'
+  import { starterDoc, defaultTheme, uid } from './video/engine.js'
 
   // ---- 状态 ----
   sid = $router.current.query.session_id || ''
-  doc = null            // 当前 video/1 文档对象
-  curName = ''          // 当前项目名
+  doc = null            // 当前 video/1 文档对象（真身，proxy）
+  curName = ''          // 当前项目名（'' = 样例只读）
   curTitle = ''
-  assets = {}           // ref → blob URL（页面持有，导出前不回收）
+  assets = {}           // ref → dataURL（预览/导出共用）
+  sel = { kind: 'none', sceneIndex: 0, elId: '' }   // 选中态
+  rtab = 'props'        // 右栏 tab
+  curFrame = 0          // 当前帧（rAF 同步自 stage）
   cases = []
   projects = []
   showCases = false
   showProjects = false
   exporting = false
   toast = ''
+  saveState = ''
+  sceneVer = 0        // 场景结构版本号（增删/移动后递增，强制子组件重建列表）
 
-  // ---- page_fs 访问（浏览器 IndexedDB，$SESSION 根下 /vedio/）----
-  pf = null
+  // ---- page_exec（AI 指令通道；存储走 $cloud_fs 不依赖它）----
   pe = null
 
   let toastTimer = 0
-  let blobUrls = []     // 待回收 blob URL
+  let saveTimer = 0
 
   const projRoot = () => '/sessions/' + sid + '/vedio'
   const projDir = (name) => projRoot() + '/' + name
@@ -220,23 +251,87 @@
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => { toast = '' }, 2600)
   }
-
-  // ---- 初始化：样例加载不依赖 sid；page_exec 绑定依赖 sid ----
-  initPage = async () => {
-    await loadCases()       // 样例来自 ui/cases（$mod.scoped），与 sid 无关
-    bindPageExec()
+  const ensureTheme = (d) => {
+    d.theme = Object.assign(defaultTheme(), d.theme || {})
+    d.theme.captionStyle = Object.assign(defaultTheme().captionStyle, d.theme.captionStyle || {})
+    return d
   }
 
-  bindPageExec = async () => {
+  // ---- 云存储（$mod.$cloud_fs → 服务端 UFS /sessions/{sid}/vedio/）----
+  storageReady = () => !!(sid && $mod.$cloud_fs)
+  const fsText = async (path) => {
+    const r = await $mod.$cloud_fs.get(path)
+    return typeof r.content === 'string' ? r.content : await r.content.text()
+  }
+  const fsGet = (path) => $mod.$cloud_fs.get(path)         // {ok, content(string|Blob), mime, size}
+  const fsPut = (path, content) => $mod.$cloud_fs.put(path, content)   // string | Blob
+  const fsLs = async (path) => {
+    try { return await $mod.$cloud_fs.ls(path) } catch (e) { return { ok: false, items: [] } }
+  }
+  const fsRm = (path) => $mod.$cloud_fs.rm(path)
+  // 目录删除：先试整删，失败则递归逐文件
+  const rmDir = async (dir) => {
+    try { await fsRm(dir); return } catch (e) { }
+    const walk = async (d) => {
+      const l = await fsLs(d + '/')
+      for (const it of (l.items || [])) {
+        if (it.dir) await walk(d + '/' + it.name)
+        else { try { await fsRm(d + '/' + it.name) } catch (e) { } }
+      }
+      try { await fsRm(d) } catch (e) { }
+    }
+    await walk(dir)
+  }
+
+  // ---- 初始化 ----
+  initPage = async () => {
+    await loadCases()
+    await ensureSession()
+  }
+
+  // 会话自举：URL 带 sid 直接用；否则复用 localStorage 的工作台会话；再否则新建（隐藏会话）
+  ensureSession = async () => {
+    if (!sid) {
+      const saved = localStorage.getItem('vedio_studio_sid') || ''
+      if (saved) {
+        try {
+          const r = await fetch('/api/sessions/' + saved)
+          if (r.ok) sid = saved
+        } catch (e) { }
+        if (!sid) localStorage.removeItem('vedio_studio_sid')
+      }
+      if (!sid) {
+        try {
+          const r = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Vedio Studio 工作台', hide: true }),
+          })
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          const s = await r.json()
+          sid = s.id
+          localStorage.setItem('vedio_studio_sid', sid)
+        } catch (e) {
+          console.warn('ensureSession failed', e)
+          showToast('会话初始化失败：项目无法保存，可正常使用样例与导出')
+        }
+      }
+    }
+    bindPageExec()
+    // 恢复上次打开的项目
+    const last = localStorage.getItem('vedio_studio_last') || ''
+    if (last && storageReady()) { try { await openProject(last) } catch (e) { } }
+  }
+
+  bindPageExec = () => {
     if (!sid || !$mod.$page_exec) {
       console.warn('vedio_studio: no session / page_exec')
       return
     }
     if (pe) { try { pe.stop() } catch (e) { } }
     pe = null
-    pf = null
     pe = $mod.$page_exec(sid, [
-      { name: 'list_video', description: '列出浏览器本地（page_fs）的视频项目与内置样例',
+      { name: 'list_video', description: '列出云端存储的视频项目与内置样例',
         handler: async () => {
           try {
             const list = await listProjects()
@@ -256,9 +351,9 @@
             d.title = title
             const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
             if (w >= 240 && h >= 240) d.size = { width: w, height: h }
-            await pf.writeText(projIndex(name), JSON.stringify(d, null, 2))
+            await fsPut(projIndex(name), JSON.stringify(d, null, 2))
             await openProject(name)
-            return reply({ ok: true, name, path: projIndex(name), scenes: d.scenes.length, duration: Math.round(d.totalFrames / d.fps) })
+            return reply({ ok: true, name, path: projIndex(name), scenes: d.scenes.length, duration: Math.round(d.scenes.reduce((a, s) => a + s.duration, 0)) })
           } catch (e) { return reply(errReply(e)) }
         } },
 
@@ -275,7 +370,7 @@
           try {
             const name = normName(arg(argv, 'name'))
             const rel = normRel(arg(argv, 'path') || 'index.json')
-            const r = await pf.readRaw(projDir(name) + '/' + rel)
+            const r = await fsGet(projDir(name) + '/' + rel)
             return reply({ ok: true, path: rel, size: r.size, content: typeof r.content === 'string' ? r.content : '[binary]' })
           } catch (e) { return reply(errReply(e)) }
         } },
@@ -287,7 +382,7 @@
             const rel = normRel(arg(argv, 'path') || 'index.json')
             const content = arg(argv, 'content')
             if (content == null) throw new Error('--content 必填')
-            await pf.writeText(projDir(name) + '/' + rel, content)
+            await fsPut(projDir(name) + '/' + rel, content)
             if (rel === 'index.json' && name === curName) await reloadProject()
             return reply({ ok: true, path: rel, bytes: String(content).length })
           } catch (e) { return reply(errReply(e)) }
@@ -303,8 +398,8 @@
             const r = await fetch(url)
             if (!r.ok) throw new Error('下载失败 HTTP ' + r.status)
             const blob = await r.blob()
-            const out = await pf.writeBlob(projDir(name) + '/' + rel, blob)
-            return reply({ ok: true, path: rel, size: out.size })
+            const out = await fsPut(projDir(name) + '/' + rel, blob)
+            return reply({ ok: true, path: rel, size: out.bytes || blob.size })
           } catch (e) { return reply(errReply(e)) }
         } },
 
@@ -337,9 +432,9 @@
             const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
             const fps = parseInt(arg(argv, 'fps') || '0', 10)
             const blob = await doExport({ width: w || 0, height: h || 0, fps: fps || 0 })
-            const out = await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
+            const out = await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
             downloadBlob(blob, safeTitle() + '.mp4')
-            return reply({ ok: true, path: out.path, size: out.size, bytes: blob.size })
+            return reply({ ok: true, path: out.path, size: out.bytes || blob.size })
           } catch (e) { return reply(errReply(e)) }
         } },
 
@@ -347,8 +442,8 @@
         handler: async (argv) => {
           try {
             const name = normName(arg(argv, 'name'))
-            await deleteProjectFiles(name)
-            if (curName === name) { doc = null; curName = ''; curTitle = '' }
+            await rmDir(projDir(name))
+            if (curName === name) { doc = null; curName = ''; curTitle = ''; saveState = '' }
             return reply({ ok: true, deleted: name })
           } catch (e) { return reply(errReply(e)) }
         } },
@@ -364,10 +459,6 @@
           } catch (e) { return reply(errReply(e)) }
         } },
     ])
-    pf = pe.page_fs()
-    // 恢复上次打开的项目（有 sid 且本地有记录时）
-    const last = localStorage.getItem('vedio_studio_last') || ''
-    if (last) { try { await openProject(last) } catch (e) { } }
   }
 
   const errReply = (e) => ({ ok: false, error: String((e && e.message) || e) })
@@ -381,14 +472,13 @@
 
   // ---- 项目读写 ----
   listProjects = async () => {
-    const l = await pf.list(projRoot() + '/')
+    const l = await fsLs(projRoot() + '/')
     const out = []
     for (const it of (l.items || [])) {
       if (!it.dir) continue
       try {
-        const r = await pf.readRaw(projDir(it.name) + '/index.json')
-        const d = JSON.parse(typeof r.content === 'string' ? r.content : '{}')
-        out.push({ name: it.name, title: d.title || it.name, duration: Math.round((d.totalFrames || (d.fps || 30) * ((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0))) / (d.fps || 30)), scenes: (d.scenes || []).length })
+        const d = JSON.parse(await fsText(projDir(it.name) + '/index.json'))
+        out.push({ name: it.name, title: d.title || it.name, duration: Math.round(((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0)) * 10) / 10, scenes: (d.scenes || []).length })
       } catch (e) { out.push({ name: it.name, title: it.name, duration: 0, scenes: 0 }) }
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
@@ -397,19 +487,14 @@
   }
 
   loadAssets = async (d) => {
-    // 释放旧资源
-    blobUrls.forEach((u) => { try { URL.revokeObjectURL(u) } catch (e) { } })
-    blobUrls = []
     assets = {}
     const stageEngine = $refs.stage?.$data?.engine
     const refs = stageEngine ? stageEngine.assetRefs() : []
     for (const ref of refs) {
       try {
-        const r = await pf.readRaw(projDir(curName) + '/' + ref)
+        const r = await fsGet(projDir(curName) + '/' + ref)
         if (r.content instanceof Blob) {
-          // 转 data URL：导出时 foreignObject 隔离文档只能加载 data: 资源
-          const u = await blobToDataURL(r.content)
-          assets[ref] = u
+          assets[ref] = await blobToDataURL(r.content)
         }
       } catch (e) { console.warn('asset missing:', ref, e) }
     }
@@ -424,89 +509,85 @@
 
   openProject = async (name) => {
     name = normName(name)
-    const r = await pf.readRaw(projIndex(name))
-    if (typeof r.content !== 'string') throw new Error('index.json 非文本: ' + name)
-    const d = JSON.parse(r.content)
+    const d = ensureTheme(JSON.parse(await fsText(projIndex(name))))
     curName = name
     curTitle = d.title || name
     doc = d
+    sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    saveState = '已保存'
     try { localStorage.setItem('vedio_studio_last', name) } catch (e) { }
     await loadAssets(d)
-    $refs.stage.$data.setDoc(d, assets)
+    // 关键：传 sandbox 读出的 doc 代理（而非裸 d）——vhtml copyBind 保证同一
+    // 代理对象贯穿后续赋值，stage 与父组件由此共享同一响应式图，
+    // 舞台拖拽写入才能被 inspector 感知、被 doSave 持久化。
+    $refs.stage.$data.setDoc(doc, assets)
     showToast('已打开：' + curTitle)
     return d
   }
 
   reloadProject = async () => {
     if (!curName) return
-    const r = await pf.readRaw(projIndex(curName))
-    const d = JSON.parse(r.content)
+    const d = ensureTheme(JSON.parse(await fsText(projIndex(curName))))
     doc = d
     curTitle = d.title || curName
+    // 选中态校验：元素/场景可能已被外部（AI）删除
+    if (sel.kind === 'element') {
+      const sc = d.scenes[sel.sceneIndex]
+      if (!sc || !(sc.elements || []).some((e) => e.id === sel.elId)) sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    } else if (sel.kind === 'scene' && sel.sceneIndex >= d.scenes.length) {
+      sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    }
     await loadAssets(d)
-    $refs.stage.$data.setDoc(d, assets)
+    $refs.stage.$data.setDoc(doc, assets)
   }
 
   newProject = async () => {
+    if (!storageReady()) { showToast('会话未建立，无法保存项目'); return }
     const name = 'video-' + Date.now().toString(36)
     const d = starterDoc()
-    d.title = name
-    await pf.writeText(projIndex(name), JSON.stringify(d, null, 2))
+    d.title = '未命名视频'
+    await fsPut(projIndex(name), JSON.stringify(d, null, 2))
     await openProject(name)
     showToast('已新建：' + name)
   }
 
   openCase = async (id) => {
     try {
-      // 相对路径由 vhtml 自动加 $mod.scoped 前缀（ui/cases/）
       const r = await fetch('cases/' + id + '/index.json')
       if (!r.ok) throw new Error('样例不存在: ' + id)
-      const d = await r.json()
+      const d = ensureTheme(await r.json())
       curName = ''
       curTitle = d.title || id
       doc = d
+      sel = { kind: 'none', sceneIndex: 0, elId: '' }
+      saveState = ''
       assets = {}
-      $refs.stage.$data.setDoc(d, assets)
-      showToast('已加载样例：' + curTitle + '（只读，导出会另存为新项目）')
+      $refs.stage.$data.setDoc(doc, assets)
+      showCases = false
+      showToast('已加载样例：' + curTitle + '（只读，右侧可另存为项目）')
     } catch (e) { showToast('加载样例失败：' + e.message) }
   }
 
   loadCases = async () => {
     try {
-      // 相对路径由 vhtml 自动加 $mod.scoped 前缀（ui/cases/）
       const r = await fetch('cases/cases.json')
       const list = await r.json()
       cases = Array.isArray(list) ? list : (list.cases || [])
     } catch (e) { cases = [] }
   }
 
-  deleteProjectFiles = async (name) => {
-    // page_fs 无 rm：直接操作 IndexedDB 删除前缀 keys
-    const abs = projDir(name)
-    const db = await new Promise((res, rej) => {
-      const req = indexedDB.open('aic-page-fs-' + (pf._uid || ''))
-      req.onsuccess = () => res(req.result)
-      req.onerror = () => rej(req.error)
-    })
-    const tx = db.transaction('session', 'readwrite')
-    const store = tx.objectStore('session')
-    const keys = await new Promise((res, rej) => {
-      const req = store.getAllKeys()
-      req.onsuccess = () => res(req.result)
-      req.onerror = () => rej(req.error)
-    })
-    let n = 0
-    for (const k of keys) {
-      if (String(k).startsWith(abs)) { store.delete(k); n++ }
-    }
-    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error) })
-    db.close()
-    return n
+  saveAsProject = async () => {
+    if (!doc || curName) return
+    if (!storageReady()) { showToast('会话未建立，无法保存'); return }
+    const name = 'video-' + Date.now().toString(36)
+    await fsPut(projIndex(name), JSON.stringify(doc, null, 2))
+    await openProject(name)
+    showToast('已另存为项目：' + name + '，现在可以编辑了')
   }
 
   deleteProject = async (name) => {
-    await deleteProjectFiles(name)
-    if (curName === name) { doc = null; curName = ''; curTitle = '' }
+    await rmDir(projDir(name))
+    if (curName === name) { doc = null; curName = ''; curTitle = ''; saveState = '' }
     showToast('已删除：' + name)
     await refreshProjects()
   }
@@ -526,6 +607,226 @@
     a.click()
     a.remove()
     setTimeout(() => URL.revokeObjectURL(u), 10000)
+  }
+
+  // ---- 保存 ----
+  scheduleSave = () => {
+    if (!curName || !storageReady()) return
+    saveState = '未保存'
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(doSave, 600)
+  }
+  doSave = async () => {
+    if (!curName || !storageReady()) return
+    saveState = '保存中…'
+    try {
+      await fsPut(projIndex(curName), JSON.stringify(doc, null, 2))
+      saveState = '已保存'
+    } catch (e) {
+      console.error('save failed', e)
+      saveState = '保存失败'
+    }
+  }
+
+  // ---- 编辑数据流（§2.3）----
+  canEdit = () => {
+    if (!doc) return false
+    if (!curName) {
+      rtab = 'props'
+      showToast('样例为只读：请先在右侧「另存为项目」')
+      return false
+    }
+    return true
+  }
+
+  onDocChange = () => {
+    curTitle = (doc && doc.title) || curName
+    $refs.stage.$data.refreshFrame()
+    scheduleSave()
+  }
+  onStageChange = () => {
+    scheduleSave()
+  }
+
+  // ---- 选中模型 ----
+  activeSceneIdx = () => {
+    if (!doc) return 0
+    let acc = 0
+    for (let i = 0; i < doc.scenes.length; i++) {
+      const fr = Math.max(1, Math.round((+doc.scenes[i].duration || 1) * doc.fps))
+      if (curFrame < acc + fr) return i
+      acc += fr
+    }
+    return Math.max(0, doc.scenes.length - 1)
+  }
+
+  sceneStartFrame = (i) => {
+    let acc = 0
+    for (let k = 0; k < i; k++) acc += Math.max(1, Math.round((+doc.scenes[k].duration || 1) * doc.fps))
+    return acc
+  }
+
+  onPickScene = (i) => {
+    if (!doc) return
+    i = Math.max(0, Math.min(i, doc.scenes.length - 1))
+    sel = { kind: 'scene', sceneIndex: i, elId: '' }
+    $refs.stage.$data.seekFrame(sceneStartFrame(i))
+  }
+  onStageSelect = (s) => {
+    if (s && s.kind === 'element') {
+      sel = { kind: 'element', sceneIndex: s.sceneIndex, elId: s.id }
+    } else {
+      sel = { kind: 'scene', sceneIndex: activeSceneIdx(), elId: '' }
+    }
+  }
+  onPickEl = (id) => {
+    sel = { kind: 'element', sceneIndex: activeSceneIdx(), elId: id }
+  }
+  onSeek = (f) => {
+    $refs.stage.$data.seekFrame(f)
+  }
+  selNone = () => {
+    if (!doc) return
+    sel = { kind: 'none', sceneIndex: activeSceneIdx(), elId: '' }
+    rtab = 'props'
+  }
+
+  // ---- 场景操作 ----
+  // 注意：vhtml Wrap 代理数组上直接 splice 会复制插入项（已踩坑）——
+  // 统一走「拷贝 → 改 → 赋回」模式（赋值经 copyBind 数组合并，安全可靠）
+  const spliceScenes = (fn) => {
+    const arr = doc.scenes.slice()
+    fn(arr)
+    doc.scenes = arr
+  }
+  const spliceEls = (sc, fn) => {
+    const arr = (sc.elements || []).slice()
+    fn(arr)
+    sc.elements = arr
+  }
+  addScene = () => {
+    if (!canEdit()) return
+    const i = sel.sceneIndex != null ? sel.sceneIndex : doc.scenes.length - 1
+    const at = Math.min(i, doc.scenes.length - 1) + 1
+    spliceScenes((a) => a.splice(at, 0, {
+      id: 's' + uid(), duration: 3, transition: 'fade', transitionIn: 0.6,
+      elements: [],
+    }))
+    sceneVer++
+    onPickScene(at)
+    onDocChange()
+  }
+  dupScene = (i) => {
+    if (!canEdit()) return
+    const c = JSON.parse(JSON.stringify(doc.scenes[i]))
+    c.id = 's' + uid()
+    spliceScenes((a) => a.splice(i + 1, 0, c))
+    sceneVer++
+    onPickScene(i + 1)
+    onDocChange()
+  }
+  delScene = (i) => {
+    if (!canEdit() || doc.scenes.length <= 1) return
+    spliceScenes((a) => a.splice(i, 1))
+    sceneVer++
+    const ni = Math.max(0, Math.min(i, doc.scenes.length - 1))
+    onPickScene(ni)
+    onDocChange()
+  }
+  moveScene = ({ i, d }) => {
+    if (!canEdit()) return
+    const j = i + d
+    if (j < 0 || j >= doc.scenes.length) return
+    spliceScenes((a) => {
+      const t = a[i]
+      a.splice(i, 1)
+      a.splice(j, 0, t)
+    })
+    sceneVer++
+    onPickScene(j)
+    onDocChange()
+  }
+
+  // ---- 元素操作 ----
+  makeElement = (type, sub) => {
+    const W = doc.size.width, H = doc.size.height
+    const id = (type === 'shape' ? sub : type) + '-' + uid()
+    const base = { id, type, x: Math.round(W / 2 - 160), y: Math.round(H / 2 - 45), w: 320, h: 90 }
+    if (type === 'text') return Object.assign(base, {
+      html: '双击编辑文本', fontSize: 42, fontWeight: 600, color: doc.theme.color,
+      align: 'center', valign: 'middle', fx: { enter: 'fade-up', enterDur: 0.6, delay: 0.2 },
+    })
+    if (type === 'shape') {
+      const o = Object.assign(base, { shape: sub || 'rect', fill: doc.theme.accent, w: 240, h: 170 })
+      if (sub === 'rect') o.radius = 14
+      if (sub === 'arrow') { o.direction = 'right'; o.h = 90 }
+      if (sub === 'triangle') { o.w = 200; o.h = 180 }
+      return o
+    }
+    if (type === 'image') return Object.assign(base, { w: 360, h: 220, src: '', fit: 'contain' })
+    if (type === 'chart') return Object.assign(base, {
+      w: 560, h: 340, x: Math.round(W / 2 - 280), y: Math.round(H / 2 - 170),
+      option: { xAxis: { data: ['Q1', 'Q2', 'Q3', 'Q4'] }, series: [{ type: 'bar', data: [120, 210, 340, 520] }] },
+    })
+    if (type === 'table') return Object.assign(base, {
+      w: 480, h: 220, x: Math.round(W / 2 - 240), y: Math.round(H / 2 - 110),
+      columns: [{ w: 0.6 }, { w: 0.4 }],
+      rows: [
+        { cells: [{ html: '名称', bold: true }, { html: '数值', bold: true }] },
+        { cells: [{ html: '项目 A' }, { html: '12' }] },
+        { cells: [{ html: '项目 B' }, { html: '34' }] },
+      ],
+      header: true,
+      style: { fontSize: 16, color: '#e2e8f0', headerBg: doc.theme.accent, borderColor: 'rgba(255,255,255,0.15)' },
+    })
+    return base
+  }
+
+  onAddEl = ({ type, sub }) => {
+    if (!canEdit() || !doc) return
+    const i = activeSceneIdx()
+    const sc = doc.scenes[i]
+    if (!sc) return
+    const el = makeElement(type, sub)
+    spliceEls(sc, (a) => a.push(el))
+    sel = { kind: 'element', sceneIndex: i, elId: el.id }
+    onDocChange()
+    showToast('已添加元素：' + el.id)
+  }
+
+  delElement = (id) => {
+    if (!canEdit()) return
+    const sc = doc.scenes[sel.sceneIndex]
+    if (!sc) return
+    const i = (sc.elements || []).findIndex((e) => e.id === id)
+    if (i >= 0) spliceEls(sc, (a) => a.splice(i, 1))
+    sel = { kind: 'scene', sceneIndex: sel.sceneIndex, elId: '' }
+    onDocChange()
+  }
+
+  dupElement = (id) => {
+    if (!canEdit()) return
+    const sc = doc.scenes[sel.sceneIndex]
+    const el = sc && (sc.elements || []).find((e) => e.id === id)
+    if (!el) return
+    const c = JSON.parse(JSON.stringify(el))
+    c.id = (c.type || 'el') + '-' + uid()
+    c.x = (+c.x || 0) + 24
+    c.y = (+c.y || 0) + 24
+    spliceEls(sc, (a) => a.push(c))
+    sel = { kind: 'element', sceneIndex: sel.sceneIndex, elId: c.id }
+    onDocChange()
+  }
+
+  // ---- 素材上传 ----
+  uploadAsset = async (file) => {
+    if (!curName || !storageReady()) throw new Error('请先新建或另存为项目')
+    const ext = (String((file.name || '').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin')
+    const ref = 'assets/' + Date.now().toString(36) + '.' + ext
+    await fsPut(projDir(curName) + '/' + ref, file)
+    const dataUrl = await blobToDataURL(file)
+    assets[ref] = dataUrl
+    return ref
   }
 
   // ---- 导出 ----
@@ -557,10 +858,10 @@
       showToast('开始导出…')
       const blob = await doExport({})
       downloadBlob(blob, safeTitle() + '.mp4')
-      if (pf) {
+      if (storageReady()) {
         try {
-          await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
-        } catch (e) { console.warn('export saved to page_fs failed:', e) }
+          await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
+        } catch (e) { console.warn('export saved to cloud fs failed:', e) }
       }
       showToast('导出完成：' + safeTitle() + '.mp4')
     } catch (e) {
@@ -570,8 +871,33 @@
   }
 
   initPage()
+</script>
+<script>
+  // rAF 循环：同步舞台当前帧 → 顶层标量 curFrame（驱动时间轴 playhead 与属性面板）
+  const frameLoop = () => {
+    const st = $refs.stage
+    curFrame = (st && st.$data.engine && st.$data.engine.frame) || 0
+    requestAnimationFrame(frameLoop)
+  }
+  requestAnimationFrame(frameLoop)
 
-  // sid 变化（ai-box 建立会话 / URL 带 session_id）时绑定 page_exec
-  $watch(() => sid, (v) => { if (v && !pe) bindPageExec() })
+  // 快捷键（焦点在输入控件时不生效）
+  window.addEventListener('keydown', (e) => {
+    const t = e.target
+    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+    if (typing) return
+    if (e.code === 'Space') {
+      e.preventDefault()
+      const st = $refs.stage
+      if (st && st.$data.doc) st.$data.togglePlay()
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (!doc || !curName) return
+      e.preventDefault()
+      if (sel.kind === 'element') delElement(sel.elId)
+      else if (sel.kind === 'scene') delScene(sel.sceneIndex)
+    } else if (e.key === 'Escape') {
+      selNone()
+    }
+  })
 </script>
 </html>

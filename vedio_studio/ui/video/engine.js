@@ -210,14 +210,92 @@ export const easing = {
       c3 = c1 + 1;
     return c3 * t * t * t - c1 * t * t;
   },
-  spring: (t) => {
-    // gentle under-damped spring approximation (settles ~1.0 at t=1)
-    const f = clamp(t, 0, 1);
-    return 1 - Math.exp(-5.5 * f) * Math.cos(8.5 * f);
-  },
+  spring: null, // 占位：由下方 springPhysics 默认值填充
 };
+
+/** 真实弹簧物理（移植 remotion core spring 的闭式解，从静止开始求 t 秒位置）：
+ *  欠阻尼：1 - e^(-ζω₀t)·(sin(ω₁t)·ζω₀/ω₁ + cos(ω₁t))；临界/过阻尼用指数近似。
+ *  返回 0→1 的进度（可能过冲 >1 或回摆 <1，调用方不得 clamp）。 */
+export function springPhysics(damping = 10, stiffness = 100, mass = 1) {
+  const c = Math.max(0.01, +damping || 10),
+    k = Math.max(1, +stiffness || 100),
+    m = Math.max(0.01, +mass || 1);
+  const zeta = c / (2 * Math.sqrt(k * m));
+  const omega0 = Math.sqrt(k / m);
+  const omega1 = omega0 * Math.sqrt(Math.max(0, 1 - zeta * zeta));
+  return (t) => {
+    t = clamp(t, 0, 1);
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const time = t * 2.2; // 归一化：t=1 时基本稳定（2.2s 物理时长）
+    if (zeta < 1) {
+      const env = Math.exp(-zeta * omega0 * time);
+      return (
+        1 -
+        env *
+          (Math.sin(omega1 * time) * ((zeta * omega0) / omega1) +
+            Math.cos(omega1 * time))
+      );
+    }
+    const env = Math.exp(-omega0 * time);
+    return 1 - env * (1 + omega0 * time);
+  };
+}
+easing.spring = springPhysics(10, 100, 1);
+
+/** CSS cubic-bezier 缓动求解（Newton-Raphson + 二分回退）。 */
+export function bezierEasing(x1, y1, x2, y2) {
+  const cx = 3 * x1,
+    bx = 3 * (x2 - x1) - cx,
+    ax = 1 - cx - bx,
+    cy = 3 * y1,
+    by = 3 * (y2 - y1) - cy,
+    ay = 1 - cy - by;
+  const sampleX = (t) => ((ax * t + bx) * t + cx) * t;
+  const sampleY = (t) => ((ay * t + by) * t + cy) * t;
+  const sampleDX = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  const solveX = (x) => {
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const err = sampleX(t) - x;
+      if (Math.abs(err) < 1e-6) return t;
+      const d = sampleDX(t);
+      if (Math.abs(d) < 1e-6) break;
+      t -= err / d;
+    }
+    let lo = 0,
+      hi = 1;
+    t = x;
+    while (hi - lo > 1e-6) {
+      if (sampleX(t) < x) lo = t;
+      else hi = t;
+      t = (lo + hi) / 2;
+    }
+    return t;
+  };
+  return (x) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    return sampleY(solveX(clamp(x, 0, 1)));
+  };
+}
+
+/** easing 名称解析：支持参数化 "spring(damping,stiffness,mass)" 与
+ *  "bezier(x1,y1,x2,y2)"（如 Showreel 的 bezier(0.16,1,0.3,1)）。 */
 export function easingOf(name) {
-  return easing[name] || easing.easeInOut;
+  if (typeof name === "function") return name;
+  const s = String(name || "").trim();
+  let m = s.match(/^spring\(([^)]*)\)$/);
+  if (m) {
+    const p = m[1].split(",").map((v) => parseFloat(v));
+    return springPhysics(p[0], p[1], p[2]);
+  }
+  m = s.match(/^(?:cubic-)?bezier\(([^)]*)\)$/);
+  if (m) {
+    const p = m[1].split(",").map((v) => parseFloat(v));
+    return bezierEasing(p[0], p[1], p[2], p[3]);
+  }
+  return easing[s] || easing.easeInOut;
 }
 
 /**
@@ -441,7 +519,9 @@ const EXIT_TYPES = {
   "none": { from: {}, to: {} },
 };
 
-/** Entrance progress 0..1 for an element at scene-local time t (seconds). */
+/** Entrance progress 0..1 for an element at scene-local time t (seconds).
+ *  默认曲线 bezier(0.16,1,0.3,1)（Showreel 标志性 out-expo 曲线）；
+ *  fx.enterEasing 可覆盖（spring / bezier(...) / 命名缓动）。 */
 export function enterProgress(el, t) {
   const fx = el.fx;
   if (!fx || !fx.enter || fx.enter === "none") return 1;
@@ -449,7 +529,7 @@ export function enterProgress(el, t) {
   return interpolate(t, [fx.delay || 0, (fx.delay || 0) + d], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: "easeOut",
+    easing: easingOf(fx.enterEasing || "bezier(0.16,1,0.3,1)"),
   });
 }
 /** Exit progress 1..0; 1 = fully visible, 0 = gone. */
@@ -461,15 +541,25 @@ export function exitProgress(el, sceneDur, t) {
   return interpolate(t, [start, sceneDur], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: "easeIn",
+    easing: easingOf(fx.exitEasing || "bezier(0.7,0,0.84,0)"),
   });
 }
 
-/** Sample keyframes at scene-local t (seconds). Returns {x,y,scale,rotation,opacity} offsets/absolutes. */
+/** Sample keyframes at scene-local t (seconds).
+ *  x/y are ABSOLUTE document coordinates (null when unspecified — the
+ *  caller translates them into offsets relative to el.x/el.y);
+ *  scale/rotation/opacity default to 1/0/1. */
 export function sampleKeyframes(el, t) {
   const kf = el.keyframes;
-  const out = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 };
+  const out = { x: null, y: null, scale: 1, rotation: 0, opacity: 1 };
   if (!Array.isArray(kf) || !kf.length) return out;
+  // kfLoop：时间在关键帧区间内取模循环（环境动画：漂移/走马灯/粒子）
+  if (el.kfLoop && kf.length >= 2) {
+    const t0 = kf[0].t,
+      t1 = kf[kf.length - 1].t,
+      span = t1 - t0;
+    if (span > 0) t = t0 + ((((t - t0) % span) + span) % span);
+  }
   if (t <= kf[0].t) return applyKey(out, kf[0]);
   const last = kf[kf.length - 1];
   if (t >= last.t) return applyKey(out, last);
@@ -483,7 +573,7 @@ export function sampleKeyframes(el, t) {
         if (a[k] != null && b[k] != null) out[k] = a[k] + (b[k] - a[k]) * e;
         else if (a[k] != null) out[k] = a[k];
         else if (b[k] != null) out[k] = b[k];
-        else out[k] = k === "scale" ? 1 : k === "opacity" ? 1 : 0;
+        // 否则保持缺省：x/y = null（未指定），scale/rotation/opacity = 1/0/1
       });
       return out;
     }
@@ -497,13 +587,20 @@ function applyKey(out, k) {
   return out;
 }
 
-/** Combined per-frame element state: {opacity, dx, dy, scale, rotation}. */
+/** Combined per-frame element state: {opacity, dx, dy, scale, rotation}.
+ *  Keyframe x/y are absolute document coordinates → converted to offsets. */
 export function elementState(el, sceneDur, t) {
   const kf = sampleKeyframes(el, t);
   const en = enterProgress(el, t);
   const ex = exitProgress(el, sceneDur, t);
   let op = (el.opacity == null ? 1 : el.opacity) * kf.opacity * en * ex;
-  const state = { opacity: op, dx: kf.x, dy: kf.y, scale: kf.scale, rotation: kf.rotation };
+  const state = {
+    opacity: op,
+    dx: kf.x != null ? kf.x - (+el.x || 0) : 0,
+    dy: kf.y != null ? kf.y - (+el.y || 0) : 0,
+    scale: kf.scale,
+    rotation: kf.rotation,
+  };
 
   const fx = el.fx;
   if (fx && fx.enter && ENTER_TYPES[fx.enter] && en < 1) {
@@ -681,7 +778,7 @@ function renderTable(el) {
   );
 }
 
-function renderChart(el, doc) {
+function renderChart(el, doc, ctx) {
   const opt = el.option || {};
   const series = Array.isArray(opt.series) ? opt.series : [];
   const pal =
@@ -746,14 +843,24 @@ function renderChart(el, doc) {
     out +=
       `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + ih}" stroke="rgba(128,128,128,.4)"/><line x1="${padL}" y1="${Y(Math.max(min, 0))}" x2="${padL + iw}" y2="${Y(Math.max(min, 0))}" stroke="rgba(128,128,128,.4)"/>`;
     const band = iw / n;
+    let drawP = 1;
+    if (opt.draw && ctx) {
+      const dur = +opt.draw || 2;
+      drawP = clamp((ctx.t - (+opt.drawDelay || 0)) / dur, 0, 1);
+      drawP = easingOf(opt.drawEasing || "bezier(0.65,0,0.35,1)")(drawP);
+    }
     series.forEach((s, si) => {
       const col = pal[si % pal.length];
       const vals2 = (s.data || []).map((v) => +v || 0);
       if (s.type === "line") {
         const pts = vals2.map((v, i) => padL + band * (i + 0.5) + "," + Y(v)).join(" ");
+        const drawAttrs = opt.draw
+          ? ` pathLength="1" stroke-dasharray="1" stroke-dashoffset="${(1 - drawP).toFixed(4)}"`
+          : "";
         out +=
-          `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"/>`;
+          `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"${drawAttrs}/>`;
         vals2.forEach((v, i) => {
+          if (opt.draw && drawP < (i + 0.5) / vals2.length) return;
           out += `<circle cx="${padL + band * (i + 0.5)}" cy="${Y(v)}" r="3" fill="${col}"/>`;
         });
       } else if (s.type === "scatter") {
@@ -807,6 +914,57 @@ function renderTextHtml(el, doc, ctx) {
   return sanitizeHtml(html);
 }
 
+/** 逐字/逐词 stagger（移植 Showreel 逐字弹簧语义）：纯文本拆分为 span，
+ *  每个单元以 spring（或指定缓动）从 dy/dx/rotation/scaleFrom 过渡到原位。
+ *  el.stagger = { by:'char'|'word', step, delay, dur, dy, dx, rotation,
+ *                 scaleFrom, easing（默认 spring(13,170,0.9)） } */
+function staggerSpans(el, t) {
+  const st = el.stagger || {};
+  const by = st.by || "char";
+  const text = String(el.html || "");
+  const parts = by === "word" ? text.split(/(\s+)/) : [...text];
+  const step = st.step != null ? +st.step : 0.06;
+  const delay0 = +st.delay || 0;
+  const dur = +st.dur || 0.8;
+  const ez = easingOf(st.easing || "spring(13,170,0.9)");
+  const dy = st.dy != null ? +st.dy : 60;
+  const dx = +st.dx || 0;
+  const rot = +st.rotation || 0;
+  const scaleFrom = st.scaleFrom != null ? +st.scaleFrom : null;
+  let html = "";
+  let vi = 0;
+  for (const p of parts) {
+    if (by === "word" && /^\s+$/.test(p)) { html += " "; continue; }
+    const idx = vi++;
+    const local = clamp((t - delay0 - idx * step) / dur, 0, 1);
+    const prog = ez(local);
+    const op = clamp(prog / 0.35, 0, 1);
+    const tx = (1 - prog) * dx;
+    const ty = (1 - prog) * dy;
+    const ro = rot ? (1 - prog) * rot * (idx % 2 === 0 ? 1 : -1) : 0;
+    const sc = scaleFrom != null ? scaleFrom + (1 - scaleFrom) * prog : 1;
+    const ch = p === " " ? "&nbsp;" : escapeHtml(p);
+    html +=
+      `<span style="display:inline-block;opacity:${op.toFixed(3)};` +
+      `transform:translate(${tx.toFixed(1)}px,${ty.toFixed(1)}px) rotate(${ro.toFixed(2)}deg) scale(${sc.toFixed(3)});` +
+      `transform-origin:center">${ch}</span>`;
+  }
+  return html;
+}
+
+/** svg 描边生长：为 markup 中的 <path> 注入 pathLength/dasharray/dashoffset，
+ *  进度由 el.draw = { dur, delay, easing } 驱动（确定性、导出安全）。 */
+function applySvgDraw(markup, el, t) {
+  const d = el.draw || {};
+  const dur = +d.dur || 1.5;
+  const p = clamp((t - (+d.delay || 0)) / dur, 0, 1);
+  const e = easingOf(d.easing || "bezier(0.65,0,0.35,1)")(p);
+  return markup.replace(/<path\b([^>]*?)(\/?)>/g, (m, attrs, close) => {
+    if (/pathLength\s*=|stroke-dasharray\s*=/.test(attrs)) return m;
+    return `<path${attrs} pathLength="1" stroke-dasharray="1" stroke-dashoffset="${(1 - e).toFixed(4)}"${close}>`;
+  });
+}
+
 /** Render one element to an absolutely-positioned div (doc coordinates).
  *  ctx: { t (scene-local s), state (elementState), assetMap, fields, fps }
  *  Returns a detached DOM node with inline styles — export-safe. */
@@ -847,8 +1005,12 @@ export function renderElement(el, doc, ctx) {
       node.style.webkitTextStroke = el.textStroke.width + "px " + (el.textStroke.color || "#000");
       if (el.textStroke.fill === "none") node.style.color = "transparent";
     }
+    const inner =
+      el.stagger && !/<[a-z]/i.test(el.html || "")
+        ? staggerSpans(el, ctx.t)
+        : renderTextHtml(el, doc, ctx);
     node.innerHTML =
-      '<div style="width:100%">' + renderTextHtml(el, doc, ctx) + "</div>";
+      '<div style="width:100%">' + inner + "</div>";
   } else if (el.type === "shape") {
     node.innerHTML = renderShape(el);
   } else if (el.type === "image") {
@@ -863,15 +1025,16 @@ export function renderElement(el, doc, ctx) {
     node.style.overflow = "hidden";
     if (el.radius) node.style.borderRadius = el.radius + "px";
   } else if (el.type === "svg") {
-    const markup = el.asset
+    let markup = el.asset
       ? resolveAssetUrl(el.asset, ctx.assetMap)
       : el.markup || "";
+    if (el.draw && markup) markup = applySvgDraw(markup, el, ctx.t);
     node.innerHTML =
       (el.css ? "<style>" + el.css.replace(/<\//g, "<\\/") + "</style>" : "") + markup;
   } else if (el.type === "table") {
     node.innerHTML = renderTable(el);
   } else if (el.type === "chart") {
-    node.innerHTML = renderChart(el, doc);
+    node.innerHTML = renderChart(el, doc, ctx);
   } else if (el.type === "media") {
     const tag = el.kind === "audio" ? "audio" : "video";
     const m = document.createElement(tag);
@@ -991,12 +1154,12 @@ export function buildFrame(doc, frame, opts = {}) {
     bar.className = "vd-caption";
     bar.textContent = cap.text;
     bar.style.cssText =
-      `position:absolute;left:50%;bottom:${cs.bottom != null ? cs.bottom : 64}px;transform:translateX(-50%);` +
+      `position:absolute;left:0;right:0;bottom:${cs.bottom != null ? cs.bottom : 64}px;margin:0 auto;width:fit-content;` +
       `max-width:84%;font-size:${cs.fontSize || 40}px;font-family:${doc.theme.fontFamily};` +
       `color:${cs.color || "#fff"};text-align:center;line-height:1.35;` +
       `padding:${cs.paddingY || 8}px ${cs.paddingX || 18}px;border-radius:${cs.radius || 10}px;` +
       `background:${cs.background || "rgba(0,0,0,0.45)"};` +
-      (cs.stroke ? `-webkit-text-stroke:${cs.strokeWidth || 3}px ${cs.stroke};text-shadow:0 2px 6px rgba(0,0,0,.5);` : "");
+      (cs.stroke ? `-webkit-text-stroke:${cs.strokeWidth || 3}px ${cs.stroke};paint-order:stroke fill;text-shadow:0 2px 6px rgba(0,0,0,.5);` : "");
     root.appendChild(bar);
   }
 

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+  <head><title>Video Timeline</title></head>
+  <style>
+    body { display: flex; flex-direction: column; height: 100%; min-height: 0; background: rgba(13, 17, 28, 0.9); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+    .tl-bar {
+      flex: none; display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .tl-sec { font-size: 12px; color: #64748b; font-weight: 600; letter-spacing: 0.5px; margin-right: 4px; }
+    .tl-adds { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tl-adds button {
+      border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
+      color: #94a3b8; font-size: 11.5px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    }
+    .tl-adds button:hover { background: rgba(67, 97, 238, 0.25); color: #e0e7ff; border-color: rgba(67, 97, 238, 0.4); }
+    .tl-adds button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .sp { flex: 1; }
+    .tl-time { font-size: 11.5px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+    .tl-zoom {
+      background: rgba(255, 255, 255, 0.06); color: #94a3b8; border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px; font-size: 11px; padding: 2px 4px; outline: none;
+    }
+    .tl-scroll { flex: 1; overflow: auto; position: relative; }
+    .tl-inner { position: relative; min-width: 100%; padding-bottom: 6px; }
+
+    .tl-ruler { position: relative; height: 22px; cursor: ew-resize; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .tl-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(255, 255, 255, 0.13); padding-left: 3px; font-size: 10px; color: #64748b; line-height: 20px; user-select: none; }
+    .tl-tick.minor { border-left-color: rgba(255, 255, 255, 0.05); }
+
+    .tl-row { position: relative; height: 26px; margin-top: 4px; }
+    .tl-scene {
+      position: absolute; top: 0; height: 100%; border-radius: 5px;
+      background: rgba(67, 97, 238, 0.16); border: 1px solid rgba(67, 97, 238, 0.35);
+      color: #a5b4fc; font-size: 11px; line-height: 24px; padding: 0 7px;
+      cursor: pointer; overflow: hidden; white-space: nowrap; box-sizing: border-box;
+    }
+    .tl-scene:hover { background: rgba(67, 97, 238, 0.28); }
+    .tl-scene.active { background: rgba(67, 97, 238, 0.4); border-color: #6366f1; color: #fff; }
+    .tl-tr { color: #818cf8; margin-left: 4px; }
+
+    .tl-elrow { position: relative; height: 22px; margin-top: 2px; cursor: pointer; }
+    .tl-elbar {
+      position: absolute; top: 2px; height: 18px; border-radius: 4px;
+      background: rgba(148, 163, 184, 0.13); border: 1px solid rgba(148, 163, 184, 0.22);
+      box-sizing: border-box; overflow: hidden;
+    }
+    .tl-elrow:hover .tl-elbar { background: rgba(148, 163, 184, 0.22); }
+    .tl-elrow.active .tl-elbar { background: rgba(34, 197, 94, 0.22); border-color: rgba(34, 197, 94, 0.55); }
+    .tl-elname {
+      position: absolute; left: 5px; top: 0; font-size: 10.5px; line-height: 18px;
+      color: #94a3b8; white-space: nowrap; pointer-events: none;
+    }
+    .tl-elrow.active .tl-elname { color: #bbf7d0; }
+    .tl-kf {
+      position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px;
+      background: #fbbf24; transform: rotate(45deg); border-radius: 1px;
+    }
+    .tl-playhead {
+      position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid #f43f5e;
+      pointer-events: none; z-index: 5;
+    }
+    .tl-playhead::before {
+      content: ''; position: absolute; top: 0; left: -5.5px;
+      border: 5px solid transparent; border-top: 7px solid #f43f5e;
+    }
+    .tl-empty { padding: 18px; text-align: center; color: #4b5563; font-size: 12px; }
+  </style>
+  <body>
+    <div class="tl-bar">
+      <span class="tl-sec">时间轴</span>
+      <div class="tl-adds">
+        <button @click="add('text')" :disabled="readonly || !doc">+ 文本</button>
+        <button @click="add('shape', 'rect')" :disabled="readonly || !doc">+ 矩形</button>
+        <button @click="add('shape', 'ellipse')" :disabled="readonly || !doc">+ 椭圆</button>
+        <button @click="add('shape', 'triangle')" :disabled="readonly || !doc">+ 三角</button>
+        <button @click="add('shape', 'arrow')" :disabled="readonly || !doc">+ 箭头</button>
+        <button @click="add('image')" :disabled="readonly || !doc">+ 图片</button>
+        <button @click="add('chart')" :disabled="readonly || !doc">+ 图表</button>
+        <button @click="add('table')" :disabled="readonly || !doc">+ 表格</button>
+      </div>
+      <div class="sp"></div>
+      <span class="tl-time">{{ fmtT(frame / fpsOf()) }} / {{ fmtT(totalDur()) }}</span>
+      <select class="tl-zoom" :value="pps" @change="pps = +$event.target.value">
+        <option value="30" :selected="pps === 30">缩放 30px/s</option>
+        <option value="60" :selected="pps === 60">缩放 60px/s</option>
+        <option value="100" :selected="pps === 100">缩放 100px/s</option>
+      </select>
+    </div>
+    <div class="tl-scroll">
+      <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }" v-if="doc">
+        <div class="tl-ruler" @mousedown="onRulerDown">
+          <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
+        </div>
+        <div class="tl-row">
+          <div v-for="b in blocks()" :key="ver + ':' + b.id" class="tl-scene" :class="{ active: b.i === curSceneIdx() }"
+               :style="{ left: b.x + 'px', width: b.w + 'px' }"
+               @mousedown="onSceneDown(b)">
+            S{{ b.i + 1 }}<span v-if="b.trans" class="tl-tr">⇢</span>
+          </div>
+        </div>
+        <div class="tl-elrow" v-for="el in curEls()" :key="el.id" :class="{ active: sel && sel.kind === 'element' && sel.elId === el.id }" @click="pickEl(el.id)">
+          <div class="tl-elbar" :style="elBarStyle()">
+            <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"></div>
+          </div>
+          <span class="tl-elname" :style="{ left: (elNameX() + 10) + 'px' }">{{ el.id }} · {{ el.type }}</span>
+        </div>
+        <div class="tl-playhead" :style="{ left: playX() + 'px' }"></div>
+      </div>
+      <div class="tl-empty" v-if="!doc">打开项目后此处显示时间轴</div>
+    </div>
+  </body>
+  <script setup>
+    doc = null         // prop
+    frame = 0          // prop：当前帧（父级 rAF 同步）
+    sel = null         // prop：{ kind, sceneIndex, elId }
+    readonly = false   // prop
+    ver = 0            // prop：场景结构版本号
+    pps = 60           // 像素/秒
+
+    fpsOf = () => (doc && doc.fps) || 30
+    sceneFrames = (s) => Math.max(1, Math.round((+s.duration || 1) * fpsOf()))
+
+    blocks = () => {
+      if (!doc) return []
+      let acc = 0
+      return doc.scenes.map((s, i) => {
+        const fr = sceneFrames(s)
+        const b = {
+          id: s.id, i,
+          startF: acc, frames: fr,
+          x: (acc / fpsOf()) * pps,
+          w: (fr / fpsOf()) * pps,
+          trans: i > 0 && s.transition && s.transition !== 'none',
+        }
+        acc += fr
+        return b
+      })
+    }
+
+    totalDur = () => {
+      const bs = blocks()
+      if (!bs.length) return 0
+      const last = bs[bs.length - 1]
+      return (last.startF + last.frames) / fpsOf()
+    }
+
+    innerW = () => Math.max(totalDur() * pps + 60, 200)
+
+    curSceneIdx = () => {
+      const bs = blocks()
+      for (let i = 0; i < bs.length; i++) {
+        if (frame < bs[i].startF + bs[i].frames) return i
+      }
+      return Math.max(0, bs.length - 1)
+    }
+
+    ticks = () => {
+      const dur = totalDur()
+      const out = []
+      const step = pps >= 50 ? 0.5 : 1
+      for (let t = 0; t <= Math.ceil(dur) + 0.001; t += step) {
+        const major = Math.abs(t - Math.round(t)) < 0.001
+        out.push({ x: Math.round(t * pps * 100) / 100, major, label: major ? fmtS(Math.round(t)) : '' })
+      }
+      return out
+    }
+
+    playX = () => (frame / fpsOf()) * pps
+
+    curEls = () => {
+      if (!doc) return []
+      const sc = doc.scenes[curSceneIdx()]
+      return sc ? (sc.elements || []) : []
+    }
+
+    elBarStyle = () => {
+      const b = blocks()[curSceneIdx()]
+      if (!b) return {}
+      return { left: b.x + 'px', width: Math.max(6, b.w) + 'px' }
+    }
+    elNameX = () => {
+      const b = blocks()[curSceneIdx()]
+      return b ? b.x : 0
+    }
+    kfX = (k) => ((+k.t || 0) * pps) + 'px'
+
+    /* ---------------- 事件 ---------------- */
+    add = (type, sub) => { if (!readonly) $emit('addel', { type, sub }) }
+    pickEl = (id) => $emit('pickel', id)
+
+    onSceneDown = (b) => {
+      $emit('pickscene', b.i)
+      $emit('seek', b.startF)
+    }
+
+    onRulerDown = (e) => {
+      if (!doc) return
+      const inner = $refs.inner
+      if (!inner) return
+      const rect = inner.getBoundingClientRect()
+      const seekTo = (clientX) => {
+        const x = Math.max(0, Math.min(clientX - rect.left, totalDur() * pps))
+        $emit('seek', Math.round((x / pps) * fpsOf()))
+      }
+      seekTo(e.clientX)
+      const mv = (ev) => seekTo(ev.clientX)
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    fmtS = (s) => {
+      const m = Math.floor(s / 60)
+      return m + ':' + String(s % 60).padStart(2, '0')
+    }
+    fmtT = (s) => {
+      s = Math.max(0, s || 0)
+      const m = Math.floor(s / 60)
+      const r = Math.floor(s % 60)
+      const d = Math.floor((s % 1) * 10)
+      return m + ':' + String(r).padStart(2, '0') + '.' + d
+    }
+  </script>
+</html>

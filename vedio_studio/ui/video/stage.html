@@ -4,17 +4,19 @@
   <style>
     .vd-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
     .vd-host {
-      position: relative; flex: 1; min-height: 0;
-      display: flex; align-items: center; justify-content: center;
+      position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden;
       background:
         radial-gradient(1200px 600px at 50% -10%, rgba(67, 97, 238, 0.14), transparent 60%),
         #0a0e16;
-      overflow: hidden;
     }
     .vd-box {
-      position: relative;
+      position: relative; margin: auto; flex: none;
       box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-      border-radius: 4px; overflow: hidden;
+      border-radius: 4px;
+    }
+    .vd-clip {
+      position: absolute; left: 0; top: 0; overflow: hidden; border-radius: 4px;
+      transform-origin: 0 0;
     }
     .vd-empty {
       position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -22,6 +24,44 @@
       color: #4b5563; font-size: 15px;
     }
     .vd-empty b { color: #9ca3af; font-size: 17px; font-weight: 600; }
+
+    /* ---- 选中框与八向手柄 ---- */
+    .vd-sel { position: absolute; border: 1.5px solid #4f6ef7; pointer-events: none; z-index: 10; }
+    .vd-sel .nm {
+      position: absolute; top: -20px; left: -1.5px; font-size: 11px; line-height: 16px;
+      color: #e0e7ff; background: rgba(79, 110, 247, 0.92); padding: 0 7px;
+      border-radius: 4px 4px 4px 0; white-space: nowrap;
+    }
+    .vd-handle {
+      position: absolute; width: 9px; height: 9px; background: #fff;
+      border: 1.5px solid #4f6ef7; border-radius: 2px; pointer-events: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .vh-nw { left: -5px; top: -5px; cursor: nwse-resize; }
+    .vh-n  { left: calc(50% - 5px); top: -5px; cursor: ns-resize; }
+    .vh-ne { right: -5px; top: -5px; cursor: nesw-resize; }
+    .vh-e  { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+    .vh-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+    .vh-s  { left: calc(50% - 5px); bottom: -5px; cursor: ns-resize; }
+    .vh-sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+    .vh-w  { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+
+    /* ---- 文本编辑浮层 ---- */
+    .vd-textedit { position: absolute; z-index: 12; display: flex; flex-direction: column; gap: 4px; }
+    .vd-textedit textarea {
+      flex: 1; min-height: 48px; resize: both; background: rgba(15, 23, 42, 0.94);
+      color: #e5e7eb; border: 1.5px solid #4f6ef7; border-radius: 6px;
+      padding: 6px 8px; font-size: 14px; line-height: 1.4; outline: none;
+      font-family: inherit;
+    }
+    .vd-textedit .te-bar { display: flex; gap: 6px; justify-content: flex-end; }
+    .vd-textedit .te-bar button {
+      border: none; border-radius: 6px; padding: 3px 12px; font-size: 12px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.1); color: #cbd5e1;
+    }
+    .vd-textedit .te-bar button.ok { background: #4361ee; color: #fff; }
+
+    /* ---- 控制条 ---- */
     .vd-controls {
       display: flex; align-items: center; gap: 10px;
       padding: 8px 14px; background: rgba(15, 20, 32, 0.92);
@@ -31,30 +71,25 @@
       border: none; background: rgba(67, 97, 238, 0.16); color: #c7d2fe;
       width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
       font-size: 15px; display: flex; align-items: center; justify-content: center;
-      transition: background 0.15s;
+      transition: background 0.15s; flex: none;
     }
     .vd-btn:hover { background: rgba(67, 97, 238, 0.32); color: #fff; }
     .vd-btn.primary { background: #4361ee; color: #fff; width: 40px; height: 40px; }
     .vd-btn.primary:hover { background: #2563eb; }
-    .vd-seek { flex: 1; height: 5px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.12); border-radius: 99px; outline: none; cursor: pointer; }
+    .vd-seek { flex: 1; height: 5px; -webkit-appearance: none; appearance: none; background: rgba(255, 255, 255, 0.12); border-radius: 99px; outline: none; cursor: pointer; }
     .vd-seek::-webkit-slider-thumb {
       -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
-      background: #4361ee; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+      background: #4361ee; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     }
-    .vd-time { color: #9ca3af; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 96px; text-align: center; }
-    .vd-scenes { display: flex; gap: 4px; }
-    .vd-scene-chip {
-      padding: 3px 8px; border-radius: 6px; font-size: 11px; color: #6b7280;
-      background: rgba(255,255,255,0.05); cursor: pointer; white-space: nowrap;
-    }
-    .vd-scene-chip.active { background: rgba(67,97,238,0.28); color: #c7d2fe; }
+    .vd-time { color: #9ca3af; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
+
     .vd-exporting {
       position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 12px;
       background: rgba(10, 14, 22, 0.88); color: #c7d2fe; font-size: 14px;
       z-index: 20; backdrop-filter: blur(2px);
     }
-    .vd-export-bar { width: 260px; height: 6px; background: rgba(255,255,255,0.12); border-radius: 99px; overflow: hidden; }
+    .vd-export-bar { width: 260px; height: 6px; background: rgba(255, 255, 255, 0.12); border-radius: 99px; overflow: hidden; }
     .vd-export-fill { height: 100%; background: linear-gradient(90deg, #4361ee, #7c3aed); border-radius: 99px; transition: width 0.2s; }
   </style>
   <body>
@@ -62,9 +97,24 @@
       <div class="vd-host" ref="host">
         <div v-if="!doc" class="vd-empty">
           <b>暂无视频文档</b>
-          <span>在对话中让 AI 创建一个项目，或从上方选择样例</span>
+          <span>点击上方「样例」查看演示，或「新建」创建项目</span>
         </div>
-        <div class="vd-box" v-show="doc" :style="{ width: boxW + 'px', height: boxH + 'px' }" ref="box"></div>
+        <div class="vd-box" v-show="doc" ref="box"
+             :style="{ width: boxW + 'px', height: boxH + 'px' }"
+             @mousedown="onBoxMouseDown" @dblclick="onBoxDblClick">
+          <div class="vd-clip" ref="clip" :style="clipStyle()"></div>
+          <div class="vd-sel" v-if="selBox()" :style="selStyle()">
+            <div class="nm">{{ selBox().id }}</div>
+            <div v-for="h in handles" :key="h" class="vd-handle" :class="'vh-' + h" :data-vd-handle="h"></div>
+          </div>
+          <div class="vd-textedit" v-if="editing" :style="teStyle()">
+            <textarea ref="te" v:value="editHtml" @keydown.esc="cancelText()"></textarea>
+            <div class="te-bar">
+              <button @click="cancelText()">取消</button>
+              <button class="ok" @click="commitText()">完成</button>
+            </div>
+          </div>
+        </div>
         <div class="vd-exporting" v-if="exporting">
           <div>正在导出视频…</div>
           <div class="vd-export-bar"><div class="vd-export-fill" :style="{ width: exportPct + '%' }"></div></div>
@@ -74,10 +124,7 @@
       <div class="vd-controls" v-if="doc">
         <button class="vd-btn primary" @click="togglePlay()">{{ playing ? '❚❚' : '▶' }}</button>
         <input class="vd-seek" type="range" min="0" :max="totalFrames" v:value="frameVal" @input="seekFromSlider()" />
-        <div class="vd-time">{{ timeText }} / {{ durText }}</div>
-        <div class="vd-scenes">
-          <span v-for="(sc, i) in scenes" :key="sc.id" class="vd-scene-chip" :class="{ active: i === curScene }" @click="seekScene(i)">{{ i + 1 }}</span>
-        </div>
+        <div class="vd-time">{{ timeText() }} / {{ durText() }} · {{ frameVal }}/{{ totalFrames }}f</div>
         <button class="vd-btn" title="静音" @click="toggleMute()">{{ muted ? '🔇' : '🔊' }}</button>
       </div>
     </div>
@@ -85,8 +132,10 @@
   <script setup>
     import { Video } from './engine.js'
 
-    doc = null          // video/1 文档对象（父页面传入）
+    doc = null          // video/1 文档对象（父页面传入，proxy 引用，可编辑）
     assets = {}         // assetMap（父页面传入）
+    editable = false    // prop：是否可编辑（样例只读时为 false）
+    selid = ''          // prop：当前选中元素 id
     playing = false
     muted = false
     frameVal = 0
@@ -98,50 +147,85 @@
     exportText = ''
     boxW = 640
     boxH = 360
+    scale = 1
+    docW = 1280
+    docH = 720
+    editing = false
+    editingId = ''
+    editHtml = ''
+    handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 
     // 私有
-    engine = null        // 注册到 $data（父组件 loadAssets/doExport 需要访问）
+    engine = null        // 注册到 $data（父组件需要访问 frame / export）
     let rafId = 0
     let lastT = 0
-    let playT = 0        // 播放时间累积（秒），tick 的推进源
-    let audioEls = {}   // kind → HTMLAudioElement
+    let playT = 0        // 播放时间累积（秒）
+    let audioEls = {}    // kind → HTMLAudioElement
+    let drag = null      // 拖拽状态
+    let rafPending = false
 
     engine = new Video()
 
+    /* ---------------------------------------------------------- 文档装载 */
     setDoc = (d, assetMap) => {
       doc = d
       assets = assetMap || {}
       engine.assets = assets
+      const f = engine.frame || 0
       engine.load(doc)
-      totalFrames = engine.getState().totalFrames
-      scenes = engine.getState().scenes
-      frameVal = 0
-      curScene = 0
+      const st = engine.getState()
+      totalFrames = st.totalFrames
+      scenes = st.scenes
+      engine.seek(Math.min(f, Math.max(0, totalFrames - 1)))
+      frameVal = engine.frame
+      syncScene()
       stopAudio()
       setupAudio()
-      renderFrame()
       fit()
+      renderFrame()
+    }
+
+    // doc 被外部修改后调用：保持帧号重载 + 重渲染
+    refreshFrame = () => {
+      if (!doc || !engine) return
+      const f = engine.frame
+      engine.load(doc)
+      const st = engine.getState()
+      totalFrames = st.totalFrames
+      scenes = st.scenes
+      engine.seek(Math.min(f, Math.max(0, totalFrames - 1)))
+      frameVal = engine.frame
+      syncScene()
+      renderFrame()
     }
 
     fit = () => {
       const host = $refs.host
       if (!host || !doc) return
-      const pad = 24
-      const aw = host.clientWidth - pad * 2
-      const ah = host.clientHeight - pad * 2
-      const s = Math.min(aw / doc.size.width, ah / doc.size.height, 1)
-      boxW = Math.round(doc.size.width * s)
-      boxH = Math.round(doc.size.height * s)
-      $watch(() => 0)
+      const pad = 28
+      const aw = Math.max(80, host.clientWidth - pad * 2)
+      const ah = Math.max(80, host.clientHeight - pad * 2)
+      scale = Math.min(aw / doc.size.width, ah / doc.size.height)
+      docW = doc.size.width
+      docH = doc.size.height
+      boxW = Math.round(docW * scale)
+      boxH = Math.round(docH * scale)
     }
+
+    clipStyle = () => ({
+      width: docW + 'px',
+      height: docH + 'px',
+      transform: 'scale(' + scale + ')',
+    })
 
     renderFrame = () => {
-      const box = $refs.box
-      if (!box || !engine.doc) return
+      const clip = $refs.clip
+      if (!clip || !engine.doc) return
       const node = engine.buildFrame()
-      box.replaceChildren(node)
+      clip.replaceChildren(node)
     }
 
+    /* ---------------------------------------------------------- 播放 */
     tick = (t) => {
       if (!playing) return
       const dt = lastT ? Math.min(Math.max((t - lastT) / 1000, 0), 0.25) : 0
@@ -153,7 +237,6 @@
       } catch (e) { console.error('[vd tick] seek', e) }
       frameVal = engine.frame
       syncScene()
-      syncAudio()
       try {
         renderFrame()
       } catch (e) { console.error('[vd tick] render', e) }
@@ -175,27 +258,26 @@
       }
     }
 
-    seekFromSlider = () => {
-      engine.seek(frameVal)
+    seekFrame = (f) => {
+      if (!doc) return
+      engine.seek(f)
       playT = engine.frame / (engine.getState().fps || 30)
+      frameVal = engine.frame
       syncScene()
-      syncAudio()
       renderFrame()
     }
 
-    seekScene = (i) => {
-      engine.seek(scenes[i].start)
-      playT = engine.frame / (engine.getState().fps || 30)
-      frameVal = engine.frame
-      renderFrame()
+    seekFromSlider = () => {
+      seekFrame(frameVal)
+      syncAudioSeek()
     }
 
     toggleMute = () => {
       muted = !muted
-      Object.values(audioEls).forEach(a => { if (a) a.muted = muted })
+      Object.values(audioEls).forEach((a) => { if (a) a.muted = muted })
     }
 
-    // ---- preview audio (simple: music loop + voice single) ----
+    /* ---------------------------------------------------------- 音频预览 */
     setupAudio = () => {
       stopAudio()
       audioEls = {}
@@ -231,34 +313,164 @@
         voice.play().catch(() => {})
       }
     }
-    pauseAudio = () => { Object.values(audioEls).forEach(a => { if (a) a.pause() }) }
+    pauseAudio = () => { Object.values(audioEls).forEach((a) => { if (a) a.pause() }) }
     stopAudio = () => { pauseAudio(); audioEls = {} }
-    syncAudio = () => {
-      // keep music in sync after seek (no-op during playback; tick handles)
+    syncAudioSeek = () => {
+      // seek 后若正在播放，音乐重新对齐
+      if (playing) startAudio()
     }
 
     syncScene = () => {
-      const st = engine.getState()
       for (let i = 0; i < scenes.length; i++) {
         if (engine.frame >= scenes[i].start && engine.frame < scenes[i].start + scenes[i].frames) {
           curScene = i
-          break
+          return
         }
+      }
+      curScene = Math.max(0, scenes.length - 1)
+    }
+
+    /* ---------------------------------------------------------- 选中与拖拽 */
+    const findEl = (id) => {
+      if (!doc) return null
+      const sc = doc.scenes[curScene]
+      if (!sc) return null
+      return (sc.elements || []).find((e) => e.id === id) || null
+    }
+
+    selBox = () => {
+      if (!editable || !selid || !doc || editing) return null
+      const el = findEl(selid)
+      if (!el) return null
+      return {
+        x: (+el.x || 0) * scale,
+        y: (+el.y || 0) * scale,
+        w: (+el.w || 0) * scale,
+        h: (+el.h || 0) * scale,
+        rot: +el.rotation || 0,
+        id: el.id,
       }
     }
 
-    timeText = () => {
-      const f = engine.frame || 0
-      const s = Math.floor(f / (engine.getState()?.fps || 30))
-      return fmt(s)
+    selStyle = () => {
+      const b = selBox()
+      return {
+        left: b.x + 'px',
+        top: b.y + 'px',
+        width: Math.max(0, b.w) + 'px',
+        height: Math.max(0, b.h) + 'px',
+        transform: b.rot ? 'rotate(' + b.rot + 'deg)' : '',
+      }
     }
-    durText = () => {
-      return fmt(Math.floor((totalFrames || 0) / (engine.getState()?.fps || 30)))
+
+    onBoxMouseDown = (e) => {
+      if (!editable || !doc || exporting || editing) return
+      if (e.button !== 0) return
+      const h = e.target.closest ? e.target.closest('[data-vd-handle]') : null
+      if (h && selid) {
+        startDrag(e, selid, h.getAttribute('data-vd-handle'))
+        return
+      }
+      const elNode = e.target.closest ? e.target.closest('[data-el-id]') : null
+      if (elNode) {
+        const id = elNode.getAttribute('data-el-id')
+        if (id !== selid) $emit('select', { kind: 'element', sceneIndex: curScene, id })
+        startDrag(e, id, 'move')
+      } else {
+        $emit('select', null)
+      }
     }
+
+    startDrag = (e, id, mode) => {
+      const el = findEl(id)
+      if (!el) return
+      if (playing) togglePlay()
+      drag = {
+        id, mode,
+        sx: e.clientX, sy: e.clientY,
+        ox: +el.x || 0, oy: +el.y || 0, ow: +el.w || 10, oh: +el.h || 10,
+      }
+      e.preventDefault()
+      const mv = (ev) => onDragMove(ev)
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        drag = null
+        $emit('mutate')
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    onDragMove = (ev) => {
+      if (!drag) return
+      const el = findEl(drag.id)
+      if (!el) return
+      const dx = (ev.clientX - drag.sx) / scale
+      const dy = (ev.clientY - drag.sy) / scale
+      const r1 = (v) => Math.round(v * 10) / 10
+      if (drag.mode === 'move') {
+        el.x = r1(drag.ox + dx)
+        el.y = r1(drag.oy + dy)
+      } else {
+        const m = drag.mode
+        let x = drag.ox, y = drag.oy, w = drag.ow, h = drag.oh
+        if (m.indexOf('e') >= 0) w = Math.max(8, drag.ow + dx)
+        if (m.indexOf('s') >= 0) h = Math.max(8, drag.oh + dy)
+        if (m.indexOf('w') >= 0) { w = Math.max(8, drag.ow - dx); x = drag.ox + (drag.ow - w) }
+        if (m.indexOf('n') >= 0) { h = Math.max(8, drag.oh - dy); y = drag.oy + (drag.oh - h) }
+        el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h)
+      }
+      if (!rafPending) {
+        rafPending = true
+        requestAnimationFrame(() => { rafPending = false; refreshFrame() })
+      }
+    }
+
+    /* ---------------------------------------------------------- 文本编辑 */
+    onBoxDblClick = (e) => {
+      if (!editable || !doc || exporting) return
+      const elNode = e.target.closest ? e.target.closest('[data-el-id]') : null
+      if (!elNode) return
+      const id = elNode.getAttribute('data-el-id')
+      const el = findEl(id)
+      if (!el || el.type !== 'text') return
+      if (id !== selid) $emit('select', { kind: 'element', sceneIndex: curScene, id })
+      editing = true
+      editingId = id
+      editHtml = el.html || ''
+      setTimeout(() => { if ($refs.te) { $refs.te.focus(); $refs.te.select() } }, 50)
+    }
+
+    teStyle = () => {
+      const el = findEl(editingId)
+      if (!el) return {}
+      return {
+        left: (+el.x || 0) * scale + 'px',
+        top: (+el.y || 0) * scale + 'px',
+        width: Math.max(120, (+el.w || 0) * scale) + 'px',
+      }
+    }
+
+    commitText = () => {
+      const el = findEl(editingId)
+      if (el) el.html = editHtml
+      editing = false
+      editingId = ''
+      refreshFrame()
+      $emit('mutate')
+    }
+    cancelText = () => { editing = false; editingId = '' }
+
+    /* ---------------------------------------------------------- 显示辅助 */
+    timeText = () => fmt((frameVal || 0) / (engine.getState() ? engine.getState().fps : 30))
+    durText = () => fmt((totalFrames || 0) / (engine.getState() ? engine.getState().fps : 30))
     fmt = (s) => {
+      s = Math.max(0, s || 0)
       const m = Math.floor(s / 60)
       const r = Math.floor(s % 60)
-      return m + ':' + String(r).padStart(2, '0')
+      const d = Math.floor((s % 1) * 10)
+      return m + ':' + String(r).padStart(2, '0') + '.' + d
     }
 
     // 导出进度（父页面调用）
@@ -267,5 +479,10 @@
       exportPct = pct || 0
       exportText = text || ''
     }
+  </script>
+  <script>
+    // DOM 就绪后：宿主尺寸变化 → 重新适配缩放
+    const ro = new ResizeObserver(() => { fit() })
+    ro.observe($refs.host)
   </script>
 </html>
