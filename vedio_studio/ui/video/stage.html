@@ -100,9 +100,10 @@
     boxH = 360
 
     // 私有
-    let engine = null
+    engine = null        // 注册到 $data（父组件 loadAssets/doExport 需要访问）
     let rafId = 0
     let lastT = 0
+    let playT = 0        // 播放时间累积（秒），tick 的推进源
     let audioEls = {}   // kind → HTMLAudioElement
 
     engine = new Video()
@@ -143,13 +144,19 @@
 
     tick = (t) => {
       if (!playing) return
-      const dt = lastT ? (t - lastT) / 1000 : 0
+      const dt = lastT ? Math.min(Math.max((t - lastT) / 1000, 0), 0.25) : 0
       lastT = t
-      engine.seek(engine.frame + Math.max(0, dt) * engine.getState().fps)
+      playT += dt
+      if (playT >= totalFrames / engine.getState().fps) { playT = 0; engine.seek(0) }
+      try {
+        engine.seek(playT * engine.getState().fps)
+      } catch (e) { console.error('[vd tick] seek', e) }
       frameVal = engine.frame
       syncScene()
       syncAudio()
-      renderFrame()
+      try {
+        renderFrame()
+      } catch (e) { console.error('[vd tick] render', e) }
       rafId = requestAnimationFrame(tick)
     }
 
@@ -157,7 +164,8 @@
       if (!doc) return
       playing = !playing
       if (playing) {
-        if (engine.frame >= totalFrames - 1) engine.seek(0)
+        if (engine.frame >= totalFrames - 1) { playT = 0; engine.seek(0) }
+        playT = engine.frame / (engine.getState().fps || 30)
         lastT = 0
         rafId = requestAnimationFrame(tick)
         startAudio()
@@ -169,6 +177,7 @@
 
     seekFromSlider = () => {
       engine.seek(frameVal)
+      playT = engine.frame / (engine.getState().fps || 30)
       syncScene()
       syncAudio()
       renderFrame()
@@ -176,6 +185,7 @@
 
     seekScene = (i) => {
       engine.seek(scenes[i].start)
+      playT = engine.frame / (engine.getState().fps || 30)
       frameVal = engine.frame
       renderFrame()
     }
@@ -243,8 +253,7 @@
       return fmt(s)
     }
     durText = () => {
-      if (!doc) return '0:00'
-      return fmt(Math.floor((doc.totalFrames || 0) / (doc.fps || 30)))
+      return fmt(Math.floor((totalFrames || 0) / (engine.getState()?.fps || 30)))
     }
     fmt = (s) => {
       const m = Math.floor(s / 60)

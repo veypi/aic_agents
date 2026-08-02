@@ -26,9 +26,19 @@ function sleep(ms) {
 }
 
 /** Serialize a frame DOM node to an SVG foreignObject data URL, then draw it
- *  onto the given canvas at (0,0). Deterministic; waits for image decode. */
+ *  onto the given canvas at (0,0). Deterministic; waits for image decode.
+ *  Notes (SVG-as-image constraints):
+ *   - root element MUST carry the XHTML namespace (children inherit it);
+ *   - void elements MUST be self-closed (strict XML parsing);
+ *   - only data: URLs are loadable inside the isolated document (no blob:). */
 async function drawFrameToCanvas(node, canvas, ctx, width, height) {
-  const html = node.outerHTML;
+  const clone = node.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  let html = clone.outerHTML;
+  html = html.replace(
+    /<(img|br|hr|input|meta|link|source|col|wbr|embed|area|base|track|param)(\s[^>]*?)?(?<!\/)>/g,
+    "<$1$2 />",
+  );
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
     `<foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
@@ -38,6 +48,22 @@ async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   img.src = url;
   await img.decode();
   ctx.drawImage(img, 0, 0, width, height);
+}
+
+/** Preload every asset URL (data:) into the browser image cache so frames
+ *  referencing them render synchronously inside the isolated SVG document. */
+async function preloadAssets(assetMap) {
+  const urls = Object.values(assetMap || {}).filter((u) => /^data:/i.test(u));
+  await Promise.all(
+    urls.map(
+      (u) =>
+        new Promise((res) => {
+          const i = new Image();
+          i.onload = i.onerror = res;
+          i.src = u;
+        }),
+    ),
+  );
 }
 
 function checkAbort(signal) {
@@ -65,6 +91,8 @@ export async function exportVideo(engine, opts = {}) {
 
   onProgress({ phase: "setup", pct: 0, frame: 0, total: totalFrames });
 
+  await preloadAssets(engine.assets);
+
   const { codec, bitrate } = codecFor(width, height, fps);
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -76,7 +104,7 @@ export async function exportVideo(engine, opts = {}) {
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: "avc", width, height },
-    audio: { codec: "aac", sampleRate: SR, numberOfChannels: 2 },
+    ...(engine.audioTracks().length ? { audio: { codec: "aac", sampleRate: SR, numberOfChannels: 2 } } : {}),
     fastStart: "in-memory",
   });
 

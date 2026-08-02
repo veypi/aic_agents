@@ -145,7 +145,7 @@
 <body>
   <div class="topbar">
     <div class="brand"><span class="logo">▶</span> Vedio Studio</div>
-    <div class="doc-title" :class="{ empty: !curName }">{{ curName || '未打开项目' }}</div>
+    <div class="doc-title" :class="{ empty: !curName && !curTitle }">{{ curTitle || curName || '未打开项目' }}</div>
     <div class="spacer"></div>
     <button class="tbtn" @click="showCases = !showCases">样例</button>
     <button class="tbtn" @click="showProjects = !showProjects; refreshProjects()">项目</button>
@@ -221,12 +221,20 @@
     toastTimer = setTimeout(() => { toast = '' }, 2600)
   }
 
-  // ---- 初始化 page_fs + page_exec ----
+  // ---- 初始化：样例加载不依赖 sid；page_exec 绑定依赖 sid ----
   initPage = async () => {
+    await loadCases()       // 样例来自 ui/cases（$mod.scoped），与 sid 无关
+    bindPageExec()
+  }
+
+  bindPageExec = async () => {
     if (!sid || !$mod.$page_exec) {
       console.warn('vedio_studio: no session / page_exec')
       return
     }
+    if (pe) { try { pe.stop() } catch (e) { } }
+    pe = null
+    pf = null
     pe = $mod.$page_exec(sid, [
       { name: 'list_video', description: '列出浏览器本地（page_fs）的视频项目与内置样例',
         handler: async () => {
@@ -357,8 +365,7 @@
         } },
     ])
     pf = pe.page_fs()
-    await loadCases()
-    // 恢复上次打开的项目
+    // 恢复上次打开的项目（有 sid 且本地有记录时）
     const last = localStorage.getItem('vedio_studio_last') || ''
     if (last) { try { await openProject(last) } catch (e) { } }
   }
@@ -394,19 +401,26 @@
     blobUrls.forEach((u) => { try { URL.revokeObjectURL(u) } catch (e) { } })
     blobUrls = []
     assets = {}
-    const engine = $refs.stage.$data.engine
-    const refs = engine ? engine.assetRefs() : []
+    const stageEngine = $refs.stage?.$data?.engine
+    const refs = stageEngine ? stageEngine.assetRefs() : []
     for (const ref of refs) {
       try {
         const r = await pf.readRaw(projDir(curName) + '/' + ref)
         if (r.content instanceof Blob) {
-          const u = URL.createObjectURL(r.content)
-          blobUrls.push(u)
+          // 转 data URL：导出时 foreignObject 隔离文档只能加载 data: 资源
+          const u = await blobToDataURL(r.content)
           assets[ref] = u
         }
       } catch (e) { console.warn('asset missing:', ref, e) }
     }
   }
+
+  blobToDataURL = (blob) => new Promise((res, rej) => {
+    const fr = new FileReader()
+    fr.onload = () => res(fr.result)
+    fr.onerror = () => rej(fr.error || new Error('read blob failed'))
+    fr.readAsDataURL(blob)
+  })
 
   openProject = async (name) => {
     name = normName(name)
@@ -444,7 +458,8 @@
 
   openCase = async (id) => {
     try {
-      const r = await fetch($mod.scoped + '/cases/' + id + '/index.json')
+      // 相对路径由 vhtml 自动加 $mod.scoped 前缀（ui/cases/）
+      const r = await fetch('cases/' + id + '/index.json')
       if (!r.ok) throw new Error('样例不存在: ' + id)
       const d = await r.json()
       curName = ''
@@ -458,7 +473,8 @@
 
   loadCases = async () => {
     try {
-      const r = await fetch($mod.scoped + '/cases/cases.json')
+      // 相对路径由 vhtml 自动加 $mod.scoped 前缀（ui/cases/）
+      const r = await fetch('cases/cases.json')
       const list = await r.json()
       cases = Array.isArray(list) ? list : (list.cases || [])
     } catch (e) { cases = [] }
@@ -540,8 +556,12 @@
     try {
       showToast('开始导出…')
       const blob = await doExport({})
-      await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
       downloadBlob(blob, safeTitle() + '.mp4')
+      if (pf) {
+        try {
+          await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
+        } catch (e) { console.warn('export saved to page_fs failed:', e) }
+      }
       showToast('导出完成：' + safeTitle() + '.mp4')
     } catch (e) {
       console.error(e)
@@ -550,5 +570,8 @@
   }
 
   initPage()
+
+  // sid 变化（ai-box 建立会话 / URL 带 session_id）时绑定 page_exec
+  $watch(() => sid, (v) => { if (v && !pe) bindPageExec() })
 </script>
 </html>

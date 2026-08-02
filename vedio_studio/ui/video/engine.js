@@ -1145,7 +1145,7 @@ export class Video {
       const audio = await ctx.decodeAudioData(buf);
       return { t, audio };
     });
-    const items = await Promise.all(decodes);
+    const items = (await Promise.all(decodes.map((p) => p.catch((e) => { console.warn('[vd audio] decode failed, skipped:', e.message); return null })))).filter(Boolean);
     items.forEach(({ t, audio }) => {
       const srcNode = ctx.createBufferSource();
       srcNode.buffer = audio;
