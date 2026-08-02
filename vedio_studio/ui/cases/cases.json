@@ -2,9 +2,9 @@
   {
     "id": "showreel",
     "title": "Showreel · 引擎能力巡礼",
-    "desc": "复刻 Remotion Showreel：逐字弹簧 / 贝塞尔 / countUp / 图表 / 粒子爆发 / 走马灯，29 秒 7 场景 133 元素",
+    "desc": "高保真复刻 Remotion Showreel：全局 HUD（帧计数/进度条）/ 逐字 spring / 贝塞尔 draw / 弹簧柱图 / 64 段频谱 / glitch / 粒子爆发，36 秒 7 场景",
     "scenes": 7,
-    "duration": 29
+    "duration": 36
   },
   {
     "id": "product-pitch",
