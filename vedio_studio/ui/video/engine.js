@@ -409,14 +409,16 @@ export function normalizeDoc(input) {
     doc.theme.captionStyle || {},
   );
   doc.scenes = (doc.scenes || []).map((s) => normalizeScene(s, doc));
+  // 全局覆盖层（HUD）：元素以全片时间为基准，渲染于所有场景内容之上
+  doc.overlay = (doc.overlay || []).map((el, i) => normalizeEl(el, i));
   // asset index (relative paths referenced anywhere)
   const assets = new Set();
-  doc.scenes.forEach((s) => {
-    s.elements.forEach((el) => {
-      if (el.src && !/^(data:|https?:|blob:)/i.test(el.src)) assets.add(el.src);
-      if (el.poster && !/^(data:|https?:|blob:)/i.test(el.poster)) assets.add(el.poster);
-    });
-  });
+  const scanEl = (el) => {
+    if (el.src && !/^(data:|https?:|blob:)/i.test(el.src)) assets.add(el.src);
+    if (el.poster && !/^(data:|https?:|blob:)/i.test(el.poster)) assets.add(el.poster);
+  };
+  doc.scenes.forEach((s) => s.elements.forEach(scanEl));
+  doc.overlay.forEach(scanEl);
   ["music", "voice"].forEach((k) => {
     const a = doc[k];
     if (a && a.src && !/^(data:|https?:|blob:)/i.test(a.src)) assets.add(a.src);
@@ -435,6 +437,23 @@ export function normalizeDoc(input) {
   doc._ranges = ranges; // unused placeholder, kept for symmetry
   return doc;
 }
+function normalizeEl(el, i) {
+  el = deepClone(el || {});
+  el.id = el.id || uid();
+  el.x = +el.x || 0;
+  el.y = +el.y || 0;
+  el.w = +el.w || 100;
+  el.h = +el.h || 60;
+  if (el.rotation == null) el.rotation = 0;
+  if (el.opacity == null) el.opacity = 1;
+  el.z = el.z != null ? +el.z : i; // explicit z or document order
+  if (el.fx) {
+    if (el.fx.enterDur == null) el.fx.enterDur = 0.6;
+    if (el.fx.delay == null) el.fx.delay = 0;
+    if (el.fx.exitDur == null) el.fx.exitDur = 0.5;
+  }
+  return el;
+}
 function normalizeScene(s, doc) {
   s = deepClone(s || {});
   s.id = s.id || uid();
@@ -442,23 +461,7 @@ function normalizeScene(s, doc) {
   s.transition = s.transition || "fade";
   s.transitionIn = s.transitionIn != null ? Math.max(0, +s.transitionIn) : 0.6;
   s.background = s.background || doc.theme.background;
-  s.elements = (s.elements || []).map((el, i) => {
-    el = deepClone(el || {});
-    el.id = el.id || uid();
-    el.x = +el.x || 0;
-    el.y = +el.y || 0;
-    el.w = +el.w || 100;
-    el.h = +el.h || 60;
-    if (el.rotation == null) el.rotation = 0;
-    if (el.opacity == null) el.opacity = 1;
-    el.z = el.z != null ? +el.z : i; // explicit z or document order
-    if (el.fx) {
-      if (el.fx.enterDur == null) el.fx.enterDur = 0.6;
-      if (el.fx.delay == null) el.fx.delay = 0;
-      if (el.fx.exitDur == null) el.fx.exitDur = 0.5;
-    }
-    return el;
-  });
+  s.elements = (s.elements || []).map((el, i) => normalizeEl(el, i));
   return s;
 }
 
@@ -548,10 +551,10 @@ export function exitProgress(el, sceneDur, t) {
 /** Sample keyframes at scene-local t (seconds).
  *  x/y are ABSOLUTE document coordinates (null when unspecified — the
  *  caller translates them into offsets relative to el.x/el.y);
- *  scale/rotation/opacity default to 1/0/1. */
+ *  scale/rotation/opacity default to 1/0/1; scaleY null = follow scale. */
 export function sampleKeyframes(el, t) {
   const kf = el.keyframes;
-  const out = { x: null, y: null, scale: 1, rotation: 0, opacity: 1 };
+  const out = { x: null, y: null, scale: 1, scaleY: null, rotation: 0, opacity: 1 };
   if (!Array.isArray(kf) || !kf.length) return out;
   // kfLoop：时间在关键帧区间内取模循环（环境动画：漂移/走马灯/粒子）
   if (el.kfLoop && kf.length >= 2) {
@@ -569,7 +572,7 @@ export function sampleKeyframes(el, t) {
     if (t >= a.t && t <= b.t) {
       const p = clamp((t - a.t) / ((b.t - a.t) || 1), 0, 1);
       const e = easingOf((a.easing) || "linear")(p);
-      ["x", "y", "scale", "rotation", "opacity"].forEach((k) => {
+      ["x", "y", "scale", "scaleY", "rotation", "opacity"].forEach((k) => {
         if (a[k] != null && b[k] != null) out[k] = a[k] + (b[k] - a[k]) * e;
         else if (a[k] != null) out[k] = a[k];
         else if (b[k] != null) out[k] = b[k];
@@ -581,13 +584,13 @@ export function sampleKeyframes(el, t) {
   return out;
 }
 function applyKey(out, k) {
-  ["x", "y", "scale", "rotation", "opacity"].forEach((key) => {
+  ["x", "y", "scale", "scaleY", "rotation", "opacity"].forEach((key) => {
     if (k[key] != null) out[key] = k[key];
   });
   return out;
 }
 
-/** Combined per-frame element state: {opacity, dx, dy, scale, rotation}.
+/** Combined per-frame element state: {opacity, dx, dy, scale, scaleY, rotation}.
  *  Keyframe x/y are absolute document coordinates → converted to offsets. */
 export function elementState(el, sceneDur, t) {
   const kf = sampleKeyframes(el, t);
@@ -599,6 +602,7 @@ export function elementState(el, sceneDur, t) {
     dx: kf.x != null ? kf.x - (+el.x || 0) : 0,
     dy: kf.y != null ? kf.y - (+el.y || 0) : 0,
     scale: kf.scale,
+    scaleY: kf.scaleY,
     rotation: kf.rotation,
   };
 
@@ -661,6 +665,27 @@ export function captionsAt(scene, t) {
  * works detached (export) or attached (preview). `state` is the per-frame
  * elementState() result; `asrc` is the resolved asset URL (data: URL for export).
  */
+
+/* three 元素：声明式 3D 场景（ui/video/three.js，vendored three.js r170）。
+ * 懒加载：首次遇到 three 元素时由 prepareThree 动态 import；buildFrame 同步
+ * 渲染（renderThree 输出 dataURL <img>，导出 foreignObject 走 data: 路径）。 */
+let threeMod = null;
+export async function prepareThree(doc) {
+  const has =
+    !!doc &&
+    ((doc.scenes || []).some((s) =>
+      (s.elements || []).some((e) => e.type === "three"),
+    ) ||
+      (doc.overlay || []).some((e) => e.type === "three"));
+  if (has && !threeMod) {
+    try {
+      threeMod = await import("./three.js");
+    } catch (e) {
+      console.warn("[vedio engine] three.js 加载失败：", e);
+    }
+  }
+  return !!threeMod;
+}
 
 function gradientCss(g) {
   if (!g || !g.stops || !g.stops.length) return null;
@@ -901,14 +926,33 @@ export function resolveAssetUrl(src, assetMap) {
 function renderTextHtml(el, doc, ctx) {
   let html = el.html || "";
   if (ctx.fields && html.indexOf("{{") >= 0) {
-    html = html.replace(/\{\{\s*(page|pages|title)(?::([^}]*))?\s*\}\}/gi, (m, name, arg) => {
-      if (name.toLowerCase() === "page") {
-        const w = parseInt(arg || "", 10);
-        return w > 0 ? String(ctx.fields.page || 1).padStart(w, "0") : String(ctx.fields.page || 1);
-      }
-      if (name.toLowerCase() === "pages") return String(ctx.fields.pages || 1);
-      return escapeHtml(ctx.fields.title || "");
-    });
+    html = html.replace(
+      /\{\{\s*(page|pages|title|frame|time|progress|sframe|stime|sprogress)(?::([^}]*))?\s*\}\}/gi,
+      (m, name, arg) => {
+        const n = name.toLowerCase();
+        const F = ctx.fields || {};
+        if (n === "page") {
+          const w = parseInt(arg || "", 10);
+          return w > 0 ? String(F.page || 1).padStart(w, "0") : String(F.page || 1);
+        }
+        if (n === "pages") return String(F.pages || 1);
+        if (n === "title") return escapeHtml(F.title || "");
+        // HUD 动态字段：frame/time/progress（全片）与 sframe/stime/sprogress（场景内）
+        if (n === "frame" || n === "sframe") {
+          const w = parseInt(arg || "", 10);
+          const v = Math.floor(+F[n] || 0);
+          return w > 0 ? String(v).padStart(w, "0") : String(v);
+        }
+        if (n === "time" || n === "stime") {
+          const d = parseInt(arg || "2", 10);
+          const dd = isFinite(d) ? clamp(d, 0, 3) : 2;
+          // {{time:2}} → "08.77"（toFixed 后左侧补零对齐读数风格）
+          return (+F[n] || 0).toFixed(dd).padStart(dd + 3, "0");
+        }
+        // progress / sprogress → 0-100 整数百分比
+        return String(Math.round(clamp(+F[n] || 0, 0, 1) * 100));
+      },
+    );
   }
   if (el.fx && el.fx.countUp) html = applyCountUp(html, el, ctx.t, ctx.fps);
   return sanitizeHtml(html);
@@ -973,11 +1017,13 @@ export function renderElement(el, doc, ctx) {
   node.className = "vd-el vd-el-" + el.type;
   node.setAttribute("data-el-id", el.id);
   const st = ctx.state || { opacity: 1, dx: 0, dy: 0, scale: 1, rotation: 0 };
+  const sy = st.scaleY != null ? st.scaleY : st.scale;
   let css =
     `position:absolute;left:${el.x}px;top:${el.y}px;width:${el.w}px;height:${el.h}px;` +
-    `transform:translate(${st.dx}px,${st.dy}px) rotate(${st.rotation}deg) scale(${st.scale});` +
-    `transform-origin:center;opacity:${clamp(st.opacity, 0, 1)};`;
+    `transform:translate(${st.dx}px,${st.dy}px) rotate(${st.rotation}deg) scale(${st.scale},${sy});` +
+    `transform-origin:${el.origin || "center"};opacity:${clamp(st.opacity, 0, 1)};`;
   if (el.z != null) css += `z-index:${el.z};`;
+  if (el.blur) css += `filter:blur(${+el.blur || 0}px);`;
   node.style.cssText = css;
 
   if (el.type === "text") {
@@ -1047,6 +1093,27 @@ export function renderElement(el, doc, ctx) {
     m.preload = "auto";
     m.style.cssText = `width:100%;height:100%;object-fit:${el.fit || "contain"};`;
     node.appendChild(m);
+  } else if (el.type === "three") {
+    // WebGL 位图无法序列化进 foreignObject（隔离文档不会同步解码每帧新
+    // dataURL），因此预览与导出都直接挂活 canvas；导出路径在 render.js
+    // 里按 ctx.threeItems 记录的几何与透明度把 canvas 合成到目标画布上。
+    if (threeMod) {
+      try {
+        const cv = threeMod.getThreeCanvas(el, ctx.t);
+        cv.setAttribute("data-three-canvas", "1");
+        cv.style.cssText = "width:100%;height:100%;display:block;";
+        node.appendChild(cv);
+        if (ctx.threeItems) {
+          ctx.threeItems.push({
+            canvas: cv, x: el.x, y: el.y, w: el.w, h: el.h,
+            dx: st.dx, dy: st.dy, rotation: st.rotation,
+            scaleX: st.scale, scaleY: sy, opacity: clamp(st.opacity, 0, 1),
+          });
+        }
+      } catch (e) {
+        console.warn("[vedio engine] three 渲染失败：", e);
+      }
+    }
   } else {
     node.textContent = el.type || "?";
   }
@@ -1097,6 +1164,25 @@ const TRANSITION_ENTER = {
   iris: { scale: [1.15, 1] },
 };
 
+/** 全局覆盖层：doc.overlay 元素以全片时间为基准渲染（HUD 帧计数/进度条/
+ *  常驻角标）。fx exit 在全片结尾触发；kfLoop 跨全片循环。 */
+function buildOverlay(doc, gtime, ctx) {
+  const wrap = document.createElement("div");
+  wrap.className = "vd-overlay";
+  wrap.style.cssText =
+    "position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;";
+  const totalDur = doc.totalFrames / doc.fps;
+  const els = (doc.overlay || []).slice().sort((a, b) => (a.z || 0) - (b.z || 0));
+  els.forEach((el) => {
+    const state = elementState(el, totalDur, gtime);
+    if (state.opacity <= 0.003) return;
+    wrap.appendChild(
+      renderElement(el, doc, Object.assign({}, ctx, { t: gtime, state })),
+    );
+  });
+  return wrap;
+}
+
 /** Build the DOM for one frame. Deterministic; safe to serialize. */
 export function buildFrame(doc, frame, opts = {}) {
   const f = frameToScene(doc, frame);
@@ -1108,12 +1194,24 @@ export function buildFrame(doc, frame, opts = {}) {
     `background:${f.scene.background || doc.theme.background};`;
 
   const assetMap = opts.assetMap || {};
-  const fields = opts.fields || {
-    page: f.index + 1,
-    pages: doc.scenes.length,
-    title: doc.title,
-  };
-  const ctx = { t: f.localT, assetMap, fields, fps: doc.fps };
+  const gframe = clamp(Math.floor(frame), 0, Math.max(0, doc.totalFrames - 1));
+  const fields = Object.assign(
+    {
+      page: f.index + 1,
+      pages: doc.scenes.length,
+      title: doc.title,
+      // HUD 动态字段：全片基准
+      frame: gframe,
+      time: gframe / doc.fps,
+      progress: doc.totalFrames ? gframe / doc.totalFrames : 0,
+      // 场景内基准
+      sframe: f.localFrame,
+      stime: f.localT,
+      sprogress: f.progress,
+    },
+    opts.fields || {},
+  );
+  const ctx = { t: f.localT, assetMap, fields, fps: doc.fps, threeItems: [] };
 
   // transition: incoming scene enter anim + outgoing background crossfade
   const tin = f.scene.transitionIn || 0;
@@ -1146,6 +1244,12 @@ export function buildFrame(doc, frame, opts = {}) {
     root.appendChild(buildSceneContent(f.scene, doc, ctx));
   }
 
+  // 全局覆盖层（HUD）：以全片时间渲染，位于场景内容之上、字幕之下；
+  // pointer-events:none，舞台点选/拖拽穿透。
+  if (doc.overlay && doc.overlay.length) {
+    root.appendChild(buildOverlay(doc, gframe / doc.fps, ctx));
+  }
+
   // captions
   const cap = captionsAt(f.scene, f.localT);
   if (cap) {
@@ -1163,10 +1267,9 @@ export function buildFrame(doc, frame, opts = {}) {
     root.appendChild(bar);
   }
 
+  root.__threeItems = ctx.threeItems;
   return root;
 }
-
-/* --------------------------------------------------------------- Video */
 
 const listeners = Symbol("listeners");
 
@@ -1248,6 +1351,11 @@ export class Video {
   /** Collect every distinct asset ref used by the doc (for preloading). */
   assetRefs() {
     return this.doc ? this.doc._assets.slice() : [];
+  }
+
+  /** 懒加载扩展渲染器（three 元素）。预览 setDoc 与导出前各调一次。 */
+  async prepare() {
+    return prepareThree(this.doc);
   }
 
   /* ------------------------------------------------------ audio graph */

@@ -39,6 +39,8 @@ async function drawFrameToCanvas(node, canvas, ctx, width, height) {
     /<(img|br|hr|input|meta|link|source|col|wbr|embed|area|base|track|param)(\s[^>]*?)?(?<!\/)>/g,
     "<$1$2 />",
   );
+  // XML 不识别 HTML 具名实体（stagger 空格等产生的 &nbsp;）——换数值实体
+  html = html.replace(/&nbsp;/g, "&#160;");
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
     `<foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
@@ -48,6 +50,27 @@ async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   img.src = url;
   await img.decode();
   ctx.drawImage(img, 0, 0, width, height);
+
+  // three 合成：WebGL canvas 序列化进 foreignObject 后是空白，按引擎
+  // buildFrame 收集的 __threeItems（文档坐标几何/变换/透明度）直接叠加。
+  const items = node.__threeItems || [];
+  if (items.length) {
+    const rootW = +((/width:(\d+)px/.exec(node.style.cssText) || [])[1] || width);
+    const rootH = +((/height:(\d+)px/.exec(node.style.cssText) || [])[1] || height);
+    const sx = width / rootW, sy = height / rootH;
+    for (const it of items) {
+      if (it.opacity <= 0.003) continue;
+      const w = it.w * sx, h = it.h * sy;
+      ctx.save();
+      ctx.translate((it.x + it.dx) * sx + w / 2, (it.y + it.dy) * sy + h / 2);
+      if (it.rotation) ctx.rotate((it.rotation * Math.PI) / 180);
+      if (it.scaleX !== 1 || it.scaleY !== 1) ctx.scale(it.scaleX, it.scaleY);
+      ctx.globalAlpha = Math.max(0, Math.min(1, it.opacity));
+      ctx.drawImage(it.canvas, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 /** Preload every asset URL (data:) into the browser image cache so frames
@@ -92,6 +115,7 @@ export async function exportVideo(engine, opts = {}) {
   onProgress({ phase: "setup", pct: 0, frame: 0, total: totalFrames });
 
   await preloadAssets(engine.assets);
+  if (engine.prepare) await engine.prepare(); // 懒加载 three 渲染器
 
   const { codec, bitrate } = codecFor(width, height, fps);
   const canvas = document.createElement("canvas");

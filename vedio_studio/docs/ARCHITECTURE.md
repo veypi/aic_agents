@@ -232,6 +232,19 @@ assets    // 素材 ref → dataURL 映射
 | 循环环境动画 | 元素 `kfLoop: true` | 关键帧区间取模循环（漂移洗层/上升尘埃/走马灯） |
 | 描边生长 | svg `draw: {dur,delay,easing}`；chart `option.draw` | pathLength dashoffset 确定性生长；折线图采样点随进度逐个出现 |
 
+### 二轮升级（2026-08-03，Showreel 高保真复刻配套）
+
+| 能力 | 字段 | 说明 |
+|---|---|---|
+| 全局覆盖层 | doc `overlay: [元素...]` | HUD：元素以**全片时间**渲染于场景内容之上、字幕之下，pointer-events 穿透；fx.exit 在全片结尾触发，kfLoop 跨全片循环 |
+| HUD 文本模板 | `{{frame:4}}` `{{time:2}}` `{{progress}}` `{{sframe}}` `{{stime:2}}` `{{sprogress}}` | renderTextHtml 逐帧插值（全片/场景双基准），F 0263 / T+08.77s / 27% |
+| 纵向缩放 | kf `scaleY` + 元素 `origin` | scaleY 缺省跟随 scale；origin=transform-origin（`bottom` 柱图弹簧生长） |
+| 柔光滤镜 | 元素 `blur: px` | CSS filter blur（光晕/光斑/光漏，替代硬边椭圆） |
+| 音乐 offset 预览 | stage startAudio 支持非 loop 音轨 offset + **tick 内持续对齐**（syncAudioTick） | startAudio 只在播放/seek 时执行一次，连续播放越过 offset 边界音乐不启动（S4→S5 无声实踩）；改为每 tick 判定 offset..offset+dur 窗口：窗内未播则起播、窗外暂停、跑偏 >1.2s 才 seek 纠正 |
+| 样例素材预载 | openCase 加载相对素材为 dataURL | 样例可带音乐/图片素材（预览与导出同一 assetMap） |
+| 导出 XML 实体修复 | render.js `&nbsp;` → `&#160;` | outerHTML 将 U+00A0 序列化为 `&nbsp;`（SVG/XML 未定义实体），含空格的 stagger 文本帧解码失败（Showreel S7 “VEDIO STUDIO” 实踩） |
+| 真 3D 元素 | `type: "three"` + scene 描述 | vendored three.js r170（ui/video/vendor，691KB）+ ui/video/three.js 声明式渲染器（camera/lights/torusKnot/icosahedron/sphere/box/orbiters，rotation/scalePulse 时间驱动）；engine.prepare() 懒加载；预览挂活 canvas（共享 WebGL 上下文按元素签名缓存）；导出由 render.js 按 __threeItems 几何合成（**WebGL 位图无法序列化进 foreignObject**：隔离文档不会同步解码每帧新 dataURL，实测中心区全黑） |
+
 ## 4. 引擎/舞台缺陷修正清单（Phase 1 附带）
 
 | # | 问题 | 修正 |
@@ -246,16 +259,16 @@ assets    // 素材 ref → dataURL 映射
 
 | Showreel 场景 | 使用的 Remotion 能力 | vedio_studio 对应 | 阶段 |
 |---|---|---|---|
-| 01 Title | spring() 物理、逐字母 stagger、Easing.bezier、radial-gradient 光晕 | 渐变背景 ✅、逐字动画/弹簧/贝塞尔 ❌ | P3 |
-| 02 Kinetic Type | 动态排印（字级时序、位移/旋转组合） | fx enter/exit + keyframes 可近似 ✅（手动排） | P1 可手做 |
-| 03 Three.js | react-three-fiber 3D | ❌ 不支持 | 远期 |
-| 04 Data Viz | 图表动画、数字滚动 | chart 元素 ✅、fx.countUp ✅ | P1 ✅ |
-| 05 Audio | useWindowedAudioData 频谱/波形可视化 | 音轨播放/混音 ✅、可视化 ❌ | P3 |
-| 06 Post FX | glitch 等后期效果 | ❌ | P3 |
-| 07 Outro | 同 01 | ✅ 近似 | P1 可手做 |
+| 01 Title | spring() 物理、逐字母 stagger、Easing.bezier、radial-gradient 光晕 | spring/stagger/bezier ✅、blur 柔光光晕 ✅ | ✅ 已复刻 |
+| 02 Kinetic Type | 动态排印（字级时序、位移/旋转组合） | 单场景三段连演 + 段落计数器 ✅ 已复刻 | ✅ 已复刻 |
+| 03 Three.js | react-three-fiber 3D | **three 元素真 3D**（vendored three.js r170）：金属环结+线框多面体呼吸+10 轨道卫星，参数逐项对齐 ✅ 已复刻 | ✅ 近似复刻 |
+| 04 Data Viz | 图表动画、数字滚动 | scaleY 弹簧柱图（origin bottom）+ countUp + svg draw ✅ 已复刻 | ✅ 已复刻 |
+| 05 Audio | useWindowedAudioData 频谱/波形可视化 | 64 段伪频谱包络+镜像+bass 环+波形 draw ✅；真实音频分析 ❌ | ✅ 近似复刻 |
+| 06 Post FX | glitch 等后期效果 | glitch 切片抖动 + lightLeak 模糊光斑 ✅（真像素管线 ❌） | ✅ 近似复刻 |
+| 07 Outro | 同 01 + 粒子爆发 + 走马灯 | 60 粒子 spring 爆发 + stagger scaleFrom + kfLoop 走马灯 ✅ | ✅ 已复刻 |
 | TransitionSeries | wipe/slide/flip/clockWipe/fade + spring/linear timing | transition（fade/slide/zoom/iris）✅ 简化版 | P1 ✅ / flip·wipe P3 |
-| LightLeakOverlay | 全片 overlay 层 | ❌（doc 级 overlay 元素列表） | P3 |
-| Hud | 跨场景常驻组件（帧号/进度） | ❌（可做 watermark 元素） | P3 |
+| LightLeakOverlay | 全片 overlay 层 | doc.overlay ✅（S5 开头光斑近似） | ✅ |
+| Hud | 跨场景常驻组件（帧号/进度） | doc.overlay + 模板字段 ✅（F 0263 / T+08.77s / 27%） | ✅ |
 | schema.ts + Studio | zod schema → 可视化 props 编辑 | video/1 + inspector ✅ | P1 ✅ |
 | google-fonts | 字体加载 | fontFamily 系统字体 ✅、Web 字体 ❌ | P3 |
 | `<Player>` | 预览播放器 | video-stage ✅ | P1 ✅ |
@@ -263,6 +276,10 @@ assets    // 素材 ref → dataURL 映射
 
 **Phase 1 达成标准**：用编辑器手动复刻 Showreel 的 01/02/04/07 场景形态
 （标题入场、动态排印、数据图表、片尾）+ 转场串联 + 字幕 + 配乐 + 导出 MP4。
+
+**Showreel 样例复刻（2026-08-03 完成）**：cases/showreel 由 showreel-gen.py 生成
+（含合成 music.wav，S5 配乐 offset=21s），7 场景 36s、529 场景元素 + 18 HUD
+overlay 元素，逐场景对标 my-video/src；预览/导出（360p 冒烟通过）均已验证。
 
 ## 6. 模块职责（engine.js / render.js，保持不变）
 

@@ -160,7 +160,7 @@
     let rafId = 0
     let lastT = 0
     let playT = 0        // 播放时间累积（秒）
-    let audioEls = {}    // kind → HTMLAudioElement
+    audioEls = {}        // kind → HTMLAudioElement（挂 $data 便于调试与父级访问）
     let drag = null      // 拖拽状态
     let rafPending = false
 
@@ -183,6 +183,8 @@
       setupAudio()
       fit()
       renderFrame()
+      // 懒加载 three 渲染器（若文档含 3D 元素），就绪后重绘当前帧
+      engine.prepare().then((ok) => { if (ok && doc) renderFrame() })
     }
 
     // doc 被外部修改后调用：保持帧号重载 + 重渲染
@@ -237,6 +239,7 @@
       } catch (e) { console.error('[vd tick] seek', e) }
       frameVal = engine.frame
       syncScene()
+      syncAudioTick()
       try {
         renderFrame()
       } catch (e) { console.error('[vd tick] render', e) }
@@ -303,14 +306,27 @@
           if (Math.abs(music.currentTime - t) > 1 || !music.duration) music.currentTime = t % (music.duration || 1)
           music.play().catch(() => {})
         } else {
-          music.currentTime = Math.min(t, music.duration || 0)
-          if (music.currentTime < (music.duration || 0) - 0.1) music.play().catch(() => {})
+          // 非循环音乐支持 offset：文档时间早于 offset 不播，之后按 t-offset 对齐
+          const off = (doc.music && doc.music.offset) || 0
+          const lt = t - off
+          if (lt >= 0 && lt < (music.duration || 0) - 0.1) {
+            if (Math.abs(music.currentTime - lt) > 0.6) music.currentTime = lt
+            music.play().catch(() => {})
+          } else {
+            music.pause()
+          }
         }
       }
       const voice = audioEls.voice
-      if (voice && voice.duration && t < voice.duration) {
-        voice.currentTime = t
-        voice.play().catch(() => {})
+      if (voice && voice.duration) {
+        const voff = (doc.voice && doc.voice.offset) || 0
+        const vlt = t - voff
+        if (vlt >= 0 && vlt < voice.duration) {
+          if (Math.abs(voice.currentTime - vlt) > 0.6) voice.currentTime = vlt
+          voice.play().catch(() => {})
+        } else {
+          voice.pause()
+        }
       }
     }
     pauseAudio = () => { Object.values(audioEls).forEach((a) => { if (a) a.pause() }) }
@@ -318,6 +334,36 @@
     syncAudioSeek = () => {
       // seek 后若正在播放，音乐重新对齐
       if (playing) startAudio()
+    }
+
+    // 播放中每 tick 对齐音轨：非 loop 音轨在 offset..offset+dur 窗口内才播，
+    // 窗口外保持暂停（修复连续播放越过 offset 边界时音乐不启动/不停止）
+    syncAudioTick = () => {
+      if (!doc || !playing) return
+      const t = engine.frame / (engine.getState().fps || 30)
+      const syncOne = (a, track) => {
+        if (!a || !track || !track.src) return
+        if (track.loop !== false) {
+          // loop 音轨（startAudio 已对齐全局时间）：确保在播
+          if (a.paused) a.play().catch(() => {})
+          return
+        }
+        const off = track.offset || 0
+        const lt = t - off
+        const dur = a.duration || 0
+        if (lt >= 0 && (dur === 0 || lt < dur - 0.1)) {
+          if (a.paused) {
+            if (dur === 0 || Math.abs(a.currentTime - lt) > 0.6) a.currentTime = lt
+            a.play().catch(() => {})
+          } else if (dur > 0 && Math.abs(a.currentTime - lt) > 1.2) {
+            a.currentTime = lt // 明显跑偏才纠正，避免频繁 seek 卡顿
+          }
+        } else if (!a.paused) {
+          a.pause()
+        }
+      }
+      syncOne(audioEls.music, doc.music)
+      syncOne(audioEls.voice, doc.voice)
     }
 
     syncScene = () => {

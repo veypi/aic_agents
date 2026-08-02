@@ -109,6 +109,7 @@
              "fontFamily": "system-ui, ...", "captionStyle": { "fontSize": 38, "color": "#fff", "stroke": "#000" } },
   "music": { "src": "assets/bg.mp3", "volume": 0.3, "loop": true, "offset": 0 },   // 可选背景音乐
   "voice": { "src": "assets/voice.mp3", "volume": 1, "offset": 0 },                // 可选配音轨
+  "overlay": [ /* 可选全局覆盖层（HUD）：元素以全片时间为基准渲染于所有场景之上 */ ],
   "scenes": [{
     "id": "s1", "duration": 4,                    // 秒，视频时间轴核心
     "transition": "fade",                          // 进入转场: none|fade|slide-left|slide-right|slide-up|slide-down|zoom|iris
@@ -132,7 +133,7 @@
 }
 ```
 
-元素公共字段：`id`（场景内唯一）、`x/y/w/h`（文档坐标系）、`rotation`、`opacity`、`z`（层叠，缺省按数组顺序）。
+元素公共字段：`id`（场景内唯一）、`x/y/w/h`（文档坐标系）、`rotation`、`opacity`、`z`（层叠，缺省按数组顺序）、`origin`（transform-origin，如 `"bottom"` 柱图从底生长）、`blur`（CSS 模糊 px，柔光/光斑）。
 
 | type | 关键字段 |
 |---|---|
@@ -143,12 +144,55 @@
 | `table` | `columns`、`rows`、`header`、`style` |
 | `chart` | `option`：`{xAxis:{data}, series:[{type:bar/line/scatter/pie, data}], color}` |
 | `media` | `kind`: video/audio、`src`、`poster`、`loop`、`muted`（预览播放；导出取视频当前帧） |
+| `three` | `scene`：声明式 3D 场景（vendored three.js r170，WebGL 逐帧确定性渲染） |
+
+`three` 元素 scene 描述（速度单位 rad/s，Remotion 的 rad/frame × 30）：
+
+```jsonc
+{ "id": "tk", "type": "three", "x": 0, "y": 0, "w": 1920, "h": 1080,
+  "scene": {
+    "camera": { "position": [0, 0, 7.6], "fov": 45 },
+    "lights": [ { "type": "ambient", "intensity": 0.55 },
+                { "type": "directional", "position": [6, 6, 6], "intensity": 1.15 },
+                { "type": "point", "position": [-5, -3, 4], "intensity": 60, "color": "#FFC24B" } ],
+    "group": { "rotation": [0, 0.12, 0] },          // 整组旋转
+    "objects": [
+      { "type": "torusKnot", "args": [1.25, 0.4, 240, 32],
+        "material": { "kind": "standard", "color": "#FFC24B", "metalness": 0.65, "roughness": 0.22 },
+        "rotation": [0.18, 0.27, 0.09] },
+      { "type": "icosahedron", "args": [2.75, 1],
+        "material": { "kind": "basic", "color": "#4ECDC4", "wireframe": true, "opacity": 0.32 },
+        "rotation": [-0.09, -0.15, 0], "scalePulse": { "amp": 0.05, "speed": 1.5 } },
+      { "type": "orbiters", "count": 10, "radius": 3.35, "speed": 0.9,
+        "yWave": { "freq": 1.7, "amp": 0.9 },
+        "sizes": [0.09, 0.135, 0.18], "colors": ["#FF6B57", "#4ECDC4"], "emissiveIntensity": 0.55 }
+    ] } }
+```
+
+单体几何：`torusKnot` / `icosahedron` / `sphere` / `box`（args 透传 three 构造函数）；
+material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/opacity/emissive/emissiveIntensity`；
+动画字段：`rotation`（rad/s）、`scalePulse{amp,speed}`、`position`、`scale`；`orbiters` 为群组轨道卫星。
+元素本身的 keyframes/fx（透明度/缩放入场等）照常作用于外层 div。预览直接挂活 canvas（无每帧 dataURL 开销）；
+导出由 render.js 将 WebGL canvas 按几何合成到目标画布（foreignObject 无法序列化 WebGL 位图）。
+
+**全局覆盖层 `overlay`**（HUD，2026-08-03 新增）：与场景元素同构的元素数组，渲染于场景内容之上、字幕之下，`pointer-events:none`（舞台点选穿透）。与场景元素的唯一区别是**时间基准为全片**（keyframes/fx/countUp 按全片秒数驱动；`fx.exit` 在全片结尾触发；`kfLoop` 跨全片循环）。适合做：帧计数器、全片进度条、常驻角标水印、开场黑渐隐。
+
+**文本模板字段**（html 内插值，预览/导出逐帧求值）：
+
+| 写法 | 含义 |
+|---|---|
+| `{{page}}` / `{{page:2}}` | 当前场景序号（可补零宽度） |
+| `{{pages}}` / `{{title}}` | 场景总数 / 文档标题 |
+| `{{frame}}` / `{{frame:4}}` | 全片帧号（如 `F {{frame:4}}` → `F 0263`） |
+| `{{time}}` / `{{time:2}}` | 全片秒数（小数位数，左补零 → `T+{{time:2}}s` → `T+08.77s`） |
+| `{{progress}}` / `{{sprogress}}` | 全片 / 场景进度 0-100 整数百分比 |
+| `{{sframe}}` / `{{stime:2}}` | 场景内帧号 / 秒数 |
 
 **动画能力（勿超范围）**：
 
 - **入场** `fx.enter`: `fade` / `fade-up` / `fade-down` / `slide-left` / `slide-right` / `slide-up` / `slide-down` / `zoom` / `zoom-in` / `none`，配 `enterDur`（默认 0.6s）、`delay`（默认 0）、`enterEasing`（默认 `bezier(0.16,1,0.3,1)`，可换 `spring` 或其它缓动）
 - **退场** `fx.exit`: `fade-out` / `fade-up` / `slide-left` / `slide-right` / `zoom-out` / `none`，配 `exitDur`（默认 0.5s）、`exitEasing`（默认 `bezier(0.7,0,0.84,0)`），在场景结尾播放
-- **关键帧** `keyframes`: `[{t, x?, y?, scale?, rotation?, opacity?}]`，t 为场景内秒，**x/y 为画面绝对坐标**；每段支持 `easing`（命名缓动或参数化 `spring(damping,stiffness,mass)`、`bezier(x1,y1,x2,y2)`）
+- **关键帧** `keyframes`: `[{t, x?, y?, scale?, scaleY?, rotation?, opacity?}]`，t 为场景内秒，**x/y 为画面绝对坐标**；`scaleY` 独立纵向缩放（缺省跟随 scale，配合 `origin: "bottom"` 做柱图生长）；每段支持 `easing`（命名缓动或参数化 `spring(damping,stiffness,mass)`、`bezier(x1,y1,x2,y2)`）
 - **真实弹簧** `spring(d,s,m)`：欠阻尼物理解，过冲回弹（如 `spring(13,170,0.9)` 逐字弹簧、`spring(9,180,1)` 弹跳小球）；命名 `spring` = `spring(10,100,1)`
 - **逐字 stagger**：文本元素加 `stagger: { by: 'char'|'word', step, delay, dur, dy, dx, rotation, scaleFrom, easing }`（纯文本专用，不能含 html 标签）——每字以弹簧从 dy/rotation 过渡到原位，Showreel 标志性逐字入场
 - **循环环境动画**：元素加 `kfLoop: true`，关键帧时间取模循环（漂移/走马灯/粒子）
