@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+  <head><title>Video Stage</title></head>
+  <style>
+    .vd-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+    .vd-host {
+      position: relative; flex: 1; min-height: 0;
+      display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, rgba(67, 97, 238, 0.14), transparent 60%),
+        #0a0e16;
+      overflow: hidden;
+    }
+    .vd-box {
+      position: relative;
+      box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      border-radius: 4px; overflow: hidden;
+    }
+    .vd-empty {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+      color: #4b5563; font-size: 15px;
+    }
+    .vd-empty b { color: #9ca3af; font-size: 17px; font-weight: 600; }
+    .vd-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; background: rgba(15, 20, 32, 0.92);
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .vd-btn {
+      border: none; background: rgba(67, 97, 238, 0.16); color: #c7d2fe;
+      width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
+      font-size: 15px; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .vd-btn:hover { background: rgba(67, 97, 238, 0.32); color: #fff; }
+    .vd-btn.primary { background: #4361ee; color: #fff; width: 40px; height: 40px; }
+    .vd-btn.primary:hover { background: #2563eb; }
+    .vd-seek { flex: 1; height: 5px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.12); border-radius: 99px; outline: none; cursor: pointer; }
+    .vd-seek::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+      background: #4361ee; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+    }
+    .vd-time { color: #9ca3af; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 96px; text-align: center; }
+    .vd-scenes { display: flex; gap: 4px; }
+    .vd-scene-chip {
+      padding: 3px 8px; border-radius: 6px; font-size: 11px; color: #6b7280;
+      background: rgba(255,255,255,0.05); cursor: pointer; white-space: nowrap;
+    }
+    .vd-scene-chip.active { background: rgba(67,97,238,0.28); color: #c7d2fe; }
+    .vd-exporting {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      background: rgba(10, 14, 22, 0.88); color: #c7d2fe; font-size: 14px;
+      z-index: 20; backdrop-filter: blur(2px);
+    }
+    .vd-export-bar { width: 260px; height: 6px; background: rgba(255,255,255,0.12); border-radius: 99px; overflow: hidden; }
+    .vd-export-fill { height: 100%; background: linear-gradient(90deg, #4361ee, #7c3aed); border-radius: 99px; transition: width 0.2s; }
+  </style>
+  <body>
+    <div class="vd-wrap">
+      <div class="vd-host" ref="host">
+        <div v-if="!doc" class="vd-empty">
+          <b>暂无视频文档</b>
+          <span>在对话中让 AI 创建一个项目，或从上方选择样例</span>
+        </div>
+        <div class="vd-box" v-show="doc" :style="{ width: boxW + 'px', height: boxH + 'px' }" ref="box"></div>
+        <div class="vd-exporting" v-if="exporting">
+          <div>正在导出视频…</div>
+          <div class="vd-export-bar"><div class="vd-export-fill" :style="{ width: exportPct + '%' }"></div></div>
+          <div>{{ exportText }}</div>
+        </div>
+      </div>
+      <div class="vd-controls" v-if="doc">
+        <button class="vd-btn primary" @click="togglePlay()">{{ playing ? '❚❚' : '▶' }}</button>
+        <input class="vd-seek" type="range" min="0" :max="totalFrames" v:value="frameVal" @input="seekFromSlider()" />
+        <div class="vd-time">{{ timeText }} / {{ durText }}</div>
+        <div class="vd-scenes">
+          <span v-for="(sc, i) in scenes" :key="sc.id" class="vd-scene-chip" :class="{ active: i === curScene }" @click="seekScene(i)">{{ i + 1 }}</span>
+        </div>
+        <button class="vd-btn" title="静音" @click="toggleMute()">{{ muted ? '🔇' : '🔊' }}</button>
+      </div>
+    </div>
+  </body>
+  <script setup>
+    import { Video } from './engine.js'
+
+    doc = null          // video/1 文档对象（父页面传入）
+    assets = {}         // assetMap（父页面传入）
+    playing = false
+    muted = false
+    frameVal = 0
+    totalFrames = 0
+    scenes = []
+    curScene = 0
+    exporting = false
+    exportPct = 0
+    exportText = ''
+    boxW = 640
+    boxH = 360
+
+    // 私有
+    let engine = null
+    let rafId = 0
+    let lastT = 0
+    let audioEls = {}   // kind → HTMLAudioElement
+
+    engine = new Video()
+
+    setDoc = (d, assetMap) => {
+      doc = d
+      assets = assetMap || {}
+      engine.assets = assets
+      engine.load(doc)
+      totalFrames = engine.getState().totalFrames
+      scenes = engine.getState().scenes
+      frameVal = 0
+      curScene = 0
+      stopAudio()
+      setupAudio()
+      renderFrame()
+      fit()
+    }
+
+    fit = () => {
+      const host = $refs.host
+      if (!host || !doc) return
+      const pad = 24
+      const aw = host.clientWidth - pad * 2
+      const ah = host.clientHeight - pad * 2
+      const s = Math.min(aw / doc.size.width, ah / doc.size.height, 1)
+      boxW = Math.round(doc.size.width * s)
+      boxH = Math.round(doc.size.height * s)
+      $watch(() => 0)
+    }
+
+    renderFrame = () => {
+      const box = $refs.box
+      if (!box || !engine.doc) return
+      const node = engine.buildFrame()
+      box.replaceChildren(node)
+    }
+
+    tick = (t) => {
+      if (!playing) return
+      const dt = lastT ? (t - lastT) / 1000 : 0
+      lastT = t
+      engine.seek(engine.frame + Math.max(0, dt) * engine.getState().fps)
+      frameVal = engine.frame
+      syncScene()
+      syncAudio()
+      renderFrame()
+      rafId = requestAnimationFrame(tick)
+    }
+
+    togglePlay = () => {
+      if (!doc) return
+      playing = !playing
+      if (playing) {
+        if (engine.frame >= totalFrames - 1) engine.seek(0)
+        lastT = 0
+        rafId = requestAnimationFrame(tick)
+        startAudio()
+      } else {
+        cancelAnimationFrame(rafId)
+        pauseAudio()
+      }
+    }
+
+    seekFromSlider = () => {
+      engine.seek(frameVal)
+      syncScene()
+      syncAudio()
+      renderFrame()
+    }
+
+    seekScene = (i) => {
+      engine.seek(scenes[i].start)
+      frameVal = engine.frame
+      renderFrame()
+    }
+
+    toggleMute = () => {
+      muted = !muted
+      Object.values(audioEls).forEach(a => { if (a) a.muted = muted })
+    }
+
+    // ---- preview audio (simple: music loop + voice single) ----
+    setupAudio = () => {
+      stopAudio()
+      audioEls = {}
+      if (!doc) return
+      const make = (key, track) => {
+        if (!track || !track.src) return
+        const a = new Audio()
+        a.src = (engine.assets[track.src] || track.src)
+        a.loop = !!track.loop
+        a.volume = track.volume != null ? track.volume : 1
+        a.muted = muted
+        a.preload = 'auto'
+        audioEls[key] = a
+      }
+      make('music', doc.music)
+      make('voice', doc.voice)
+    }
+    startAudio = () => {
+      const t = engine.frame / (engine.getState().fps || 30)
+      const music = audioEls.music
+      if (music) {
+        if (music.loop) {
+          if (Math.abs(music.currentTime - t) > 1 || !music.duration) music.currentTime = t % (music.duration || 1)
+          music.play().catch(() => {})
+        } else {
+          music.currentTime = Math.min(t, music.duration || 0)
+          if (music.currentTime < (music.duration || 0) - 0.1) music.play().catch(() => {})
+        }
+      }
+      const voice = audioEls.voice
+      if (voice && voice.duration && t < voice.duration) {
+        voice.currentTime = t
+        voice.play().catch(() => {})
+      }
+    }
+    pauseAudio = () => { Object.values(audioEls).forEach(a => { if (a) a.pause() }) }
+    stopAudio = () => { pauseAudio(); audioEls = {} }
+    syncAudio = () => {
+      // keep music in sync after seek (no-op during playback; tick handles)
+    }
+
+    syncScene = () => {
+      const st = engine.getState()
+      for (let i = 0; i < scenes.length; i++) {
+        if (engine.frame >= scenes[i].start && engine.frame < scenes[i].start + scenes[i].frames) {
+          curScene = i
+          break
+        }
+      }
+    }
+
+    timeText = () => {
+      const f = engine.frame || 0
+      const s = Math.floor(f / (engine.getState()?.fps || 30))
+      return fmt(s)
+    }
+    durText = () => {
+      if (!doc) return '0:00'
+      return fmt(Math.floor((doc.totalFrames || 0) / (doc.fps || 30)))
+    }
+    fmt = (s) => {
+      const m = Math.floor(s / 60)
+      const r = Math.floor(s % 60)
+      return m + ':' + String(r).padStart(2, '0')
+    }
+
+    // 导出进度（父页面调用）
+    setExporting = (on, pct, text) => {
+      exporting = on
+      exportPct = pct || 0
+      exportText = text || ''
+    }
+  </script>
+</html>

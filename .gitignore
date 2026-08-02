@@ -15,6 +15,8 @@
 !/code_anylse/
 !/code_wiki/
 !/relia_scope/
+!/vedio_studio/
+!/coder/
 
 # 白名单目录内的平台运行产物（agent 运行会话时产生）
 **/data.db

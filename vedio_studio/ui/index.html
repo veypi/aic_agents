@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="Vedio Studio — 浏览器端视频工作台：时间轴项目（page_fs 本地存储）+ 预览舞台 + 浏览器导出 MP4 + AI 助手" />
+  <title>Vedio Studio</title>
+</head>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: #0a0e16;
+  }
+
+  .topbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 20, 32, 0.95);
+    position: relative;
+    z-index: 20;
+  }
+
+  .brand {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: #4361ee;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand .logo {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, #4361ee, #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 11px;
+  }
+
+  .doc-title {
+    font-size: var(--font-size-md);
+    color: var(--text-color);
+    max-width: 260px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-left: var(--spacing-sm);
+  }
+  .doc-title.empty { color: var(--text-color-disabled); }
+
+  .spacer { flex: 1; }
+
+  .tbtn {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    padding: 6px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tbtn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+  .tbtn.primary {
+    background: linear-gradient(135deg, #4361ee, #5b46f0);
+    border: none; color: #fff; font-weight: 600;
+  }
+  .tbtn.primary:hover { filter: brightness(1.12); }
+  .tbtn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 0;
+  }
+  .stage-wrap {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+  }
+  .side {
+    flex: none;
+    width: 340px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 17, 28, 0.9);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .side ai-box { flex: 1; min-height: 0; display: flex; }
+
+  .popover {
+    position: absolute;
+    top: 48px;
+    right: 8px;
+    width: 300px;
+    max-height: 60vh;
+    overflow: auto;
+    background: #121826;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    z-index: 40;
+    padding: 8px;
+  }
+  .pop-item {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #cbd5e1;
+  }
+  .pop-item:hover { background: rgba(67, 97, 238, 0.16); }
+  .pop-item .t { font-size: 13.5px; font-weight: 600; color: #e2e8f0; }
+  .pop-item .d { font-size: 11.5px; color: #64748b; }
+  .pop-item .del {
+    margin-left: auto; color: #94a3b8; font-size: 12px; padding: 2px 6px; border-radius: 6px;
+  }
+  .pop-item .del:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  .pop-title { padding: 6px 8px 4px; font-size: 11px; color: #64748b; letter-spacing: 0.5px; }
+
+  .toast {
+    position: fixed;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    z-index: 100;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+</style>
+
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">▶</span> Vedio Studio</div>
+    <div class="doc-title" :class="{ empty: !curName }">{{ curName || '未打开项目' }}</div>
+    <div class="spacer"></div>
+    <button class="tbtn" @click="showCases = !showCases">样例</button>
+    <button class="tbtn" @click="showProjects = !showProjects; refreshProjects()">项目</button>
+    <button class="tbtn" @click="newProject()">新建</button>
+    <button class="tbtn primary" @click="exportMp4()" :disabled="exporting || !doc">导出 MP4</button>
+  </div>
+
+  <div class="popover" v-if="showCases">
+    <div class="pop-title">内置样例（只读，点击加载）</div>
+    <div v-for="c in cases" :key="c.id" class="pop-item" @click="openCase(c.id)">
+      <div class="t">{{ c.title }}</div>
+      <div class="d">{{ c.desc }}</div>
+    </div>
+  </div>
+
+  <div class="popover" v-if="showProjects">
+    <div class="pop-title">我的项目（浏览器本地 page_fs）</div>
+    <div v-if="!projects.length" class="pop-item"><div class="d">暂无项目，点击「新建」或让 AI 创建</div></div>
+    <div v-for="p in projects" :key="p.name" class="pop-item" @click="openProject(p.name)">
+      <div class="t" :class="{ active: p.name === curName }">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s</span></div>
+      <div class="d">{{ p.name }}</div>
+      <span class="del" @click.stop="deleteProject(p.name)">删除</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="stage-wrap">
+      <video-stage ref="stage"></video-stage>
+    </div>
+    <div class="side">
+      <ai-box v:id="sid"></ai-box>
+    </div>
+  </div>
+
+  <div class="toast" v-if="toast">{{ toast }}</div>
+</body>
+
+<script setup>
+  import { starterDoc, normalizeDoc } from './video/engine.js'
+
+  // ---- 状态 ----
+  sid = $router.current.query.session_id || ''
+  doc = null            // 当前 video/1 文档对象
+  curName = ''          // 当前项目名
+  curTitle = ''
+  assets = {}           // ref → blob URL（页面持有，导出前不回收）
+  cases = []
+  projects = []
+  showCases = false
+  showProjects = false
+  exporting = false
+  toast = ''
+
+  // ---- page_fs 访问（浏览器 IndexedDB，$SESSION 根下 /vedio/）----
+  pf = null
+  pe = null
+
+  let toastTimer = 0
+  let blobUrls = []     // 待回收 blob URL
+
+  const projRoot = () => '/sessions/' + sid + '/vedio'
+  const projDir = (name) => projRoot() + '/' + name
+  const projIndex = (name) => projDir(name) + '/index.json'
+  const normName = (n) => String(n || '').trim().replace(/[\\/:\*\?"<>\|#%\s]+/g, '-').replace(/^-+|-+$/g, '') || 'video-' + Date.now().toString(36)
+  const normRel = (p) => {
+    p = String(p || '').trim().replace(/^\/+/, '')
+    if (!p || p.indexOf('..') >= 0) throw new Error('非法路径: ' + p)
+    return p
+  }
+  const showToast = (msg) => {
+    toast = msg
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => { toast = '' }, 2600)
+  }
+
+  // ---- 初始化 page_fs + page_exec ----
+  initPage = async () => {
+    if (!sid || !$mod.$page_exec) {
+      console.warn('vedio_studio: no session / page_exec')
+      return
+    }
+    pe = $mod.$page_exec(sid, [
+      { name: 'list_video', description: '列出浏览器本地（page_fs）的视频项目与内置样例',
+        handler: async () => {
+          try {
+            const list = await listProjects()
+            return reply({ ok: true, current: curName, current_title: curTitle,
+              files: list.map((p) => ({ name: p.name, title: p.title, duration: p.duration, scenes: p.scenes })),
+              cases: cases.map((c) => ({ id: c.id, title: c.title, desc: c.desc })) })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'new_video', description: '新建视频项目（--name 必填，--title 可选，--width/--height 可选）',
+        handler: async (argv) => {
+          try {
+            const name = normName(arg(argv, 'name'))
+            if (!name) throw new Error('--name 必填')
+            const title = arg(argv, 'title') || name
+            const d = starterDoc()
+            d.title = title
+            const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
+            if (w >= 240 && h >= 240) d.size = { width: w, height: h }
+            await pf.writeText(projIndex(name), JSON.stringify(d, null, 2))
+            await openProject(name)
+            return reply({ ok: true, name, path: projIndex(name), scenes: d.scenes.length, duration: Math.round(d.totalFrames / d.fps) })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'open_video', description: '打开项目（--name 必填）',
+        handler: async (argv) => {
+          try {
+            await openProject(arg(argv, 'name'))
+            return reply({ ok: true, name: curName, title: curTitle, duration: Math.round((doc.totalFrames || 0) / (doc.fps || 30)) })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'read_video_file', description: '读项目内文件（--name 项目名，--path 相对路径如 index.json），返回文本',
+        handler: async (argv) => {
+          try {
+            const name = normName(arg(argv, 'name'))
+            const rel = normRel(arg(argv, 'path') || 'index.json')
+            const r = await pf.readRaw(projDir(name) + '/' + rel)
+            return reply({ ok: true, path: rel, size: r.size, content: typeof r.content === 'string' ? r.content : '[binary]' })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'write_video_file', description: '写项目内文件（--name 项目名，--path 相对路径，--content JSON 文本）。写 index.json 后页面自动刷新',
+        handler: async (argv) => {
+          try {
+            const name = normName(arg(argv, 'name'))
+            const rel = normRel(arg(argv, 'path') || 'index.json')
+            const content = arg(argv, 'content')
+            if (content == null) throw new Error('--content 必填')
+            await pf.writeText(projDir(name) + '/' + rel, content)
+            if (rel === 'index.json' && name === curName) await reloadProject()
+            return reply({ ok: true, path: rel, bytes: String(content).length })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'asset_download', description: '下载外部素材到项目（--name 项目名，--url 必填，--path 目标相对路径如 assets/bg.mp3）',
+        handler: async (argv) => {
+          try {
+            const name = normName(arg(argv, 'name'))
+            const url = arg(argv, 'url')
+            if (!url) throw new Error('--url 必填')
+            const rel = normRel(arg(argv, 'path') || 'assets/' + (url.split('/').pop() || 'asset.bin'))
+            const r = await fetch(url)
+            if (!r.ok) throw new Error('下载失败 HTTP ' + r.status)
+            const blob = await r.blob()
+            const out = await pf.writeBlob(projDir(name) + '/' + rel, blob)
+            return reply({ ok: true, path: rel, size: out.size })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'run_video', description: '预览播放当前项目（--name 可选，指定则先打开）',
+        handler: async (argv) => {
+          try {
+            const n = arg(argv, 'name')
+            if (n && n !== curName) await openProject(n)
+            if (!doc) throw new Error('没有已打开的项目')
+            $refs.stage.$data.togglePlay()
+            return reply({ ok: true, playing: $refs.stage.$data.playing, title: curTitle })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'stop_video', description: '停止预览播放',
+        handler: async () => {
+          try {
+            const st = $refs.stage.$data
+            if (st.playing) st.togglePlay()
+            return reply({ ok: true, playing: false })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'export_video', description: '导出当前项目为 MP4（--name 可选，--width/--height 可选分辨率，--fps 可选）',
+        handler: async (argv) => {
+          try {
+            const n = arg(argv, 'name')
+            if (n && n !== curName) await openProject(n)
+            if (!doc) throw new Error('没有已打开的项目')
+            const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
+            const fps = parseInt(arg(argv, 'fps') || '0', 10)
+            const blob = await doExport({ width: w || 0, height: h || 0, fps: fps || 0 })
+            const out = await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
+            downloadBlob(blob, safeTitle() + '.mp4')
+            return reply({ ok: true, path: out.path, size: out.size, bytes: blob.size })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'delete_video', description: '删除项目（--name 必填，不可恢复）',
+        handler: async (argv) => {
+          try {
+            const name = normName(arg(argv, 'name'))
+            await deleteProjectFiles(name)
+            if (curName === name) { doc = null; curName = ''; curTitle = '' }
+            return reply({ ok: true, deleted: name })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+
+      { name: 'get_video', description: '当前打开项目的信息',
+        handler: async () => {
+          try {
+            if (!doc) return reply({ ok: true, open: false })
+            const st = $refs.stage.$data.engine ? $refs.stage.$data.engine.getState() : null
+            return reply({ ok: true, open: true, name: curName, title: curTitle,
+              duration: st ? Math.round(st.duration) : 0, fps: st ? st.fps : 0,
+              size: st ? st.size : null, scenes: st ? st.scenes.length : 0 })
+          } catch (e) { return reply(errReply(e)) }
+        } },
+    ])
+    pf = pe.page_fs()
+    await loadCases()
+    // 恢复上次打开的项目
+    const last = localStorage.getItem('vedio_studio_last') || ''
+    if (last) { try { await openProject(last) } catch (e) { } }
+  }
+
+  const errReply = (e) => ({ ok: false, error: String((e && e.message) || e) })
+  const reply = (obj) => ({ content: JSON.stringify(obj) })
+  const arg = (argv, key, dft) => {
+    const i = (argv || []).indexOf('--' + key)
+    if (i >= 0 && argv[i + 1] !== undefined) return String(argv[i + 1])
+    const pos = (argv || []).find((a) => typeof a === 'string' && !String(a).startsWith('--'))
+    return pos !== undefined ? pos : dft
+  }
+
+  // ---- 项目读写 ----
+  listProjects = async () => {
+    const l = await pf.list(projRoot() + '/')
+    const out = []
+    for (const it of (l.items || [])) {
+      if (!it.dir) continue
+      try {
+        const r = await pf.readRaw(projDir(it.name) + '/index.json')
+        const d = JSON.parse(typeof r.content === 'string' ? r.content : '{}')
+        out.push({ name: it.name, title: d.title || it.name, duration: Math.round((d.totalFrames || (d.fps || 30) * ((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0))) / (d.fps || 30)), scenes: (d.scenes || []).length })
+      } catch (e) { out.push({ name: it.name, title: it.name, duration: 0, scenes: 0 }) }
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    projects = out
+    return out
+  }
+
+  loadAssets = async (d) => {
+    // 释放旧资源
+    blobUrls.forEach((u) => { try { URL.revokeObjectURL(u) } catch (e) { } })
+    blobUrls = []
+    assets = {}
+    const engine = $refs.stage.$data.engine
+    const refs = engine ? engine.assetRefs() : []
+    for (const ref of refs) {
+      try {
+        const r = await pf.readRaw(projDir(curName) + '/' + ref)
+        if (r.content instanceof Blob) {
+          const u = URL.createObjectURL(r.content)
+          blobUrls.push(u)
+          assets[ref] = u
+        }
+      } catch (e) { console.warn('asset missing:', ref, e) }
+    }
+  }
+
+  openProject = async (name) => {
+    name = normName(name)
+    const r = await pf.readRaw(projIndex(name))
+    if (typeof r.content !== 'string') throw new Error('index.json 非文本: ' + name)
+    const d = JSON.parse(r.content)
+    curName = name
+    curTitle = d.title || name
+    doc = d
+    try { localStorage.setItem('vedio_studio_last', name) } catch (e) { }
+    await loadAssets(d)
+    $refs.stage.$data.setDoc(d, assets)
+    showToast('已打开：' + curTitle)
+    return d
+  }
+
+  reloadProject = async () => {
+    if (!curName) return
+    const r = await pf.readRaw(projIndex(curName))
+    const d = JSON.parse(r.content)
+    doc = d
+    curTitle = d.title || curName
+    await loadAssets(d)
+    $refs.stage.$data.setDoc(d, assets)
+  }
+
+  newProject = async () => {
+    const name = 'video-' + Date.now().toString(36)
+    const d = starterDoc()
+    d.title = name
+    await pf.writeText(projIndex(name), JSON.stringify(d, null, 2))
+    await openProject(name)
+    showToast('已新建：' + name)
+  }
+
+  openCase = async (id) => {
+    try {
+      const r = await fetch($mod.scoped + '/cases/' + id + '/index.json')
+      if (!r.ok) throw new Error('样例不存在: ' + id)
+      const d = await r.json()
+      curName = ''
+      curTitle = d.title || id
+      doc = d
+      assets = {}
+      $refs.stage.$data.setDoc(d, assets)
+      showToast('已加载样例：' + curTitle + '（只读，导出会另存为新项目）')
+    } catch (e) { showToast('加载样例失败：' + e.message) }
+  }
+
+  loadCases = async () => {
+    try {
+      const r = await fetch($mod.scoped + '/cases/cases.json')
+      const list = await r.json()
+      cases = Array.isArray(list) ? list : (list.cases || [])
+    } catch (e) { cases = [] }
+  }
+
+  deleteProjectFiles = async (name) => {
+    // page_fs 无 rm：直接操作 IndexedDB 删除前缀 keys
+    const abs = projDir(name)
+    const db = await new Promise((res, rej) => {
+      const req = indexedDB.open('aic-page-fs-' + (pf._uid || ''))
+      req.onsuccess = () => res(req.result)
+      req.onerror = () => rej(req.error)
+    })
+    const tx = db.transaction('session', 'readwrite')
+    const store = tx.objectStore('session')
+    const keys = await new Promise((res, rej) => {
+      const req = store.getAllKeys()
+      req.onsuccess = () => res(req.result)
+      req.onerror = () => rej(req.error)
+    })
+    let n = 0
+    for (const k of keys) {
+      if (String(k).startsWith(abs)) { store.delete(k); n++ }
+    }
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error) })
+    db.close()
+    return n
+  }
+
+  deleteProject = async (name) => {
+    await deleteProjectFiles(name)
+    if (curName === name) { doc = null; curName = ''; curTitle = '' }
+    showToast('已删除：' + name)
+    await refreshProjects()
+  }
+
+  refreshProjects = async () => {
+    try { await listProjects() } catch (e) { }
+  }
+
+  safeTitle = () => String(curTitle || curName || 'video').replace(/[\\/:*?"<>|#%\s]+/g, '-').slice(0, 60)
+
+  downloadBlob = (blob, filename) => {
+    const u = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = u
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(u), 10000)
+  }
+
+  // ---- 导出 ----
+  doExport = async (opts) => {
+    const { exportVideo } = await import('./video/render.js')
+    exporting = true
+    showCases = false
+    showProjects = false
+    try {
+      const engine = $refs.stage.$data.engine
+      const blob = await exportVideo(engine, {
+        width: opts.width || 0,
+        height: opts.height || 0,
+        fps: opts.fps || 0,
+        onProgress: (p) => {
+          $refs.stage.$data.setExporting(true, p.pct, p.phase === 'audio' ? '混音与封装…' : '渲染帧 ' + p.frame + '/' + p.total)
+        },
+      })
+      return blob
+    } finally {
+      exporting = false
+      $refs.stage.$data.setExporting(false)
+    }
+  }
+
+  exportMp4 = async () => {
+    if (!doc || exporting) return
+    try {
+      showToast('开始导出…')
+      const blob = await doExport({})
+      await pf.writeBlob('/sessions/' + sid + '/vedio/exports/' + safeTitle() + '.mp4', blob)
+      downloadBlob(blob, safeTitle() + '.mp4')
+      showToast('导出完成：' + safeTitle() + '.mp4')
+    } catch (e) {
+      console.error(e)
+      showToast('导出失败：' + (e && e.message ? e.message : e))
+    }
+  }
+
+  initPage()
+</script>
+</html>
