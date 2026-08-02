@@ -1,0 +1,41 @@
+# Database
+*.db
+
+# Runtime sessions
+sessions/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+dist/
+
+# Environment & secrets
+.env
+.env.*
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# Linux
+.cache/
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+shared/
