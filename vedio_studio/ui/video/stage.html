@@ -442,16 +442,21 @@
     syncMediaOverlay = () => {
       const sc = doc.scenes[curScene]
       const want = ((sc && sc.elements) || []).filter((e) => e.type === 'media' && e.src && !e.hidden)
-      const ids = want.map((e) => e.id)
-      for (const o of mediaOv) if (ids.indexOf(o.id) < 0) {
+      // 关键：节点身份 = 场景+元素 id。dupScene 会原样拷贝元素 id——若只按 id 去重，
+      // 跨场景时旧节点被「仍然需要」而保留，随后被新场景的 localT≈0 校正拽回入点
+      // 从头重播（听起来就是「上一场景的配音在循环播放」）。同 id 在不同场景是
+      // 文档里两个独立对象，跨场景必须销毁重建。
+      const keys = want.map((e) => curScene + ':' + e.id)
+      for (const o of mediaOv) if (keys.indexOf(o.key) < 0) {
         try {o.node.pause()} catch (e) { }
         o.node.remove()
       }
-      mediaOv = mediaOv.filter((o) => ids.indexOf(o.id) >= 0)
+      mediaOv = mediaOv.filter((o) => keys.indexOf(o.key) >= 0)
       const f = frameToScene(engine.doc, engine.frame)
       const t = f ? f.localT : 0
       for (const e of want) {
-        let o = mediaOv.find((x) => x.id === e.id)
+        const key = curScene + ':' + e.id
+        let o = mediaOv.find((x) => x.key === key)
         if (!o) {
           const tag = e.kind === 'audio' ? 'audio' : 'video'
           const node = document.createElement(tag)
@@ -460,7 +465,7 @@
           node.preload = 'auto'
           if (tag === 'video') node.playsInline = true
           $refs.box.appendChild(node)
-          o = {id: e.id, el: e, node}
+          o = {key, id: e.id, el: e, node}
           mediaOv.push(o)
         }
         o.node.muted = !!e.muted || muted
@@ -477,6 +482,10 @@
     }
 
     /* ---------------------------------------------------------- 音频预览 */
+    // 音轨循环语义：music 默认循环（loop!==false），voice 默认不循环（loop===true 才循环）。
+    // 关键 bug 史：旧代码用 track.loop!==false 判断，voice 无 loop 字段被当成循环轨——
+    // 配音播完 (paused) 后每 tick 又被 play() 从头重播，听起来「场景过了配音还在循环」。
+    trackLoop = (key, track) => key === 'music' ? track.loop !== false : !!track.loop
     setupAudio = () => {
       stopAudio()
       audioEls = {}
@@ -485,7 +494,7 @@
         if (!track || !track.src) return
         const a = new Audio()
         a.src = (engine.assets[track.src] || track.src)
-        a.loop = !!track.loop
+        a.loop = trackLoop(key, track)
         a._base = track.volume != null ? track.volume : 1
         a.volume = a._base * volume
         a.muted = muted
@@ -495,36 +504,40 @@
       make('music', doc.music)
       make('voice', doc.voice)
     }
+    // 音轨对齐：循环轨 offset 后持续循环（对齐 lt%dur 防漂移）；非循环轨只在
+    // [offset, offset+duration) 窗口内播，窗口外保持暂停（配音播完即停，不重播）
+    alignTrack = (key, t) => {
+      const a = audioEls[key]
+      const track = doc && doc[key]
+      if (!a || !track || !track.src) return
+      const off = track.offset || 0
+      const lt = t - off
+      const dur = a.duration || 0
+      if (trackLoop(key, track)) {
+        if (lt < 0) { if (!a.paused) a.pause(); return }
+        if (a.paused) {
+          if (dur) a.currentTime = lt % dur
+          a.play().catch(() => {})
+        } else if (dur && Math.abs(a.currentTime - (lt % dur)) > 1.2) {
+          a.currentTime = lt % dur
+        }
+        return
+      }
+      if (lt >= 0 && (dur === 0 || lt < dur - 0.1)) {
+        if (a.paused) {
+          if (dur === 0 || Math.abs(a.currentTime - lt) > 0.6) a.currentTime = lt
+          a.play().catch(() => {})
+        } else if (dur > 0 && Math.abs(a.currentTime - lt) > 1.2) {
+          a.currentTime = lt // 明显跑偏才纠正，避免频繁 seek 卡顿
+        }
+      } else if (!a.paused) {
+        a.pause()
+      }
+    }
     startAudio = () => {
       const t = engine.frame / (engine.getState().fps || 30)
-      const music = audioEls.music
-      if (music) {
-        if (music.loop) {
-          if (Math.abs(music.currentTime - t) > 1 || !music.duration) music.currentTime = t % (music.duration || 1)
-          music.play().catch(() => {})
-        } else {
-          // 非循环音乐支持 offset：文档时间早于 offset 不播，之后按 t-offset 对齐
-          const off = (doc.music && doc.music.offset) || 0
-          const lt = t - off
-          if (lt >= 0 && lt < (music.duration || 0) - 0.1) {
-            if (Math.abs(music.currentTime - lt) > 0.6) music.currentTime = lt
-            music.play().catch(() => {})
-          } else {
-            music.pause()
-          }
-        }
-      }
-      const voice = audioEls.voice
-      if (voice && voice.duration) {
-        const voff = (doc.voice && doc.voice.offset) || 0
-        const vlt = t - voff
-        if (vlt >= 0 && vlt < voice.duration) {
-          if (Math.abs(voice.currentTime - vlt) > 0.6) voice.currentTime = vlt
-          voice.play().catch(() => {})
-        } else {
-          voice.pause()
-        }
-      }
+      alignTrack('music', t)
+      alignTrack('voice', t)
     }
     pauseAudio = () => { Object.values(audioEls).forEach((a) => { if (a) a.pause() }) }
     stopAudio = () => { pauseAudio(); audioEls = {} }
@@ -533,35 +546,13 @@
       if (playing) startAudio()
     }
 
-    // 播放中每 tick 对齐音轨：非 loop 音轨在 offset..offset+dur 窗口内才播，
-    // 窗口外保持暂停（修复连续播放越过 offset 边界时音乐不启动/不停止）
+    // 播放中每 tick 对齐音轨（倒放/变速时音轨不对齐，直接静音）
     syncAudioTick = () => {
       if (!doc || !playing) return
-      if (playRate < 0 || Math.abs(playRate) !== 1) { pauseAudio(); return } // 倒放/变速时音轨不对齐，直接静音
+      if (playRate < 0 || Math.abs(playRate) !== 1) { pauseAudio(); return }
       const t = engine.frame / (engine.getState().fps || 30)
-      const syncOne = (a, track) => {
-        if (!a || !track || !track.src) return
-        if (track.loop !== false) {
-          // loop 音轨（startAudio 已对齐全局时间）：确保在播
-          if (a.paused) a.play().catch(() => {})
-          return
-        }
-        const off = track.offset || 0
-        const lt = t - off
-        const dur = a.duration || 0
-        if (lt >= 0 && (dur === 0 || lt < dur - 0.1)) {
-          if (a.paused) {
-            if (dur === 0 || Math.abs(a.currentTime - lt) > 0.6) a.currentTime = lt
-            a.play().catch(() => {})
-          } else if (dur > 0 && Math.abs(a.currentTime - lt) > 1.2) {
-            a.currentTime = lt // 明显跑偏才纠正，避免频繁 seek 卡顿
-          }
-        } else if (!a.paused) {
-          a.pause()
-        }
-      }
-      syncOne(audioEls.music, doc.music)
-      syncOne(audioEls.voice, doc.voice)
+      alignTrack('music', t)
+      alignTrack('voice', t)
     }
 
     syncScene = () => {
