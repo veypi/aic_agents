@@ -372,6 +372,7 @@
 
 <script setup>
   import {starterDoc, defaultTheme, uid} from './video/engine.js'
+  document.body.setAttribute('theme', 'dark')
 
   // ---- 状态 ----
   sid = $router.current.query.session_id || ''
@@ -443,7 +444,7 @@
     await loadCases()
     // 恢复上次打开的项目（本地存储，纯本地）
     const last = localStorage.getItem('vedio_studio_last') || ''
-    if (last) { try { await openProject(last) } catch (e) { } }
+    if (last) {try {await openProject(last)} catch (e) { } }
     // 初始路由带 sid：绑定 AI 通道（后续由 $watch 监听 ai-box 双向绑定）
     if (sid) bindPageExec(sid)
   }
@@ -1170,7 +1171,7 @@
 <script>
   // ai-box 会话建立/切换（v:id 双向绑定）：写回路由 query + 重绑 page_exec（参考 ppt_studio）
   $watch(() => sid, (v) => {
-    $router.setQuery({ session_id: sid })
+    $router.setQuery({session_id: sid})
     bindPageExec(v)
   })
 
