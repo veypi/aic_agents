@@ -9,7 +9,7 @@
 - 每个项目一个目录：`index.json`（video/1 文档，含全部场景，单一文件）
 - 素材（图片/音频）放 `assets/` 子目录，文档中 `src` 写**相对路径**（如 `assets/bg.mp3`、`assets/logo.png`）
 - 导出产物自动存 `/vedio/exports/{标题}.mp4` 并触发浏览器下载
-- 注意：项目在浏览器本地，AI 无法用 cloud 的 `fs` 工具直接读写（不在 $SESSION 下）；素材下载/内容写入一律走 page_exec 指令（`asset_download`/`write_video_file`），页面侧落地到本地 IndexedDB
+- 注意：项目在浏览器本地，AI 用 fs 工具（1host=page）以 `$SESSION/vedio/...` 路径读写（自动映射到本地 `/vedio/...`）；外部素材用 `exec curl -o $SESSION/vedio/{项目}/assets/...` 下载
 
 ## 典型工作流
 
@@ -175,12 +175,12 @@ material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/op
 ## 制作规范
 
 1. **场景时长**：每场景 3~6 秒为宜；全片一般 8~60 秒（导出性能与时长线性相关）
-2. **先读后改**：修改前先 `read_video_file` 了解现状；不确定项目名先 `list_video`
+2. **先读后改**：修改前先 `fs.read`（1host=page，路径 `$SESSION/vedio/{项目名}/index.json`）了解现状；不确定项目名先 `list_video`
 3. **坐标合理**：基于 `size` 布局，避免元素越界；文字框给足高度（fontSize 64 标题至少 h=100）；`align/valign` 配合居中
 4. **动画克制的**：同屏 2~4 个入场动画即可，`delay` 错峰（0.3~0.5s 间隔）；关键帧运动轨迹明确、有终点
 5. **字幕**：口语化短句，与画面内容对应；不要整屏字幕
-6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材用 `asset_download` 下载（不要引用外链 URL，离线失效）
-7. **写完即所见**：`write_video_file` 写 index.json 后页面自动刷新；用 `run_video` 播放确认效果，播放后提醒用户可再次点击播放/暂停
+6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材用 `exec curl -o $SESSION/vedio/{项目名}/assets/xxx.png <url>` 下载（不要引用外链 URL，离线失效）
+7. **写完即所见**：`fs.write` 写 index.json 后调 `reload_video` 刷新画面（保持当前帧）；用 `run_video` 播放确认效果，播放后提醒用户可再次点击播放/暂停
 8. **结果反馈**：操作完成后一两句话向用户总结（时长、场景数、效果亮点）；导出后告知文件已下载
 
 ## 常见问题
