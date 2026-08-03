@@ -36,28 +36,56 @@
     align-items: center;
     gap: 8px;
   }
+
   .brand .logo {
-    width: 22px; height: 22px; border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     background: linear-gradient(135deg, #4361ee, #7c3aed);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 11px;
   }
 
   .doc-title {
     font-size: var(--font-size-md);
     color: var(--text-color);
     max-width: 240px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin-left: var(--spacing-sm);
     cursor: pointer;
   }
-  .doc-title.empty { color: var(--text-color-disabled); cursor: default; }
-  .doc-title:hover { color: #c7d2fe; }
-  .save-state { font-size: 11px; color: #64748b; white-space: nowrap; }
-  .save-state.dirty { color: #fbbf24; }
-  .save-state.fail { color: #f87171; }
 
-  .spacer { flex: 1; }
+  .doc-title.empty {
+    color: var(--text-color-disabled);
+    cursor: default;
+  }
+
+  .doc-title:hover {
+    color: #c7d2fe;
+  }
+
+  .save-state {
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+  }
+
+  .save-state.dirty {
+    color: #fbbf24;
+  }
+
+  .save-state.fail {
+    color: #f87171;
+  }
+
+  .spacer {
+    flex: 1;
+  }
 
   .tbtn {
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -70,37 +98,130 @@
     transition: all 0.15s;
     white-space: nowrap;
   }
-  .tbtn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+  .tbtn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+  }
+
   .tbtn.primary {
     background: linear-gradient(135deg, #4361ee, #5b46f0);
-    border: none; color: #fff; font-weight: 600;
+    border: none;
+    color: #fff;
+    font-weight: 600;
   }
-  .tbtn.primary:hover { filter: brightness(1.12); }
-  .tbtn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .tbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .tbtn.primary:hover {
+    filter: brightness(1.12);
+  }
+
+  .tbtn.primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .tbtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 
   /* ---- 工作区三栏 ---- */
-  .ws { flex: 1; min-height: 0; display: flex; }
-  .left { flex: none; width: 196px; border-right: 1px solid rgba(255, 255, 255, 0.08); display: flex; min-height: 0; }
-  .left video-scenes { flex: 1; min-height: 0; display: flex; }
-  .center { flex: 1; min-width: 0; min-height: 0; display: flex; }
-  .center video-stage { flex: 1; min-height: 0; display: flex; }
-  .right {
-    flex: none; width: 322px; border-left: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(13, 17, 28, 0.9); display: flex; flex-direction: column; min-height: 0;
+  .ws {
+    flex: 1;
+    min-height: 0;
+    display: flex;
   }
-  .rtabs { flex: none; display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-  .rtabs button {
-    flex: 1; border: none; background: transparent; color: #64748b;
-    font-size: 13px; padding: 9px 0; cursor: pointer; border-bottom: 2px solid transparent;
-  }
-  .rtabs button.on { color: #e0e7ff; border-bottom-color: #4361ee; background: rgba(67, 97, 238, 0.08); }
-  .rbody { flex: 1; min-height: 0; display: flex; }
-  .rbody video-inspector { flex: 1; min-height: 0; display: flex; }
-  .rbody ai-box { flex: 1; min-height: 0; display: flex; }
 
-  .bottom { flex: none; height: 188px; display: flex; }
-  .bottom video-timeline { flex: 1; min-width: 0; min-height: 0; display: flex; }
+  .left {
+    flex: none;
+    width: 196px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    min-height: 0;
+  }
+
+  .left video-scenes {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .center {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+  }
+
+  .center video-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .right {
+    flex: none;
+    width: 322px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 17, 28, 0.9);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .rtabs {
+    flex: none;
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .rtabs button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 13px;
+    padding: 9px 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+
+  .rtabs button.on {
+    color: #e0e7ff;
+    border-bottom-color: #4361ee;
+    background: rgba(67, 97, 238, 0.08);
+  }
+
+  .rbody {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .rbody video-inspector {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .rbody ai-box {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .bottom {
+    flex: none;
+    height: 188px;
+    display: flex;
+  }
+
+  .bottom video-timeline {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+  }
 
   .popover {
     position: absolute;
@@ -116,22 +237,54 @@
     z-index: 40;
     padding: 8px;
   }
+
   .pop-item {
-    display: flex; flex-direction: column; gap: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     padding: 9px 10px;
     border-radius: 8px;
     cursor: pointer;
     color: #cbd5e1;
     position: relative;
   }
-  .pop-item:hover { background: rgba(67, 97, 238, 0.16); }
-  .pop-item .t { font-size: 13.5px; font-weight: 600; color: #e2e8f0; }
-  .pop-item .d { font-size: 11.5px; color: #64748b; }
-  .pop-item .del {
-    position: absolute; right: 8px; top: 9px; color: #94a3b8; font-size: 12px; padding: 2px 6px; border-radius: 6px;
+
+  .pop-item:hover {
+    background: rgba(67, 97, 238, 0.16);
   }
-  .pop-item .del:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-  .pop-title { padding: 6px 8px 4px; font-size: 11px; color: #64748b; letter-spacing: 0.5px; }
+
+  .pop-item .t {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+
+  .pop-item .d {
+    font-size: 11.5px;
+    color: #64748b;
+  }
+
+  .pop-item .del {
+    position: absolute;
+    right: 8px;
+    top: 9px;
+    color: #94a3b8;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+
+  .pop-item .del:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
+
+  .pop-title {
+    padding: 6px 8px 4px;
+    font-size: 11px;
+    color: #64748b;
+    letter-spacing: 0.5px;
+  }
 
   .toast {
     position: fixed;
@@ -152,7 +305,8 @@
 <body>
   <div class="topbar">
     <div class="brand"><span class="logo">▶</span> Vedio Studio</div>
-    <div class="doc-title" :class="{ empty: !curName && !curTitle }" @click="selNone()" title="点击查看项目设置">{{ curTitle || curName || '未打开项目' }}</div>
+    <div class="doc-title" :class="{ empty: !curName && !curTitle }" @click="selNone()" title="点击查看项目设置">{{ curTitle ||
+      curName || '未打开项目' }}</div>
     <span class="save-state" :class="{ dirty: saveState === '未保存', fail: saveState === '保存失败' }">{{ saveState }}</span>
     <div class="spacer"></div>
     <button class="tbtn" @click="showCases = !showCases; showProjects = false">样例</button>
@@ -173,9 +327,12 @@
 
   <div class="popover" v-if="showProjects">
     <div class="pop-title">我的项目（云端会话存储）</div>
-    <div v-if="!projects.length" class="pop-item"><div class="d">暂无项目，点击「新建」开始创作</div></div>
+    <div v-if="!projects.length" class="pop-item">
+      <div class="d">暂无项目，点击「新建」开始创作</div>
+    </div>
     <div v-for="p in projects" :key="p.name" class="pop-item" @click="openProject(p.name)">
-      <div class="t">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s · {{ p.scenes }} 场景</span></div>
+      <div class="t">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s · {{ p.scenes }}
+          场景</span></div>
       <div class="d">{{ p.name }}</div>
       <span class="del" @click.stop="deleteProject(p.name)">删除</span>
     </div>
@@ -197,8 +354,7 @@
       </div>
       <div class="rbody">
         <video-inspector v-show="rtab === 'props'" :doc="doc" :sel="sel" :frame="curFrame" :readonly="!curName"
-          :uploadasset="uploadAsset"
-          @mutate="onDocChange" @saveas="saveAsProject" @pickel="onPickEl"
+          :uploadasset="uploadAsset" @mutate="onDocChange" @saveas="saveAsProject" @pickel="onPickEl"
           @delel="delElement" @dupel="dupElement"></video-inspector>
         <ai-box v-show="rtab === 'ai'" v:id="sid"></ai-box>
       </div>
@@ -206,16 +362,16 @@
   </div>
 
   <div class="bottom">
-    <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer"
-      @seek="onSeek" @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl"
-      @docchange="onDocChange" @movescene="moveSceneTo"></video-timeline>
+    <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer" @seek="onSeek"
+      @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl" @docchange="onDocChange"
+      @movescene="moveSceneTo"></video-timeline>
   </div>
 
   <div class="toast" v-if="toast">{{ toast }}</div>
 </body>
 
 <script setup>
-  import { starterDoc, defaultTheme, uid } from './video/engine.js'
+  import {starterDoc, defaultTheme, uid} from './video/engine.js'
 
   // ---- 状态 ----
   sid = $router.current.query.session_id || ''
@@ -223,8 +379,8 @@
   curName = ''          // 当前项目名（'' = 样例只读）
   curTitle = ''
   assets = {}           // ref → dataURL（预览/导出共用）
-  sel = { kind: 'none', sceneIndex: 0, elId: '' }   // 选中态
-  rtab = 'props'        // 右栏 tab
+  sel = {kind: 'none', sceneIndex: 0, elId: ''}   // 选中态
+  rtab = 'ai'           // 右栏 tab（默认 AI 助手，ai-box 双向绑定 sid 创建会话）
   curFrame = 0          // 当前帧（rAF 同步自 stage）
   cases = []
   projects = []
@@ -248,7 +404,7 @@
   const showToast = (msg) => {
     toast = msg
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => { toast = '' }, 2600)
+    toastTimer = setTimeout(() => {toast = ''}, 2600)
   }
   const ensureTheme = (d) => {
     d.theme = Object.assign(defaultTheme(), d.theme || {})
@@ -265,19 +421,19 @@
   const fsGet = (path) => $mod.$page_fs.get(path)         // {ok, content(string|Blob), mime, size}
   const fsPut = (path, content) => $mod.$page_fs.put(path, content)   // string | Blob
   const fsLs = async (path) => {
-    try { return await $mod.$page_fs.ls(path) } catch (e) { return { ok: false, items: [] } }
+    try {return await $mod.$page_fs.ls(path)} catch (e) {return {ok: false, items: []}}
   }
   const fsRm = (path) => $mod.$page_fs.rm(path)
   // 目录删除：先试整删，失败则递归逐文件
   const rmDir = async (dir) => {
-    try { await fsRm(dir); return } catch (e) { }
+    try {await fsRm(dir); return } catch (e) { }
     const walk = async (d) => {
       const l = await fsLs(d + '/')
       for (const it of (l.items || [])) {
         if (it.dir) await walk(d + '/' + it.name)
-        else { try { await fsRm(d + '/' + it.name) } catch (e) { } }
+        else {try {await fsRm(d + '/' + it.name)} catch (e) { } }
       }
-      try { await fsRm(d) } catch (e) { }
+      try {await fsRm(d)} catch (e) { }
     }
     await walk(dir)
   }
@@ -285,63 +441,39 @@
   // ---- 初始化 ----
   initPage = async () => {
     await loadCases()
-    await ensureSession()
-  }
-
-  // 会话自举（仅 AI 通道用：page_exec 指令 + ai-box 助手；本地存储 $page_fs 不依赖 sid）：
-  // URL 带 sid 直接用；否则复用 localStorage 的工作台会话；再否则新建（隐藏会话）
-  ensureSession = async () => {
-    if (!sid) {
-      const saved = localStorage.getItem('vedio_studio_sid') || ''
-      if (saved) {
-        try {
-          const r = await fetch('/api/sessions/' + saved)
-          if (r.ok) sid = saved
-        } catch (e) { }
-        if (!sid) localStorage.removeItem('vedio_studio_sid')
-      }
-      if (!sid) {
-        try {
-          const r = await fetch('/api/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: 'Vedio Studio 工作台', hide: true }),
-          })
-          if (!r.ok) throw new Error('HTTP ' + r.status)
-          const s = await r.json()
-          sid = s.id
-          localStorage.setItem('vedio_studio_sid', sid)
-        } catch (e) {
-          console.warn('ensureSession failed', e)
-          showToast('会话初始化失败：项目无法保存，可正常使用样例与导出')
-        }
-      }
-    }
-    bindPageExec()
-    // 恢复上次打开的项目
+    // 恢复上次打开的项目（本地存储，纯本地）
     const last = localStorage.getItem('vedio_studio_last') || ''
-    if (last && storageReady()) { try { await openProject(last) } catch (e) { } }
+    if (last) { try { await openProject(last) } catch (e) { } }
+    // 初始路由带 sid：绑定 AI 通道（后续由 $watch 监听 ai-box 双向绑定）
+    if (sid) bindPageExec(sid)
   }
 
-  bindPageExec = () => {
-    if (!sid || !$mod.$page_exec) {
+  // 会话绑定（参考 ppt_studio）：sid 由 ai-box v:id 双向绑定/路由 query 驱动，
+  // 不自行创建会话、不缓存 localStorage session_id。
+  bindPageExec = (id) => {
+    if (!id || !$mod.$page_exec) {
       console.warn('vedio_studio: no session / page_exec')
       return
     }
-    if (pe) { try { pe.stop() } catch (e) { } }
+    if (pe) {try {pe.stop()} catch (e) { } }
     pe = null
-    pe = $mod.$page_exec(sid, [
-      { name: 'list_video', description: '列出本地存储的视频项目与内置样例',
+    pe = $mod.$page_exec(id, [
+      {
+        name: 'list_video', description: '列出本地存储的视频项目与内置样例',
         handler: async () => {
           try {
             const list = await listProjects()
-            return reply({ ok: true, current: curName, current_title: curTitle,
-              files: list.map((p) => ({ name: p.name, title: p.title, duration: p.duration, scenes: p.scenes })),
-              cases: cases.map((c) => ({ id: c.id, title: c.title, desc: c.desc })) })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({
+              ok: true, current: curName, current_title: curTitle,
+              files: list.map((p) => ({name: p.name, title: p.title, duration: p.duration, scenes: p.scenes})),
+              cases: cases.map((c) => ({id: c.id, title: c.title, desc: c.desc}))
+            })
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'new_video', description: '新建视频项目（--name 必填，--title 可选，--width/--height 可选）',
+      {
+        name: 'new_video', description: '新建视频项目（--name 必填，--title 可选，--width/--height 可选）',
         handler: async (argv) => {
           try {
             const name = normName(arg(argv, 'name'))
@@ -350,42 +482,50 @@
             const d = starterDoc()
             d.title = title
             const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
-            if (w >= 240 && h >= 240) d.size = { width: w, height: h }
+            if (w >= 240 && h >= 240) d.size = {width: w, height: h}
             await fsPut(projIndex(name), JSON.stringify(d, null, 2))
             await openProject(name)
-            return reply({ ok: true, name, path: projIndex(name), scenes: d.scenes.length, duration: Math.round(d.scenes.reduce((a, s) => a + s.duration, 0)) })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, name, path: projIndex(name), scenes: d.scenes.length, duration: Math.round(d.scenes.reduce((a, s) => a + s.duration, 0))})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'open_video', description: '打开项目（--name 必填）',
+      {
+        name: 'open_video', description: '打开项目（--name 必填）',
         handler: async (argv) => {
           try {
             await openProject(arg(argv, 'name'))
-            return reply({ ok: true, name: curName, title: curTitle, duration: Math.round((doc.totalFrames || 0) / (doc.fps || 30)) })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, name: curName, title: curTitle, duration: Math.round((doc.totalFrames || 0) / (doc.fps || 30))})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'run_video', description: '预览播放当前项目（--name 可选，指定则先打开）',
+      {
+        name: 'run_video', description: '预览播放当前项目（--name 可选，指定则先打开）',
         handler: async (argv) => {
           try {
             const n = arg(argv, 'name')
             if (n && n !== curName) await openProject(n)
             if (!doc) throw new Error('没有已打开的项目')
             $refs.stage.$data.togglePlay()
-            return reply({ ok: true, playing: $refs.stage.$data.playing, title: curTitle })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, playing: $refs.stage.$data.playing, title: curTitle})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'stop_video', description: '停止预览播放',
+      {
+        name: 'stop_video', description: '停止预览播放',
         handler: async () => {
           try {
             const st = $refs.stage.$data
             if (st.playing) st.togglePlay()
-            return reply({ ok: true, playing: false })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, playing: false})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'export_video', description: '导出当前项目为 MP4（--name 可选，--width/--height 可选分辨率，--fps 可选）',
+      {
+        name: 'export_video', description: '导出当前项目为 MP4（--name 可选，--width/--height 可选分辨率，--fps 可选）',
         handler: async (argv) => {
           try {
             const n = arg(argv, 'name')
@@ -393,32 +533,39 @@
             if (!doc) throw new Error('没有已打开的项目')
             const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
             const fps = parseInt(arg(argv, 'fps') || '0', 10)
-            const blob = await doExport({ width: w || 0, height: h || 0, fps: fps || 0 })
+            const blob = await doExport({width: w || 0, height: h || 0, fps: fps || 0})
             const out = await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
             downloadBlob(blob, safeTitle() + '.mp4')
-            return reply({ ok: true, path: out.path, size: out.bytes || blob.size })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, path: out.path, size: out.bytes || blob.size})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'reload_video', description: '重新加载当前项目（AI 用 fs 工具写完 index.json/素材后调用，页面刷新画面并保持当前帧）',
+      {
+        name: 'reload_video', description: '重新加载当前项目（AI 用 fs 工具写完 index.json/素材后调用，页面刷新画面并保持当前帧）',
         handler: async () => {
           try {
             if (!curName) throw new Error('没有已打开的项目')
             await reloadProject()
-            return reply({ ok: true, name: curName, title: curTitle })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+            return reply({ok: true, name: curName, title: curTitle})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
 
-      { name: 'get_video', description: '当前打开项目的信息',
+      {
+        name: 'get_video', description: '当前打开项目的信息',
         handler: async () => {
           try {
-            if (!doc) return reply({ ok: true, open: false })
+            if (!doc) return reply({ok: true, open: false})
             const st = $refs.stage.$data.engine ? $refs.stage.$data.engine.getState() : null
-            return reply({ ok: true, open: true, name: curName, title: curTitle,
+            return reply({
+              ok: true, open: true, name: curName, title: curTitle,
               duration: st ? Math.round(st.duration) : 0, fps: st ? st.fps : 0,
-              size: st ? st.size : null, scenes: st ? st.scenes.length : 0 })
-          } catch (e) { return reply(errReply(e)) }
-        } },
+              size: st ? st.size : null, scenes: st ? st.scenes.length : 0
+            })
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
     ])
     // 开启 AI 通道：start() 注册自定义指令；start_fs() 开启文件读写响应
     // （fs.read/write/edit + ls/rg/tree/rm/curl 虚拟指令；AI 路径 $SESSION/vedio/x → 本地 /vedio/x）
@@ -426,8 +573,8 @@
     pe.start_fs()
   }
 
-  const errReply = (e) => ({ ok: false, error: String((e && e.message) || e) })
-  const reply = (obj) => ({ content: JSON.stringify(obj) })
+  const errReply = (e) => ({ok: false, error: String((e && e.message) || e)})
+  const reply = (obj) => ({content: JSON.stringify(obj)})
   const arg = (argv, key, dft) => {
     const i = (argv || []).indexOf('--' + key)
     if (i >= 0 && argv[i + 1] !== undefined) return String(argv[i + 1])
@@ -443,8 +590,8 @@
       if (!it.dir) continue
       try {
         const d = JSON.parse(await fsText(projDir(it.name) + '/index.json'))
-        out.push({ name: it.name, title: d.title || it.name, duration: Math.round(((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0)) * 10) / 10, scenes: (d.scenes || []).length })
-      } catch (e) { out.push({ name: it.name, title: it.name, duration: 0, scenes: 0 }) }
+        out.push({name: it.name, title: d.title || it.name, duration: Math.round(((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0)) * 10) / 10, scenes: (d.scenes || []).length})
+      } catch (e) {out.push({name: it.name, title: it.name, duration: 0, scenes: 0})}
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
     projects = out
@@ -461,7 +608,7 @@
         if (r.content instanceof Blob) {
           assets[ref] = await blobToDataURL(r.content)
         }
-      } catch (e) { console.warn('asset missing:', ref, e) }
+      } catch (e) {console.warn('asset missing:', ref, e)}
     }
   }
 
@@ -478,9 +625,9 @@
     curName = name
     curTitle = d.title || name
     doc = d
-    sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    sel = {kind: 'none', sceneIndex: 0, elId: ''}
     saveState = '已保存'
-    try { localStorage.setItem('vedio_studio_last', name) } catch (e) { }
+    try {localStorage.setItem('vedio_studio_last', name)} catch (e) { }
     await loadAssets(d)
     // 关键：传 sandbox 读出的 doc 代理（而非裸 d）——vhtml copyBind 保证同一
     // 代理对象贯穿后续赋值，stage 与父组件由此共享同一响应式图，
@@ -501,9 +648,9 @@
     // 选中态校验：元素/场景可能已被外部（AI）删除
     if (sel.kind === 'element') {
       const sc = d.scenes[sel.sceneIndex]
-      if (!sc || !(sc.elements || []).some((e) => e.id === sel.elId)) sel = { kind: 'none', sceneIndex: 0, elId: '' }
+      if (!sc || !(sc.elements || []).some((e) => e.id === sel.elId)) sel = {kind: 'none', sceneIndex: 0, elId: ''}
     } else if (sel.kind === 'scene' && sel.sceneIndex >= d.scenes.length) {
-      sel = { kind: 'none', sceneIndex: 0, elId: '' }
+      sel = {kind: 'none', sceneIndex: 0, elId: ''}
     }
     await loadAssets(d)
     $refs.stage.$data.setDoc(doc, assets)
@@ -511,7 +658,7 @@
   }
 
   newProject = async () => {
-    if (!storageReady()) { showToast('本地存储不可用，无法保存项目'); return }
+    if (!storageReady()) {showToast('本地存储不可用，无法保存项目'); return }
     const name = 'video-' + Date.now().toString(36)
     const d = starterDoc()
     d.title = '未命名视频'
@@ -528,7 +675,7 @@
       curName = ''
       curTitle = d.title || id
       doc = d
-      sel = { kind: 'none', sceneIndex: 0, elId: '' }
+      sel = {kind: 'none', sceneIndex: 0, elId: ''}
       saveState = ''
       assets = {}
       // 先装载以收集相对素材引用，再从样例目录预载为 dataURL（预览/导出共用）
@@ -538,13 +685,13 @@
         try {
           const ar = await fetch('cases/' + id + '/' + ref)
           if (ar.ok) assets[ref] = await blobToDataURL(await ar.blob())
-        } catch (e) { console.warn('case asset missing:', ref, e) }
+        } catch (e) {console.warn('case asset missing:', ref, e)}
       }
       if (refs.length) $refs.stage.$data.setDoc(doc, assets)
       setBaseline()
       showCases = false
       showToast('已加载样例：' + curTitle + '（只读，右侧可另存为项目）')
-    } catch (e) { showToast('加载样例失败：' + e.message) }
+    } catch (e) {showToast('加载样例失败：' + e.message)}
   }
 
   loadCases = async () => {
@@ -552,12 +699,12 @@
       const r = await fetch('cases/cases.json')
       const list = await r.json()
       cases = Array.isArray(list) ? list : (list.cases || [])
-    } catch (e) { cases = [] }
+    } catch (e) {cases = []}
   }
 
   saveAsProject = async () => {
     if (!doc || curName) return
-    if (!storageReady()) { showToast('本地存储不可用，无法保存'); return }
+    if (!storageReady()) {showToast('本地存储不可用，无法保存'); return }
     const name = 'video-' + Date.now().toString(36)
     await fsPut(projIndex(name), JSON.stringify(doc, null, 2))
     await openProject(name)
@@ -566,13 +713,13 @@
 
   deleteProject = async (name) => {
     await rmDir(projDir(name))
-    if (curName === name) { doc = null; curName = ''; curTitle = ''; saveState = '' }
+    if (curName === name) {doc = null; curName = ''; curTitle = ''; saveState = ''}
     showToast('已删除：' + name)
     await refreshProjects()
   }
 
   refreshProjects = async () => {
-    try { await listProjects() } catch (e) { }
+    try {await listProjects()} catch (e) { }
   }
 
   safeTitle = () => String(curTitle || curName || 'video').replace(/[\\/:*?"<>|#%\s]+/g, '-').slice(0, 60)
@@ -594,15 +741,15 @@
   let lastJson = ''     // 上一次变更后的 doc 序列化（快照基准）
   let clipboard = ''    // 元素 JSON（应用内剪贴板）
 
-  setBaseline = () => { lastJson = doc ? JSON.stringify(doc) : '' }
+  setBaseline = () => {lastJson = doc ? JSON.stringify(doc) : ''}
 
   // 任何 doc 变更后调用：把「变更前」快照入 undo 栈
   // tag 相同的连续变更（如方向键微调）在 1s 窗口内合并为一条历史
   let lastTag = ''
   let lastPushT = 0
   pushHistory = (tag) => {
-    if (!doc) { lastJson = ''; return }
-    if (!curName) { setBaseline(); return }   // 样例只读，不入栈
+    if (!doc) {lastJson = ''; return }
+    if (!curName) {setBaseline(); return }   // 样例只读，不入栈
     const j = JSON.stringify(doc)
     if (j === lastJson) return
     const now = Date.now()
@@ -622,7 +769,7 @@
     const d = ensureTheme(JSON.parse(j))
     doc = d
     curTitle = d.title || curName
-    sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    sel = {kind: 'none', sceneIndex: 0, elId: ''}
     sceneVer++
     $refs.stage.$data.setDoc(doc, assets)
     scheduleSave()
@@ -672,7 +819,7 @@
       }
     })
     if (!news.length) return
-    sel = { kind: 'element', sceneIndex: i, elId: news[news.length - 1], elIds: news }
+    sel = {kind: 'element', sceneIndex: i, elId: news[news.length - 1], elIds: news}
     onDocChange()
     showToast('已粘贴 ' + news.length + ' 个元素')
   }
@@ -715,7 +862,7 @@
       st.seekFrame(nx ? nx.start : st.totalFrames - 1)
     } else {
       let at = st.scenes[0]
-      for (const s of st.scenes) { if (s.start < fr) at = s; else break }
+      for (const s of st.scenes) {if (s.start < fr) at = s; else break}
       st.seekFrame(at.start)
     }
   }
@@ -782,25 +929,25 @@
   onPickScene = (i) => {
     if (!doc) return
     i = Math.max(0, Math.min(i, doc.scenes.length - 1))
-    sel = { kind: 'scene', sceneIndex: i, elId: '' }
+    sel = {kind: 'scene', sceneIndex: i, elId: ''}
     $refs.stage.$data.seekFrame(sceneStartFrame(i))
   }
   onStageSelect = (s) => {
     if (s && s.kind === 'element') {
-      sel = { kind: 'element', sceneIndex: s.sceneIndex, elId: s.id, elIds: s.ids || [s.id] }
+      sel = {kind: 'element', sceneIndex: s.sceneIndex, elId: s.id, elIds: s.ids || [s.id]}
     } else {
-      sel = { kind: 'scene', sceneIndex: activeSceneIdx(), elId: '', elIds: [] }
+      sel = {kind: 'scene', sceneIndex: activeSceneIdx(), elId: '', elIds: []}
     }
   }
   onPickEl = (id) => {
-    sel = { kind: 'element', sceneIndex: activeSceneIdx(), elId: id }
+    sel = {kind: 'element', sceneIndex: activeSceneIdx(), elId: id}
   }
   onSeek = (f) => {
     $refs.stage.$data.seekFrame(f)
   }
   selNone = () => {
     if (!doc) return
-    sel = { kind: 'none', sceneIndex: activeSceneIdx(), elId: '' }
+    sel = {kind: 'none', sceneIndex: activeSceneIdx(), elId: ''}
     rtab = 'props'
   }
 
@@ -846,7 +993,7 @@
     onPickScene(ni)
     onDocChange()
   }
-  moveScene = ({ i, d }) => {
+  moveScene = ({i, d}) => {
     if (!canEdit()) return
     const j = i + d
     if (j < 0 || j >= doc.scenes.length) return
@@ -864,45 +1011,45 @@
   makeElement = (type, sub) => {
     const W = doc.size.width, H = doc.size.height
     const id = (type === 'shape' ? sub : type) + '-' + uid()
-    const base = { id, type, x: Math.round(W / 2 - 160), y: Math.round(H / 2 - 45), w: 320, h: 90 }
+    const base = {id, type, x: Math.round(W / 2 - 160), y: Math.round(H / 2 - 45), w: 320, h: 90}
     if (type === 'text') return Object.assign(base, {
       html: '双击编辑文本', fontSize: 42, fontWeight: 600, color: doc.theme.color,
-      align: 'center', valign: 'middle', fx: { enter: 'fade-up', enterDur: 0.6, delay: 0.2 },
+      align: 'center', valign: 'middle', fx: {enter: 'fade-up', enterDur: 0.6, delay: 0.2},
     })
     if (type === 'shape') {
-      const o = Object.assign(base, { shape: sub || 'rect', fill: doc.theme.accent, w: 240, h: 170 })
+      const o = Object.assign(base, {shape: sub || 'rect', fill: doc.theme.accent, w: 240, h: 170})
       if (sub === 'rect') o.radius = 14
-      if (sub === 'arrow') { o.direction = 'right'; o.h = 90 }
-      if (sub === 'triangle') { o.w = 200; o.h = 180 }
+      if (sub === 'arrow') {o.direction = 'right'; o.h = 90}
+      if (sub === 'triangle') {o.w = 200; o.h = 180}
       return o
     }
-    if (type === 'image') return Object.assign(base, { w: 360, h: 220, src: '', fit: 'contain' })
+    if (type === 'image') return Object.assign(base, {w: 360, h: 220, src: '', fit: 'contain'})
     if (type === 'chart') return Object.assign(base, {
       w: 560, h: 340, x: Math.round(W / 2 - 280), y: Math.round(H / 2 - 170),
-      option: { xAxis: { data: ['Q1', 'Q2', 'Q3', 'Q4'] }, series: [{ type: 'bar', data: [120, 210, 340, 520] }] },
+      option: {xAxis: {data: ['Q1', 'Q2', 'Q3', 'Q4']}, series: [{type: 'bar', data: [120, 210, 340, 520]}]},
     })
     if (type === 'table') return Object.assign(base, {
       w: 480, h: 220, x: Math.round(W / 2 - 240), y: Math.round(H / 2 - 110),
-      columns: [{ w: 0.6 }, { w: 0.4 }],
+      columns: [{w: 0.6}, {w: 0.4}],
       rows: [
-        { cells: [{ html: '名称', bold: true }, { html: '数值', bold: true }] },
-        { cells: [{ html: '项目 A' }, { html: '12' }] },
-        { cells: [{ html: '项目 B' }, { html: '34' }] },
+        {cells: [{html: '名称', bold: true}, {html: '数值', bold: true}]},
+        {cells: [{html: '项目 A'}, {html: '12'}]},
+        {cells: [{html: '项目 B'}, {html: '34'}]},
       ],
       header: true,
-      style: { fontSize: 16, color: '#e2e8f0', headerBg: doc.theme.accent, borderColor: 'rgba(255,255,255,0.15)' },
+      style: {fontSize: 16, color: '#e2e8f0', headerBg: doc.theme.accent, borderColor: 'rgba(255,255,255,0.15)'},
     })
     return base
   }
 
-  onAddEl = ({ type, sub }) => {
+  onAddEl = ({type, sub}) => {
     if (!canEdit() || !doc) return
     const i = activeSceneIdx()
     const sc = doc.scenes[i]
     if (!sc) return
     const el = makeElement(type, sub)
     spliceEls(sc, (a) => a.push(el))
-    sel = { kind: 'element', sceneIndex: i, elId: el.id }
+    sel = {kind: 'element', sceneIndex: i, elId: el.id}
     onDocChange()
     showToast('已添加元素：' + el.id)
   }
@@ -919,7 +1066,7 @@
         if (i >= 0) a.splice(i, 1)
       }
     })
-    sel = { kind: 'scene', sceneIndex: sel.sceneIndex, elId: '', elIds: [] }
+    sel = {kind: 'scene', sceneIndex: sel.sceneIndex, elId: '', elIds: []}
     onDocChange()
   }
 
@@ -943,12 +1090,12 @@
       }
     })
     if (!news.length) return
-    sel = { kind: 'element', sceneIndex: sel.sceneIndex, elId: news[news.length - 1], elIds: news }
+    sel = {kind: 'element', sceneIndex: sel.sceneIndex, elId: news[news.length - 1], elIds: news}
     onDocChange()
   }
 
   // 场景拖拽排序：from → to（移除后的插入下标）
-  moveSceneTo = ({ from, to }) => {
+  moveSceneTo = ({from, to}) => {
     if (!canEdit()) return
     to = Math.max(0, Math.min(to, doc.scenes.length - 1))
     if (from === to) return
@@ -975,7 +1122,7 @@
 
   // ---- 导出 ----
   doExport = async (opts) => {
-    const { exportVideo } = await import('./video/render.js')
+    const {exportVideo} = await import('./video/render.js')
     exporting = true
     showCases = false
     showProjects = false
@@ -1005,7 +1152,7 @@
       if (storageReady()) {
         try {
           await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
-        } catch (e) { console.warn('export saved to cloud fs failed:', e) }
+        } catch (e) {console.warn('export saved to cloud fs failed:', e)}
       }
       showToast('导出完成：' + safeTitle() + '.mp4')
     } catch (e) {
@@ -1017,6 +1164,12 @@
   initPage()
 </script>
 <script>
+  // ai-box 会话建立/切换（v:id 双向绑定）：写回路由 query + 重绑 page_exec（参考 ppt_studio）
+  $watch(() => sid, (v) => {
+    $router.setQuery({ session_id: sid })
+    bindPageExec(v)
+  })
+
   // rAF 循环：同步舞台当前帧 → 顶层标量 curFrame（驱动时间轴 playhead 与属性面板）
   const frameLoop = () => {
     const st = $refs.stage
@@ -1035,11 +1188,11 @@
     // ---- Cmd/Ctrl 组合：undo/redo + 剪贴板 ----
     if (meta && !typing) {
       const lk = k.toLowerCase()
-      if (lk === 'z') { e.preventDefault(); e.shiftKey ? redoEdit() : undoEdit(); return }
-      if (lk === 'y') { e.preventDefault(); redoEdit(); return }
-      if (lk === 'c') { copyElement(); return }
-      if (lk === 'v') { pasteElement(); return }
-      if (lk === 'd') { e.preventDefault(); if (sel.kind === 'element') dupElement(sel.elId); return }
+      if (lk === 'z') {e.preventDefault(); e.shiftKey ? redoEdit() : undoEdit(); return }
+      if (lk === 'y') {e.preventDefault(); redoEdit(); return }
+      if (lk === 'c') {copyElement(); return }
+      if (lk === 'v') {pasteElement(); return }
+      if (lk === 'd') {e.preventDefault(); if (sel.kind === 'element') dupElement(sel.elId); return }
     }
     if (typing) return
 
@@ -1056,11 +1209,11 @@
       else if (sel.kind === 'scene') delScene(sel.sceneIndex)
       return
     }
-    if (e.key === 'Escape') { selNone(); return }
+    if (e.key === 'Escape') {selNone(); return }
 
     // ---- 选中元素时方向键 = 微调（1px，Shift=10px）----
     if (sel.kind === 'element' && sel.elIds && sel.elIds.length && curName &&
-        (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault()
       const d = e.shiftKey ? 10 : 1
       nudgeSelected(
@@ -1073,15 +1226,16 @@
     // ---- 走带控制（Remotion 风格）----
     if (!st || !st.$data.doc || exporting) return
     const S = st.$data
-    if (e.key === 'ArrowLeft') { e.preventDefault(); S.stepFrame(e.shiftKey ? -10 : -1) }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); S.stepFrame(e.shiftKey ? 10 : 1) }
-    else if (e.key === 'Home') { e.preventDefault(); S.seekFrame(0) }
-    else if (e.key === 'End') { e.preventDefault(); S.seekFrame(S.totalFrames - 1) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); jumpScene(-1) }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); jumpScene(1) }
-    else if (k === 'j' || k === 'J') { S.shuttle(-1) }
-    else if (k === 'k' || k === 'K') { S.shuttle(0) }
-    else if (k === 'l' || k === 'L') { S.shuttle(1) }
+    if (e.key === 'ArrowLeft') {e.preventDefault(); S.stepFrame(e.shiftKey ? -10 : -1)}
+    else if (e.key === 'ArrowRight') {e.preventDefault(); S.stepFrame(e.shiftKey ? 10 : 1)}
+    else if (e.key === 'Home') {e.preventDefault(); S.seekFrame(0)}
+    else if (e.key === 'End') {e.preventDefault(); S.seekFrame(S.totalFrames - 1)}
+    else if (e.key === 'ArrowUp') {e.preventDefault(); jumpScene(-1)}
+    else if (e.key === 'ArrowDown') {e.preventDefault(); jumpScene(1)}
+    else if (k === 'j' || k === 'J') {S.shuttle(-1)}
+    else if (k === 'k' || k === 'K') {S.shuttle(0)}
+    else if (k === 'l' || k === 'L') {S.shuttle(1)}
   })
 </script>
+
 </html>
