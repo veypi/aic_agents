@@ -316,6 +316,22 @@
     font-size: 11px;
     color: #64748b;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pop-title .pop-link {
+    color: #818cf8;
+    text-decoration: none;
+    font-size: 10.5px;
+    letter-spacing: 0;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 5px;
+    padding: 1px 7px;
+  }
+  .pop-title .pop-link:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
   }
 
   .toast {
@@ -358,7 +374,7 @@
   </div>
 
   <div class="popover" v-if="showProjects">
-    <div class="pop-title">我的项目（浏览器本地存储）</div>
+    <div class="pop-title">我的项目（浏览器本地存储）<a class="pop-link" href="@/settings/page" target="_blank" @click.stop>本地存储管理</a></div>
     <div v-if="!projects.length" class="pop-item">
       <div class="d">暂无项目，点击「新建」开始创作</div>
     </div>
@@ -641,23 +657,6 @@
             const st = $refs.stage.$data
             if (st.playing) st.togglePlay()
             return reply({ok: true, playing: false})
-          } catch (e) {return reply(errReply(e))}
-        }
-      },
-
-      {
-        name: 'export_video', description: '导出当前项目为 MP4（--name 可选，--width/--height 可选分辨率，--fps 可选）',
-        handler: async (argv) => {
-          try {
-            const n = arg(argv, 'name')
-            if (n && n !== curName) await openProject(n)
-            if (!doc) throw new Error('没有已打开的项目')
-            const w = parseInt(arg(argv, 'width') || '0', 10), h = parseInt(arg(argv, 'height') || '0', 10)
-            const fps = parseInt(arg(argv, 'fps') || '0', 10)
-            const blob = await doExport({width: w || 0, height: h || 0, fps: fps || 0})
-            const out = await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
-            downloadBlob(blob, safeTitle() + '.mp4')
-            return reply({ok: true, path: out.path, size: out.bytes || blob.size})
           } catch (e) {return reply(errReply(e))}
         }
       },
