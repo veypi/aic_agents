@@ -77,6 +77,7 @@
   }
   .tbtn.primary:hover { filter: brightness(1.12); }
   .tbtn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tbtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
   /* ---- 工作区三栏 ---- */
   .ws { flex: 1; min-height: 0; display: flex; }
@@ -99,7 +100,7 @@
   .rbody ai-box { flex: 1; min-height: 0; display: flex; }
 
   .bottom { flex: none; height: 188px; display: flex; }
-  .bottom video-timeline { flex: 1; min-height: 0; display: flex; }
+  .bottom video-timeline { flex: 1; min-width: 0; min-height: 0; display: flex; }
 
   .popover {
     position: absolute;
@@ -157,6 +158,8 @@
     <button class="tbtn" @click="showCases = !showCases; showProjects = false">样例</button>
     <button class="tbtn" @click="showProjects = !showProjects; showCases = false; refreshProjects()">项目</button>
     <button class="tbtn" @click="newProject()">新建</button>
+    <button class="tbtn" @click="undoEdit()" :disabled="!undoStack.length" title="撤销（Cmd/Ctrl+Z）">撤销</button>
+    <button class="tbtn" @click="redoEdit()" :disabled="!redoStack.length" title="重做（Cmd/Ctrl+Shift+Z）">重做</button>
     <button class="tbtn primary" @click="exportMp4()" :disabled="exporting || !doc">导出 MP4</button>
   </div>
 
@@ -185,7 +188,7 @@
     </div>
     <div class="center">
       <video-stage ref="stage" :editable="!!curName && !exporting" :selid="sel.kind === 'element' ? sel.elId : ''"
-        @select="onStageSelect" @mutate="onStageChange"></video-stage>
+        @select="onStageSelect" @mutate="onStageChange" @ctxdel="delElements"></video-stage>
     </div>
     <div class="right">
       <div class="rtabs">
@@ -204,7 +207,8 @@
 
   <div class="bottom">
     <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer"
-      @seek="onSeek" @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl"></video-timeline>
+      @seek="onSeek" @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl"
+      @docchange="onDocChange" @movescene="moveSceneTo"></video-timeline>
   </div>
 
   <div class="toast" v-if="toast">{{ toast }}</div>
@@ -521,6 +525,9 @@
     // 代理对象贯穿后续赋值，stage 与父组件由此共享同一响应式图，
     // 舞台拖拽写入才能被 inspector 感知、被 doSave 持久化。
     $refs.stage.$data.setDoc(doc, assets)
+    setBaseline()
+    undoStack = []
+    redoStack = []
     showToast('已打开：' + curTitle)
     return d
   }
@@ -539,6 +546,7 @@
     }
     await loadAssets(d)
     $refs.stage.$data.setDoc(doc, assets)
+    setBaseline()
   }
 
   newProject = async () => {
@@ -572,6 +580,7 @@
         } catch (e) { console.warn('case asset missing:', ref, e) }
       }
       if (refs.length) $refs.stage.$data.setDoc(doc, assets)
+      setBaseline()
       showCases = false
       showToast('已加载样例：' + curTitle + '（只读，右侧可另存为项目）')
     } catch (e) { showToast('加载样例失败：' + e.message) }
@@ -618,6 +627,138 @@
     setTimeout(() => URL.revokeObjectURL(u), 10000)
   }
 
+  // ---- 编辑历史（undo/redo）与剪贴板 ----
+  undoStack = []        // 公开数组（vhtml 响应式，驱动按钮态）；写入走「拷贝→改→赋回」
+  redoStack = []
+  let lastJson = ''     // 上一次变更后的 doc 序列化（快照基准）
+  let clipboard = ''    // 元素 JSON（应用内剪贴板）
+
+  setBaseline = () => { lastJson = doc ? JSON.stringify(doc) : '' }
+
+  // 任何 doc 变更后调用：把「变更前」快照入 undo 栈
+  // tag 相同的连续变更（如方向键微调）在 1s 窗口内合并为一条历史
+  let lastTag = ''
+  let lastPushT = 0
+  pushHistory = (tag) => {
+    if (!doc) { lastJson = ''; return }
+    if (!curName) { setBaseline(); return }   // 样例只读，不入栈
+    const j = JSON.stringify(doc)
+    if (j === lastJson) return
+    const now = Date.now()
+    if (lastJson) {
+      const coalesce = tag && tag === lastTag && now - lastPushT < 1000
+      if (!coalesce) {
+        undoStack = undoStack.concat([lastJson]).slice(-100)
+        redoStack = []
+      }
+    }
+    lastJson = j
+    lastTag = tag || ''
+    lastPushT = now
+  }
+
+  applyJson = (j) => {
+    const d = ensureTheme(JSON.parse(j))
+    doc = d
+    curTitle = d.title || curName
+    sel = { kind: 'none', sceneIndex: 0, elId: '' }
+    sceneVer++
+    $refs.stage.$data.setDoc(doc, assets)
+    scheduleSave()
+  }
+
+  undoEdit = () => {
+    if (!undoStack.length || !curName) return
+    redoStack = redoStack.concat([lastJson])
+    lastJson = undoStack[undoStack.length - 1]
+    undoStack = undoStack.slice(0, -1)
+    applyJson(lastJson)
+  }
+
+  redoEdit = () => {
+    if (!redoStack.length || !curName) return
+    undoStack = undoStack.concat([lastJson])
+    lastJson = redoStack[redoStack.length - 1]
+    redoStack = redoStack.slice(0, -1)
+    applyJson(lastJson)
+  }
+
+  copyElement = () => {
+    if (sel.kind !== 'element' || !curName) return
+    const sc = doc.scenes[sel.sceneIndex]
+    if (!sc) return
+    const ids = sel.elIds && sel.elIds.length ? sel.elIds : [sel.elId]
+    const els = (sc.elements || []).filter((e) => ids.indexOf(e.id) >= 0)
+    if (!els.length) return
+    clipboard = JSON.stringify(els.length === 1 ? els[0] : els)
+    showToast('已复制 ' + els.length + ' 个元素')
+  }
+
+  pasteElement = () => {
+    if (!clipboard || !canEdit()) return
+    const parsed = JSON.parse(clipboard)
+    const list = Array.isArray(parsed) ? parsed : [parsed]
+    const i = activeSceneIdx()
+    const news = []
+    spliceEls(doc.scenes[i], (a) => {
+      for (const src of list) {
+        const el = JSON.parse(JSON.stringify(src))
+        el.id = (el.type || 'el') + '-' + uid()
+        el.x = (+el.x || 0) + 24
+        el.y = (+el.y || 0) + 24
+        a.push(el)
+        news.push(el.id)
+      }
+    })
+    if (!news.length) return
+    sel = { kind: 'element', sceneIndex: i, elId: news[news.length - 1], elIds: news }
+    onDocChange()
+    showToast('已粘贴 ' + news.length + ' 个元素')
+  }
+
+  // 方向键微调选中元素（1px，Shift=10px；连续微调合并为一条历史）
+  nudgeSelected = (dx, dy) => {
+    const sc = doc.scenes[sel.sceneIndex]
+    if (!sc) return
+    const r1 = (v) => Math.round(v * 10) / 10
+    let hit = false
+    for (const el of (sc.elements || [])) {
+      if (sel.elIds.indexOf(el.id) < 0) continue
+      // x/y 关键帧轨道驱动位置的元素：平移轨道
+      if (Array.isArray(el.keyframes) && el.keyframes.some((k) => k.x != null || k.y != null)) {
+        el.keyframes = el.keyframes.map((k) => {
+          const c = Object.assign({}, k)
+          if (c.x != null) c.x = r1(c.x + dx)
+          if (c.y != null) c.y = r1(c.y + dy)
+          return c
+        })
+      } else {
+        el.x = r1((+el.x || 0) + dx)
+        el.y = r1((+el.y || 0) + dy)
+      }
+      hit = true
+    }
+    if (!hit) return
+    $refs.stage.$data.refreshFrame()
+    pushHistory('nudge')
+    scheduleSave()
+  }
+
+  // 场景跳转：d=-1 上一场景起点，d=1 下一场景起点
+  jumpScene = (d) => {
+    const st = $refs.stage && $refs.stage.$data
+    if (!st || !st.doc || !st.scenes || !st.scenes.length) return
+    const fr = st.engine.frame
+    if (d > 0) {
+      const nx = st.scenes.find((s) => s.start > fr)
+      st.seekFrame(nx ? nx.start : st.totalFrames - 1)
+    } else {
+      let at = st.scenes[0]
+      for (const s of st.scenes) { if (s.start < fr) at = s; else break }
+      st.seekFrame(at.start)
+    }
+  }
+
   // ---- 保存 ----
   scheduleSave = () => {
     if (!curName || !storageReady()) return
@@ -650,10 +791,12 @@
 
   onDocChange = () => {
     curTitle = (doc && doc.title) || curName
+    pushHistory()
     $refs.stage.$data.refreshFrame()
     scheduleSave()
   }
   onStageChange = () => {
+    pushHistory()
     scheduleSave()
   }
 
@@ -683,9 +826,9 @@
   }
   onStageSelect = (s) => {
     if (s && s.kind === 'element') {
-      sel = { kind: 'element', sceneIndex: s.sceneIndex, elId: s.id }
+      sel = { kind: 'element', sceneIndex: s.sceneIndex, elId: s.id, elIds: s.ids || [s.id] }
     } else {
-      sel = { kind: 'scene', sceneIndex: activeSceneIdx(), elId: '' }
+      sel = { kind: 'scene', sceneIndex: activeSceneIdx(), elId: '', elIds: [] }
     }
   }
   onPickEl = (id) => {
@@ -803,27 +946,58 @@
     showToast('已添加元素：' + el.id)
   }
 
-  delElement = (id) => {
-    if (!canEdit()) return
+  delElement = (id) => delElements([id])
+
+  delElements = (ids) => {
+    if (!canEdit() || !ids || !ids.length) return
     const sc = doc.scenes[sel.sceneIndex]
     if (!sc) return
-    const i = (sc.elements || []).findIndex((e) => e.id === id)
-    if (i >= 0) spliceEls(sc, (a) => a.splice(i, 1))
-    sel = { kind: 'scene', sceneIndex: sel.sceneIndex, elId: '' }
+    spliceEls(sc, (a) => {
+      for (const id of ids) {
+        const i = a.findIndex((e) => e.id === id)
+        if (i >= 0) a.splice(i, 1)
+      }
+    })
+    sel = { kind: 'scene', sceneIndex: sel.sceneIndex, elId: '', elIds: [] }
     onDocChange()
   }
 
-  dupElement = (id) => {
-    if (!canEdit()) return
+  dupElement = (id) => dupElements([id])
+
+  dupElements = (ids) => {
+    if (!canEdit() || !ids || !ids.length) return
     const sc = doc.scenes[sel.sceneIndex]
-    const el = sc && (sc.elements || []).find((e) => e.id === id)
-    if (!el) return
-    const c = JSON.parse(JSON.stringify(el))
-    c.id = (c.type || 'el') + '-' + uid()
-    c.x = (+c.x || 0) + 24
-    c.y = (+c.y || 0) + 24
-    spliceEls(sc, (a) => a.push(c))
-    sel = { kind: 'element', sceneIndex: sel.sceneIndex, elId: c.id }
+    if (!sc) return
+    const news = []
+    spliceEls(sc, (a) => {
+      for (const id of ids) {
+        const el = a.find((e) => e.id === id)
+        if (!el) continue
+        const c = JSON.parse(JSON.stringify(el))
+        c.id = (c.type || 'el') + '-' + uid()
+        c.x = (+c.x || 0) + 24
+        c.y = (+c.y || 0) + 24
+        a.push(c)
+        news.push(c.id)
+      }
+    })
+    if (!news.length) return
+    sel = { kind: 'element', sceneIndex: sel.sceneIndex, elId: news[news.length - 1], elIds: news }
+    onDocChange()
+  }
+
+  // 场景拖拽排序：from → to（移除后的插入下标）
+  moveSceneTo = ({ from, to }) => {
+    if (!canEdit()) return
+    to = Math.max(0, Math.min(to, doc.scenes.length - 1))
+    if (from === to) return
+    spliceScenes((a) => {
+      const t = a[from]
+      a.splice(from, 1)
+      a.splice(to, 0, t)
+    })
+    sceneVer++
+    onPickScene(to)
     onDocChange()
   }
 
@@ -890,23 +1064,63 @@
   }
   requestAnimationFrame(frameLoop)
 
-  // 快捷键（焦点在输入控件时不生效）
+  // 快捷键（焦点在输入控件时不生效；Cmd/Ctrl 组合键除外）
   window.addEventListener('keydown', (e) => {
     const t = e.target
     const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+    const meta = e.metaKey || e.ctrlKey
+    const k = e.key
+
+    // ---- Cmd/Ctrl 组合：undo/redo + 剪贴板 ----
+    if (meta && !typing) {
+      const lk = k.toLowerCase()
+      if (lk === 'z') { e.preventDefault(); e.shiftKey ? redoEdit() : undoEdit(); return }
+      if (lk === 'y') { e.preventDefault(); redoEdit(); return }
+      if (lk === 'c') { copyElement(); return }
+      if (lk === 'v') { pasteElement(); return }
+      if (lk === 'd') { e.preventDefault(); if (sel.kind === 'element') dupElement(sel.elId); return }
+    }
     if (typing) return
+
+    const st = $refs.stage
     if (e.code === 'Space') {
       e.preventDefault()
-      const st = $refs.stage
       if (st && st.$data.doc) st.$data.togglePlay()
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      return
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
       if (!doc || !curName) return
       e.preventDefault()
-      if (sel.kind === 'element') delElement(sel.elId)
+      if (sel.kind === 'element') delElements(sel.elIds && sel.elIds.length ? sel.elIds : [sel.elId])
       else if (sel.kind === 'scene') delScene(sel.sceneIndex)
-    } else if (e.key === 'Escape') {
-      selNone()
+      return
     }
+    if (e.key === 'Escape') { selNone(); return }
+
+    // ---- 选中元素时方向键 = 微调（1px，Shift=10px）----
+    if (sel.kind === 'element' && sel.elIds && sel.elIds.length && curName &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      const d = e.shiftKey ? 10 : 1
+      nudgeSelected(
+        e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0,
+        e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0,
+      )
+      return
+    }
+
+    // ---- 走带控制（Remotion 风格）----
+    if (!st || !st.$data.doc || exporting) return
+    const S = st.$data
+    if (e.key === 'ArrowLeft') { e.preventDefault(); S.stepFrame(e.shiftKey ? -10 : -1) }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); S.stepFrame(e.shiftKey ? 10 : 1) }
+    else if (e.key === 'Home') { e.preventDefault(); S.seekFrame(0) }
+    else if (e.key === 'End') { e.preventDefault(); S.seekFrame(S.totalFrames - 1) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); jumpScene(-1) }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); jumpScene(1) }
+    else if (k === 'j' || k === 'J') { S.shuttle(-1) }
+    else if (k === 'k' || k === 'K') { S.shuttle(0) }
+    else if (k === 'l' || k === 'L') { S.shuttle(1) }
   })
 </script>
 </html>
