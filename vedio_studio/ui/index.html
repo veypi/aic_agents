@@ -628,11 +628,13 @@
     sel = {kind: 'none', sceneIndex: 0, elId: ''}
     saveState = '已保存'
     try {localStorage.setItem('vedio_studio_last', name)} catch (e) { }
-    await loadAssets(d)
+    // 先装载以收集相对素材引用（openCase 同款顺序），再从本地加载为 dataURL（预览/导出共用）
     // 关键：传 sandbox 读出的 doc 代理（而非裸 d）——vhtml copyBind 保证同一
     // 代理对象贯穿后续赋值，stage 与父组件由此共享同一响应式图，
     // 舞台拖拽写入才能被 inspector 感知、被 doSave 持久化。
-    $refs.stage.$data.setDoc(doc, assets)
+    $refs.stage.$data.setDoc(doc, {})
+    await loadAssets(d)
+    if (Object.keys(assets).length) $refs.stage.$data.setDoc(doc, assets)
     setBaseline()
     undoStack = []
     redoStack = []
@@ -652,8 +654,10 @@
     } else if (sel.kind === 'scene' && sel.sceneIndex >= d.scenes.length) {
       sel = {kind: 'none', sceneIndex: 0, elId: ''}
     }
+    // 先装载收集素材引用，再加载 dataURL 后重挂（修复导出黑屏：素材必须 data: URL）
+    $refs.stage.$data.setDoc(doc, {})
     await loadAssets(d)
-    $refs.stage.$data.setDoc(doc, assets)
+    if (Object.keys(assets).length) $refs.stage.$data.setDoc(doc, assets)
     setBaseline()
   }
 
