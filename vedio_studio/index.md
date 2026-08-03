@@ -54,6 +54,16 @@
 
 无参数。AI 用 fs 工具写完 `index.json`/素材后调用，页面刷新画面并保持当前帧。返回 `{ ok, name, title }`。
 
+### gen_voice — 文本转语音配音（AI 自动配音）
+
+| argv | 说明 |
+|---|---|
+| `--text <文本>` | 待合成语音文本，必填（≤5000 字） |
+| `--name <文件名>` | 可选，输出文件名（默认 `voice-xxx`；自动带格式后缀） |
+| `--set voice\|music` | 可选，生成后自动配置到配音轨/背景音乐轨 |
+
+调用 agent TTS 接口（按文本 hash 缓存，限流约 3s/个），音频保存到项目 `assets/` 并立即可用（素材面板可见、可拖入舞台）。`--set voice` 时自动写入 `doc.voice = {src, volume:1, offset:0}`（页面播放/导出自动混入）。返回 `{ ok, ref, name, size, track }`。
+
 ### run_video / stop_video — 预览播放 / 停止
 
 `run_video` 可选 `--name`（先打开再播放）。
@@ -117,7 +127,7 @@
 
 使用建议：场景少（≤5）或元素轻量时用内联对象单文件；场景多、单场景元素重（如 showreel 样例 518+ 元素）时拆分，**改某一场景只需读写对应的 `scenes/scene_N.json`，不必动 index.json**。素材仍放 `assets/`（相对 index.json 引用，不是相对场景子文件）。
 
-元素公共字段：`id`（场景内唯一）、`x/y/w/h`（文档坐标系）、`rotation`、`opacity`、`z`（层叠，缺省按数组顺序）、`origin`（transform-origin，如 `"bottom"` 柱图从底生长）、`blur`（CSS 模糊 px，柔光/光斑）。
+元素公共字段：`id`（场景内唯一）、`x/y/w/h`（文档坐标系）、`rotation`、`opacity`、`z`（层叠，缺省按数组顺序）、`origin`（transform-origin，如 `"bottom"` 柱图从底生长）、`blur`（CSS 模糊 px，柔光/光斑）。**时间窗（Sequence 语义，2026-08-04）**：`start`（场景内开始秒，缺省 0）、`dur`（可见窗口秒数，缺省 0=到场景尾）、`hidden`（隐藏不渲染，时间轴眼睛开关）——窗口内动画/关键帧/媒体源都以窗口相对时间求值，拖窗口即整体平移动画；overlay 元素以全片时间为容器。
 
 | type | 关键字段 |
 |---|---|
@@ -200,4 +210,4 @@ material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/op
 - 用户没打开页面时指令会超时/无响应：先发 [Vedio Studio 页面](url:$AGENT/i) 链接，再重试
 - 导出需要最新版 Chrome/Edge（WebCodecs）：不支持时向用户说明
 - 导出分辨率建议 ≤1280×720（更高会明显变慢）；单视频建议 ≤60 秒
-- 视频剪辑：拖入视频素材后，时间轴上出现绿色剪辑块——**左缘拖拽改开始时间（场景内），右缘拖拽裁剪出点**；属性面板也有开始/入点/出点数字输入。预览播放时视频真实播放（变速/倒放时按帧定位显示）
+- 视频剪辑：拖入素材后，时间轴出现绿色剪辑块——**左缘拖切入、右缘拖切出（同步源出点）、块体拖动改开始时间**；所有元素都有时间窗（开始/时长，inspector 或时间轴拖拽）；入点/出点（trimStart/trimEnd）是媒体专属的源裁剪。预览播放时视频真实播放（变速/倒放时按帧定位显示）。时间轴是多轨道视图：场景组（可折叠/眼睛隐藏）+ 元素轨 + overlay 轨 + 音乐/配音轨，左栏眼睛开关元素可见性（hidden，预览/导出都不渲染）

@@ -447,9 +447,12 @@ function normalizeEl(el, i) {
   if (el.rotation == null) el.rotation = 0;
   if (el.opacity == null) el.opacity = 1;
   el.z = el.z != null ? +el.z : i; // explicit z or document order
+  // 时间窗（全类型，Remotion Sequence 语义）：start=容器内开始秒；
+  // dur=窗口时长（0/缺省=到容器尾）；hidden=隐藏不渲染（时间轴眼睛开关）
+  if (el.start == null) el.start = 0;
+  if (el.dur == null) el.dur = 0;
   if (el.type === "media") {
-    // 基本剪辑字段：start=场景内开始秒；trimStart/trimEnd=源裁剪入/出点（trimEnd<0=源全长）
-    if (el.start == null) el.start = 0;
+    // 源裁剪字段：trimStart/trimEnd=源入/出点（trimEnd<0=源全长）
     if (el.trimStart == null) el.trimStart = 0;
     if (el.trimEnd == null || el.trimEnd < 0) el.trimEnd = -1;
   }
@@ -461,13 +464,23 @@ function normalizeEl(el, i) {
   return el;
 }
 
-/** media 元素在场景时间 t（秒）对应的源时间：start 后进入播放窗口，超窗冻结在 trimEnd */
-export function mediaTimeAt(el, t) {
-  const start = +el.start || 0;
+/** 元素在容器（场景/全片）内的时间窗时长：dur>0 取 dur（不越容器），否则到容器尾 */
+export function elDurOf(el, containerDur) {
+  const start = Math.max(0, +el.start || 0);
+  const rest = Math.max(0, containerDur - start);
+  return el.dur > 0 ? Math.min(+el.dur, rest) : rest;
+}
+
+/** media 元素窗口内时间 lt（秒）对应的源时间：超 trimEnd 冻结在末帧 */
+export function mediaTimeLt(el, lt) {
   const ts = +el.trimStart || 0;
   const te = el.trimEnd >= 0 ? +el.trimEnd : Infinity;
-  const lt = Math.max(0, t - start);
-  return Math.min(te, ts + lt);
+  return Math.min(te, ts + Math.max(0, lt));
+}
+
+/** media 元素在场景时间 t（秒）对应的源时间：start 后进入播放窗口，超窗冻结在 trimEnd */
+export function mediaTimeAt(el, t) {
+  return mediaTimeLt(el, Math.max(0, t - (+el.start || 0)));
 }
 function normalizeScene(s, doc) {
   s = deepClone(s || {});
@@ -1209,7 +1222,7 @@ export function renderElement(el, doc, ctx) {
       // 不用原生 controls/loop/autoplay——确定性帧渲染只负责「显示该时刻的画面」。
       const m = mediaVideoFor(el, ctx.assetMap);
       if (m) {
-        const mt = mediaTimeAt(el, ctx.t);
+        const mt = mediaTimeLt(el, ctx.t); // ctx.t = 窗口相对时间
         m._vdT = mt;
         if (m.readyState >= 1) {
           if (Math.abs((m.currentTime || 0) - mt) > 0.001) {
@@ -1292,11 +1305,19 @@ function buildSceneContent(scene, doc, ctx) {
   const wrap = document.createElement("div");
   wrap.className = "vd-content";
   wrap.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;";
+  if (scene.hidden) return wrap; // 场景隐藏：只留背景，整轨元素不渲染
   const els = (scene.elements || []).slice().sort((a, b) => (a.z || 0) - (b.z || 0));
   els.forEach((el) => {
-    const state = elementState(el, scene.duration, ctx.t);
+    if (el.hidden) return;
+    // 时间窗：start/dur 定义元素在场景内的可见区间；窗口内动画/关键帧/媒体源
+    // 都以窗口相对时间 lt 求值（Sequence 语义：拖窗口即整体平移动画）
+    const start = Math.max(0, +el.start || 0);
+    const dur = elDurOf(el, scene.duration);
+    const lt = ctx.t - start;
+    if (lt < 0 || lt >= dur) return;
+    const state = elementState(el, dur, lt);
     if (state.opacity <= 0.003) return; // skip fully invisible (perf)
-    const c2 = Object.assign({}, ctx, { state });
+    const c2 = Object.assign({}, ctx, { state, t: lt });
     wrap.appendChild(renderElement(el, doc, c2));
   });
   return wrap;
@@ -1322,10 +1343,15 @@ function buildOverlay(doc, gtime, ctx) {
   const totalDur = doc.totalFrames / doc.fps;
   const els = (doc.overlay || []).slice().sort((a, b) => (a.z || 0) - (b.z || 0));
   els.forEach((el) => {
-    const state = elementState(el, totalDur, gtime);
+    if (el.hidden) return;
+    const start = Math.max(0, +el.start || 0);
+    const dur = elDurOf(el, totalDur);
+    const lt = gtime - start;
+    if (lt < 0 || lt >= dur) return;
+    const state = elementState(el, dur, lt);
     if (state.opacity <= 0.003) return;
     wrap.appendChild(
-      renderElement(el, doc, Object.assign({}, ctx, { t: gtime, state })),
+      renderElement(el, doc, Object.assign({}, ctx, { t: lt, state })),
     );
   });
   return wrap;
@@ -1537,16 +1563,18 @@ export class Video {
       });
     }
     d.scenes.forEach((s) => {
+      if (s.hidden) return;
       const sceneStart = s._start / d.fps;
       const sceneDur = +s.duration || 1;
       (s.elements || []).forEach((el) => {
-        // media 元素（含视频自带音轨）按裁剪窗口进混音；muted 元素静音
-        if (el.type !== "media" || !el.src || el.muted) return;
+        // media 元素（含视频自带音轨）按裁剪窗口进混音；muted/hidden 元素静音
+        if (el.type !== "media" || !el.src || el.muted || el.hidden) return;
         const start = Math.max(0, +el.start || 0);
         if (start >= sceneDur) return;
         const ts = Math.max(0, +el.trimStart || 0);
         const te = el.trimEnd >= 0 ? +el.trimEnd : Infinity;
-        const win = Math.max(0, sceneDur - start); // 场景内窗口
+        const win = elDurOf(el, sceneDur); // 场景内窗口（含 el.dur）
+        if (win <= 0) return;
         let dur = Math.min(win, Math.max(0, te - ts)); // 非循环播放长度
         if (el.loop) dur = win; // 循环：铺满窗口（loopEnd 截住源）
         if (dur <= 0) return;

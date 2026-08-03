@@ -17,66 +17,109 @@
     .tl-adds button:disabled { opacity: 0.4; cursor: not-allowed; }
     .sp { flex: 1; }
     .tl-time { font-size: 11.5px; color: #94a3b8; font-variant-numeric: tabular-nums; }
-    .tl-zoom {
-      background: rgba(255, 255, 255, 0.06); color: #94a3b8; border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px; font-size: 11px; padding: 2px 4px; outline: none;
+    .tl-zoom { display: flex; align-items: center; gap: 5px; }
+    .tl-zoom button {
+      width: 20px; height: 20px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.06);
+      color: #94a3b8; border-radius: 5px; font-size: 13px; line-height: 1; cursor: pointer; padding: 0;
     }
-    .tl-scroll { flex: 1; overflow: auto; position: relative; }
+    .tl-zoom button:hover { background: rgba(67,97,238,0.3); color: #fff; }
+    .tl-zoom input[type=range] { width: 90px; accent-color: #4361ee; cursor: pointer; }
+    .tl-zoomv { font-size: 10.5px; color: #64748b; min-width: 44px; font-variant-numeric: tabular-nums; }
+
+    /* ---------- 主体：左 gutter + 右滚动区 ---------- */
+    .tl-body { flex: 1; display: flex; min-height: 0; }
+    .tl-gutter {
+      width: 188px; flex: none; border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex; flex-direction: column; overflow: hidden; background: rgba(10, 14, 22, 0.55);
+    }
+    .tl-g-head {
+      flex: none; height: 22px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 10.5px; color: #64748b; display: flex; align-items: center; padding: 0 8px; gap: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .tl-g-rows { flex: 1; overflow: hidden; position: relative; }
+    .tl-g-rows-in { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+    .tl-g-row {
+      height: 26px; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 4px;
+      font-size: 11.5px; color: #94a3b8; white-space: nowrap; overflow: hidden;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03); cursor: pointer; box-sizing: border-box;
+    }
+    .tl-g-row:hover { background: rgba(255, 255, 255, 0.04); }
+    .tl-g-row.active { background: rgba(67, 97, 238, 0.16); color: #c7d2fe; }
+    .tl-g-row.hidden-el { opacity: 0.45; }
+    .tl-g-eye {
+      flex: none; width: 18px; height: 18px; border: none; background: transparent; color: #64748b;
+      font-size: 11px; cursor: pointer; padding: 0; border-radius: 4px; line-height: 18px; text-align: center;
+    }
+    .tl-g-eye:hover { background: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+    .tl-g-eye.off { color: #334155; }
+    .tl-g-arrow {
+      flex: none; width: 14px; border: none; background: transparent; color: #64748b;
+      font-size: 9px; cursor: pointer; padding: 0; text-align: center;
+    }
+    .tl-g-arrow:hover { color: #e2e8f0; }
+    .tl-g-ico { flex: none; width: 16px; text-align: center; font-size: 10px; }
+    .tl-g-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .tl-g-sub { flex: none; font-size: 10px; color: #475569; font-variant-numeric: tabular-nums; }
+    .tl-g-row.scene { color: #a5b4fc; font-weight: 600; }
+    .tl-g-row.el { padding-left: 22px; }
+    .tl-g-row.track { color: #86efac; }
+
+    .tl-scroll { flex: 1; overflow: auto; position: relative; min-width: 0; }
     .tl-inner { position: relative; min-width: 100%; padding-bottom: 6px; }
 
     .tl-ruler { position: relative; height: 22px; cursor: ew-resize; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
     .tl-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(255, 255, 255, 0.13); padding-left: 3px; font-size: 10px; color: #64748b; line-height: 20px; user-select: none; }
     .tl-tick.minor { border-left-color: rgba(255, 255, 255, 0.05); }
 
-    .tl-row { position: relative; height: 26px; margin-top: 4px; }
-    .tl-scene {
-      position: absolute; top: 0; height: 100%; border-radius: 5px;
-      background: rgba(67, 97, 238, 0.16); border: 1px solid rgba(67, 97, 238, 0.35);
-      color: #a5b4fc; font-size: 11px; line-height: 24px; padding: 0 7px;
+    .tl-row { position: relative; height: 26px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); box-sizing: border-box; }
+    .tl-row:hover { background: rgba(255, 255, 255, 0.02); }
+    .tl-row.active { background: rgba(67, 97, 238, 0.07); }
+
+    /* ---------- 条块 ---------- */
+    .tl-bar-scene {
+      position: absolute; top: 4px; height: 18px; border-radius: 4px;
+      background: rgba(67, 97, 238, 0.22); border: 1px solid rgba(67, 97, 238, 0.4);
+      color: #a5b4fc; font-size: 10px; line-height: 17px; padding: 0 6px;
       cursor: pointer; overflow: hidden; white-space: nowrap; box-sizing: border-box;
     }
-    .tl-scene:hover { background: rgba(67, 97, 238, 0.28); }
-    .tl-scene.active { background: rgba(67, 97, 238, 0.4); border-color: #6366f1; color: #fff; }
-    .tl-scene.moving { opacity: 0.55; cursor: grabbing; }
-    .tl-tr { color: #818cf8; margin-left: 4px; }
-    .tl-dur { color: #64748b; font-size: 10px; margin-left: 5px; }
+    .tl-bar-scene:hover { background: rgba(67, 97, 238, 0.32); }
+    .tl-bar-scene.active { background: rgba(67, 97, 238, 0.45); border-color: #6366f1; color: #fff; }
+    .tl-bar-scene.hidden-el { opacity: 0.4; }
     .tl-edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
     .tl-edge.l { left: 0; }
     .tl-edge.r { right: 0; }
-    .tl-edge:hover { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
-    .tl-drop { position: absolute; top: 20px; bottom: 0; width: 2px; background: #f472b6; z-index: 6; pointer-events: none; }
+    .tl-edge:hover { background: rgba(129, 140, 248, 0.6); border-radius: 3px; }
 
-    .tl-elrow { position: relative; height: 22px; margin-top: 2px; cursor: pointer; }
-    .tl-elbar {
-      position: absolute; top: 2px; height: 18px; border-radius: 4px;
-      background: rgba(148, 163, 184, 0.13); border: 1px solid rgba(148, 163, 184, 0.22);
-      box-sizing: border-box; overflow: hidden;
+    .tl-bar-el {
+      position: absolute; top: 4px; height: 18px; border-radius: 4px; box-sizing: border-box;
+      background: rgba(148, 163, 184, 0.16); border: 1px solid rgba(148, 163, 184, 0.32);
+      cursor: grab; overflow: hidden;
     }
-    .tl-elrow:hover .tl-elbar { background: rgba(148, 163, 184, 0.22); }
-    .tl-elrow.active .tl-elbar { background: rgba(34, 197, 94, 0.22); border-color: rgba(34, 197, 94, 0.55); }
-    .tl-elname {
-      position: absolute; left: 5px; top: 0; font-size: 10.5px; line-height: 18px;
-      color: #94a3b8; white-space: nowrap; pointer-events: none;
+    .tl-bar-el:hover { background: rgba(148, 163, 184, 0.26); }
+    .tl-row.active .tl-bar-el, .tl-bar-el.active { background: rgba(67, 97, 238, 0.3); border-color: rgba(99, 102, 241, 0.7); }
+    .tl-bar-el.media { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.55); }
+    .tl-bar-el.media:hover, .tl-bar-el.media.active { background: rgba(34, 197, 94, 0.34); border-color: rgba(34, 197, 94, 0.85); }
+    .tl-bar-el.three { background: rgba(168, 85, 247, 0.18); border-color: rgba(168, 85, 247, 0.5); }
+    .tl-bar-el.hidden-el { opacity: 0.35; }
+    .tl-bar-el .tl-edge:hover { background: rgba(226, 232, 240, 0.45); }
+    .tl-bar-lab {
+      position: absolute; left: 6px; top: 0; font-size: 9.5px; line-height: 17px; color: rgba(226, 232, 240, 0.6);
+      pointer-events: none; white-space: nowrap; overflow: hidden; max-width: calc(100% - 12px);
     }
-    .tl-elrow.active .tl-elname { color: #bbf7d0; }
-    /* media 剪辑块：绿色块表示 [start, start+dur] 窗口，左右边缘拖拽改开始/出点 */
-    .tl-mblock {
-      position: absolute; top: 2px; height: 18px; border-radius: 4px; box-sizing: border-box;
-      background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.55);
-      overflow: hidden;
-    }
-    .tl-elrow:hover .tl-mblock { background: rgba(34, 197, 94, 0.3); }
-    .tl-elrow.active .tl-mblock { background: rgba(34, 197, 94, 0.38); border-color: rgba(34, 197, 94, 0.8); }
-    .tl-medge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
-    .tl-medge.l { left: 0; }
-    .tl-medge.r { right: 0; }
-    .tl-medge:hover { background: rgba(134, 239, 172, 0.55); }
     .tl-kf {
       position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
       background: #fbbf24; transform: rotate(45deg); border-radius: 1px;
       cursor: ew-resize; z-index: 3;
     }
     .tl-kf:hover { background: #fde68a; box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3); }
+
+    .tl-bar-track {
+      position: absolute; top: 5px; height: 16px; border-radius: 4px; box-sizing: border-box;
+      background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35);
+      font-size: 9.5px; line-height: 15px; color: #86efac; padding: 0 6px; overflow: hidden; white-space: nowrap;
+    }
+
     .tl-playhead {
       position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid #f43f5e;
       pointer-events: none; z-index: 5;
@@ -101,117 +144,203 @@
         <button @click="add('table')" :disabled="readonly || !doc">+ 表格</button>
       </div>
       <div class="sp"></div>
-      <span class="tl-time">{{ fmtT(frame / fpsOf()) }} / {{ fmtT(totalDur()) }}</span>
-      <select class="tl-zoom" :value="pps" @change="setPps(+$event.target.value)">
-        <option value="30" :selected="pps === 30">缩放 30px/s</option>
-        <option value="60" :selected="pps === 60">缩放 60px/s</option>
-        <option value="100" :selected="pps === 100">缩放 100px/s</option>
-      </select>
-    </div>
-    <div class="tl-scroll" ref="scroll" @dragover="onDragOverAsset" @drop="onDropAsset">
-      <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }" v-if="doc">
-        <div class="tl-ruler" @mousedown="onRulerDown">
-          <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
-        </div>
-        <div class="tl-row">
-          <div v-for="b in blocks()" :key="ver + ':' + kver + ':' + b.id" class="tl-scene" :class="{ active: b.i === curSceneIdx(), moving: moveI === b.i }"
-               :style="{ left: b.x + 'px', width: b.w + 'px' }"
-               @mousedown="onSceneDown(b, $event)">
-            S{{ b.i + 1 }}<span v-if="b.trans" class="tl-tr">⇢</span><span class="tl-dur">{{ b.dur }}</span>
-            <div class="tl-edge l" title="拖拽改上一场景时长" @mousedown.stop="onEdgeDown(b.i - 1, $event)"></div>
-            <div class="tl-edge r" title="拖拽改本场景时长" @mousedown.stop="onEdgeDown(b.i, $event)"></div>
-          </div>
-          <div class="tl-drop" v-if="dropX >= 0" :style="{ left: dropX + 'px' }"></div>
-        </div>
-        <div class="tl-elrow" v-for="el in curEls()" :key="kver + ':' + el.id" :class="{ active: sel && sel.kind === 'element' && sel.elIds && sel.elIds.indexOf(el.id) >= 0 }" @click="pickEl(el.id)">
-          <template v-if="el.type === 'media'">
-            <div class="tl-mblock" :style="mediaBlockStyle(el)" :title="'左缘拖拽改开始时间，右缘拖拽裁剪出点（当前 ' + (mediaDur(el)).toFixed(1) + 's）'">
-              <div class="tl-medge l" @mousedown.stop="onMediaEdgeDown(el, 'l', $event)"></div>
-              <div class="tl-medge r" @mousedown.stop="onMediaEdgeDown(el, 'r', $event)"></div>
-            </div>
-          </template>
-          <template v-else>
-            <div class="tl-elbar" :style="elBarStyle()">
-              <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"
-                   :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(el, k, ki, $event)"></div>
-            </div>
-          </template>
-          <span class="tl-elname" :style="{ left: (elNameX() + 10) + 'px' }">{{ el.id }} · {{ el.type }}</span>
-        </div>
-        <div class="tl-playhead" :style="{ left: playX() + 'px' }"></div>
+      <span class="tl-time">{{ fmtT(frame / fpsOf()) }} / {{ fmtT(totalDur()) }} · {{ Math.floor(frame) }}f</span>
+      <div class="tl-zoom">
+        <button @click="zoomBy(0.8)" title="缩小">−</button>
+        <input type="range" min="10" max="240" step="2" v:value="pps" @input="setPps(+pps)" title="缩放（Ctrl+滚轮）" />
+        <button @click="zoomBy(1.25)" title="放大">+</button>
+        <span class="tl-zoomv">{{ Math.round(pps) }}px/s</span>
       </div>
-      <div class="tl-empty" v-if="!doc">打开项目后此处显示时间轴</div>
     </div>
+    <div class="tl-body" v-if="doc">
+      <div class="tl-gutter">
+        <div class="tl-g-head"><span>{{ tracks().length }} 轨</span><span>·</span><span>{{ doc.scenes.length }} 场景</span></div>
+        <div class="tl-g-rows"><div class="tl-g-rows-in" ref="grows">
+          <div v-for="tr in tracks()" :key="ver + ':' + kver + ':' + tr.key" class="tl-g-row"
+               :class="[tr.kind, { active: isActive(tr), 'hidden-el': tr.hidden }]"
+               @click="onRowClick(tr)">
+            <template v-if="tr.kind === 'scene'">
+              <button class="tl-g-arrow" @click.stop="toggleCollapse(tr)">{{ collapsed[tr.id] ? '▸' : '▾' }}</button>
+              <button class="tl-g-eye" :class="{ off: tr.hidden }" :title="tr.hidden ? '显示场景' : '隐藏场景'" @click.stop="toggleHide(tr)">{{ tr.hidden ? '−' : '●' }}</button>
+              <span class="tl-g-name">{{ tr.label }}</span>
+              <span class="tl-g-sub">{{ tr.dur.toFixed(1) }}s</span>
+            </template>
+            <template v-else-if="tr.kind === 'track'">
+              <span class="tl-g-ico">♪</span>
+              <span class="tl-g-name">{{ tr.label }}</span>
+              <span class="tl-g-sub">{{ tr.sub }}</span>
+            </template>
+            <template v-else>
+              <button class="tl-g-eye" :class="{ off: tr.hidden }" :title="tr.hidden ? '显示元素' : '隐藏元素（预览/导出都不渲染）'" @click.stop="toggleHide(tr)">{{ tr.hidden ? '−' : '●' }}</button>
+              <span class="tl-g-ico">{{ typeIcon(tr.el) }}</span>
+              <span class="tl-g-name">{{ tr.id }}</span>
+              <span class="tl-g-sub" v-if="tr.el.type === 'media'">{{ (tr.el.trimEnd >= 0 ? tr.el.trimEnd - (+tr.el.trimStart || 0) : 0) ? (tr.el.trimEnd >= 0 ? (tr.el.trimEnd - (+tr.el.trimStart || 0)).toFixed(1) + 's' : '全长') : '全长' }}</span>
+            </template>
+          </div>
+        </div></div>
+      </div>
+      <div class="tl-scroll" ref="scroll" @dragover="onDragOverAsset" @drop="onDropAsset">
+        <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }">
+          <div class="tl-ruler" @mousedown="onRulerDown">
+            <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
+          </div>
+          <div class="tl-rows">
+            <div v-for="tr in tracks()" :key="ver + ':' + kver + ':' + tr.key" class="tl-row" :class="{ active: isActive(tr) }">
+              <template v-if="tr.kind === 'scene'">
+                <div class="tl-bar-scene" :class="{ active: curSceneIdx() === tr.i, 'hidden-el': tr.hidden }"
+                     :style="{ left: x(tr.start) + 'px', width: Math.max(8, w(tr.dur)) + 'px' }"
+                     :title="'S' + (tr.i + 1) + ' · ' + tr.dur.toFixed(1) + 's（点击定位；左右缘拖时长）'"
+                     @mousedown="onSceneBarDown(tr, $event)">
+                  S{{ tr.i + 1 }}<span v-if="tr.i > 0 && doc.scenes[tr.i].transition && doc.scenes[tr.i].transition !== 'none'"> ⇢</span>
+                  <div class="tl-edge l" title="拖拽改上一场景时长" @mousedown.stop="onEdgeDown(tr.i - 1, $event)"></div>
+                  <div class="tl-edge r" title="拖拽改本场景时长" @mousedown.stop="onEdgeDown(tr.i, $event)"></div>
+                </div>
+              </template>
+              <template v-else-if="tr.kind === 'track'">
+                <div class="tl-bar-track" :style="{ left: x(tr.start) + 'px', width: Math.max(8, w(tr.dur)) + 'px' }">{{ tr.sub }}</div>
+              </template>
+              <template v-else>
+                <div class="tl-bar-el" :class="[tr.el.type, { active: isActive(tr), 'hidden-el': tr.hidden }]"
+                     :style="{ left: x(tr.start) + 'px', width: Math.max(6, w(tr.dur)) + 'px' }"
+                     :title="elTitle(tr)" @mousedown="onElBarDown(tr, $event)">
+                  <span class="tl-bar-lab">{{ tr.id }}</span>
+                  <div v-for="(k, ki) in (tr.el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: w(+k.t || 0) + 'px' }"
+                       :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(tr, k, ki, $event)"></div>
+                  <div class="tl-edge l" @mousedown.stop="onElEdgeDown(tr, 'l', $event)"></div>
+                  <div class="tl-edge r" @mousedown.stop="onElEdgeDown(tr, 'r', $event)"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="tl-playhead" :style="{ left: playX() + 'px' }"></div>
+        </div>
+      </div>
+    </div>
+    <div class="tl-empty" v-if="!doc">打开项目后此处显示时间轴</div>
   </body>
   <script setup>
+    import { elDurOf } from './engine.js'
+
     doc = null         // prop
     frame = 0          // prop：当前帧（父级 rAF 同步）
     sel = null         // prop：{ kind, sceneIndex, elId, elIds }
     readonly = false   // prop
     ver = 0            // prop：场景结构版本号
-    pps = 60           // 像素/秒（Ctrl+滚轮 10–240 连续缩放）
-    moveI = -1         // 正在拖拽排序的场景下标
-    dropX = -1         // 插入位指示线（px，<0 隐藏）
-    kver = 0           // keyed 列表重建版本号：原地写 doc（时长/关键帧/pps）后 ++，
-                       // 拼进 :key 强制 v-for 重建（vhtml keyed 列表同 key 复用旧值）
+    pps = 60           // 像素/秒（滑条/Ctrl+滚轮 10–240 连续缩放）
+    kver = 0           // keyed 列表重建版本号：原地写 doc 后 ++，拼进 :key 强制 v-for 重建
+    collapsed = {}     // 场景折叠状态 sceneId → true
 
     fpsOf = () => (doc && doc.fps) || 30
     let rafP = false
     sceneFrames = (s) => Math.max(1, Math.round((+s.duration || 1) * fpsOf()))
 
-    // 素材拖到时间轴：插入当前场景（默认位置，父级处理）；readonly 时不响应
+    // 素材拖到时间轴：插入落点场景并按落点时间设元素 start
     onDragOverAsset = (e) => {
       if (readonly) return
       e.preventDefault()
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
     }
     onDropAsset = (e) => {
-      if (readonly) return
+      if (readonly || !doc) return
       e.preventDefault()
       const ref = e.dataTransfer && e.dataTransfer.getData('application/x-vedio-asset')
       if (!ref) return
-      $emit('dropasset', {ref})
-    }
-
-    blocks = () => {
-      if (!doc) return []
+      const inner = $refs.inner
+      if (!inner) { $emit('dropasset', {ref}); return }
+      const rect = inner.getBoundingClientRect()
+      const t = Math.max(0, (e.clientX - rect.left) / pps)
+      // 落点所属场景 + 场景内时间
       let acc = 0
-      return doc.scenes.map((s, i) => {
-        const fr = sceneFrames(s)
-        const b = {
-          id: s.id, i,
-          startF: acc, frames: fr,
-          x: (acc / fpsOf()) * pps,
-          w: (fr / fpsOf()) * pps,
-          dur: (+s.duration || 0).toFixed(1) + 's',
-          trans: i > 0 && s.transition && s.transition !== 'none',
+      for (let i = 0; i < doc.scenes.length; i++) {
+        const sd = (+doc.scenes[i].duration || 1)
+        if (t < acc + sd) { $emit('dropasset', {ref, scene: i, start: Math.round((t - acc) * 100) / 100}); return }
+        acc += sd
+      }
+      $emit('dropasset', {ref, scene: doc.scenes.length - 1})
+    }
+
+    /* ---------------- 轨道模型 ---------------- */
+    // scene：场景组行（可折叠）；el：场景元素行；oel：overlay 元素行（全片时间）；track：音乐/配音轨
+    tracks = () => {
+      if (!doc) return []
+      const out = []
+      const fps = fpsOf()
+      let acc = 0
+      doc.scenes.forEach((s, i) => {
+        const frames = sceneFrames(s)
+        const sd = frames / fps
+        out.push({ kind: 'scene', key: 's:' + s.id, i, id: s.id, label: 'S' + (i + 1), start: acc / fps, dur: sd, hidden: !!s.hidden })
+        if (!collapsed[s.id]) {
+          ;(s.elements || []).forEach((el) => {
+            const st = Math.max(0, +el.start || 0)
+            out.push({ kind: 'el', key: 'e:' + el.id, i, id: el.id, el, start: acc / fps + st, dur: elDurOf(el, sd), hidden: !!el.hidden })
+          })
         }
-        acc += fr
-        return b
+        acc += frames
       })
+      const total = acc / fps
+      ;(doc.overlay || []).forEach((el) => {
+        out.push({ kind: 'oel', key: 'o:' + el.id, id: el.id, el, start: Math.max(0, +el.start || 0), dur: elDurOf(el, total), hidden: !!el.hidden })
+      })
+      if (doc.music && doc.music.src) out.push({ kind: 'track', key: 'm:', label: '音乐', sub: String(doc.music.src).split('/').pop(), start: +doc.music.offset || 0, dur: total })
+      if (doc.voice && doc.voice.src) out.push({ kind: 'track', key: 'v:', label: '配音', sub: String(doc.voice.src).split('/').pop(), start: +doc.voice.offset || 0, dur: total })
+      return out
     }
 
-    totalDur = () => {
-      const bs = blocks()
-      if (!bs.length) return 0
-      const last = bs[bs.length - 1]
-      return (last.startF + last.frames) / fpsOf()
+    typeIcon = (el) => ({ text: 'T', shape: '▢', image: '▦', media: '▶', chart: '▤', table: '☷', svg: '◈', three: '◆' }[(el && el.type)] || '·')
+
+    isActive = (tr) => {
+      if (!sel) return false
+      if (tr.kind === 'scene') return sel.kind !== 'element' && sel.sceneIndex === tr.i
+      if (tr.kind === 'el') return sel.kind === 'element' && sel.sceneIndex === tr.i && (sel.elIds ? sel.elIds.indexOf(tr.id) >= 0 : sel.elId === tr.id)
+      return false
     }
 
-    innerW = () => Math.max(totalDur() * pps + 60, 200)
+    onRowClick = (tr) => {
+      if (tr.kind === 'scene') { $emit('pickscene', tr.i); $emit('seek', tr.start * fpsOf()) }
+      else if (tr.kind === 'el') { $emit('pickel', { id: tr.id, scene: tr.i }); $emit('seek', tr.start * fpsOf()) }
+    }
+
+    toggleCollapse = (tr) => { collapsed = Object.assign({}, collapsed, { [tr.id]: !collapsed[tr.id] }) }
+
+    toggleHide = (tr) => {
+      if (readonly) return
+      if (tr.kind === 'scene') doc.scenes[tr.i].hidden = !doc.scenes[tr.i].hidden
+      else if (tr.el) tr.el.hidden = !tr.el.hidden
+      kver++
+      $emit('docchange')
+    }
+
+    elTitle = (tr) => {
+      const el = tr.el
+      const a = [tr.id + ' · ' + el.type, '窗口 ' + (+el.start || 0).toFixed(1) + 's + ' + tr.dur.toFixed(1) + 's']
+      if (el.type === 'media') a.push('源 ' + (+el.trimStart || 0).toFixed(1) + 's → ' + (el.trimEnd >= 0 ? el.trimEnd.toFixed(1) + 's' : '全长'))
+      a.push('拖动改开始；左缘切入、右缘切出')
+      return a.join('\n')
+    }
+
+    /* ---------------- 坐标换算 ---------------- */
+    x = (t) => t * pps           // 秒 → px
+    w = (t) => t * pps           // 时长秒 → px
+    totalDur = () => doc ? doc.scenes.reduce((a, s) => a + sceneFrames(s), 0) / fpsOf() : 0
+    innerW = () => Math.max(totalDur() * pps + 80, 200)
+    playX = () => x(frame / fpsOf())
 
     curSceneIdx = () => {
-      const bs = blocks()
-      for (let i = 0; i < bs.length; i++) {
-        if (frame < bs[i].startF + bs[i].frames) return i
+      if (!doc) return 0
+      let acc = 0
+      for (let i = 0; i < doc.scenes.length; i++) {
+        const fr = sceneFrames(doc.scenes[i])
+        if (frame < acc + fr) return i
+        acc += fr
       }
-      return Math.max(0, bs.length - 1)
+      return Math.max(0, doc.scenes.length - 1)
     }
 
     ticks = () => {
       const dur = totalDur()
       const out = []
-      const step = pps >= 50 ? 0.5 : 1
+      const step = pps >= 100 ? 0.5 : pps >= 40 ? 1 : 2
       for (let t = 0; t <= Math.ceil(dur) + 0.001; t += step) {
         const major = Math.abs(t - Math.round(t)) < 0.001
         out.push({ x: Math.round(t * pps * 100) / 100, major, label: major ? fmtS(Math.round(t)) : '' })
@@ -219,118 +348,22 @@
       return out
     }
 
-    playX = () => (frame / fpsOf()) * pps
+    /* ---------------- 条块拖拽 ---------------- */
+    const round2 = (v) => Math.round(v * 100) / 100
+    const clamp = (v, a, b) => (v < a ? a : v > b ? b : v)
 
-    curEls = () => {
-      if (!doc) return []
-      const sc = doc.scenes[curSceneIdx()]
-      return sc ? (sc.elements || []) : []
-    }
+    // 容器时长：el 行 = 所属场景时长；oel 行 = 全片时长
+    const containerDur = (tr) => tr.kind === 'oel' ? totalDur() : (+doc.scenes[tr.i].duration || 1)
 
-    elBarStyle = () => {
-      const b = blocks()[curSceneIdx()]
-      if (!b) return {}
-      return { left: b.x + 'px', width: Math.max(6, b.w) + 'px' }
-    }
-    elNameX = () => {
-      const b = blocks()[curSceneIdx()]
-      return b ? b.x : 0
-    }
-    kfX = (k) => ((+k.t || 0) * pps) + 'px'
-
-    // ---- media 剪辑块：场景内 [start, start+dur]，dur 受场景剩余与 trim 窗口约束 ----
-    mediaDur = (el) => {
-      const sc = doc.scenes[curSceneIdx()]
-      const sceneDur = sc ? (+sc.duration || 1) : 1
-      const start = +el.start || 0
-      const ts = +el.trimStart || 0
-      const te = el.trimEnd >= 0 ? +el.trimEnd : 1e9
-      return Math.max(0.1, Math.min(sceneDur - start, te - ts))
-    }
-    mediaBlockStyle = (el) => {
-      // 与其它行一致钉在当前场景块上：场景 x 偏移 + 场景内 start
-      const b = blocks()[curSceneIdx()]
-      const start = +el.start || 0
-      return {left: ((b ? b.x : 0) + start * pps) + 'px', width: (mediaDur(el) * pps) + 'px'}
-    }
-    // 左缘拖 = 改开始时间（场景内）；右缘拖 = 裁剪出点（显示时长）；松手上报 docchange 保存
-    onMediaEdgeDown = (el, which, e) => {
-      if (readonly) return
+    // 场景条：点击定位；拖动空白移动 = 改顺序太重，仅点击
+    onSceneBarDown = (tr, e) => {
+      if (e.button !== 0) return
       e.preventDefault()
-      e.stopPropagation()
-      const sc = doc.scenes[curSceneIdx()]
-      const sceneDur = sc ? (+sc.duration || 1) : 1
-      const ts = +el.trimStart || 0
-      const x0 = e.clientX
-      const t0 = which === 'l' ? (+el.start || 0) : mediaDur(el)
-      const onMove = (ev) => {
-        const dt = (ev.clientX - x0) / pps
-        if (which === 'l') {
-          const maxS = Math.max(0, sceneDur - mediaDur(el))
-          el.start = Math.round(Math.min(maxS, Math.max(0, t0 + dt)) * 100) / 100
-        } else {
-          const maxD = Math.max(0.1, sceneDur - (+el.start || 0))
-          el.trimEnd = Math.round((ts + Math.min(maxD, Math.max(0.1, t0 + dt))) * 100) / 100
-        }
-        kver++
-      }
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
-        $emit('docchange')
-      }
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
+      $emit('pickscene', tr.i)
+      $emit('seek', tr.start * fpsOf())
     }
 
-    /* ---------------- 事件 ---------------- */
-    add = (type, sub) => { if (!readonly) $emit('addel', { type, sub }) }
-    pickEl = (id) => $emit('pickel', id)
-
-    setPps = (v) => { pps = v; kver++ }
-
-    onSceneDown = (b, e) => {
-      if (!doc || e.button !== 0) return
-      const inner = $refs.inner
-      if (!inner) return
-      const rect = inner.getBoundingClientRect()
-      const x0 = e.clientX
-      let moved = false
-      let dropTo = -1
-      const mv = (ev) => {
-        if (!moved && Math.abs(ev.clientX - x0) < 5) return
-        if (readonly) return
-        moved = true
-        moveI = b.i
-        // 插入位：按各场景块中点判定
-        const bs = blocks()
-        const mx = ev.clientX - rect.left
-        let to = bs.length
-        for (let k = 0; k < bs.length; k++) {
-          if (mx < bs[k].x + bs[k].w / 2) { to = k; break }
-        }
-        dropTo = to
-        dropX = bs[to] ? bs[to].x : (bs.length ? bs[bs.length - 1].x + bs[bs.length - 1].w : 0)
-      }
-      const up = () => {
-        window.removeEventListener('mousemove', mv)
-        window.removeEventListener('mouseup', up)
-        if (moved && dropTo >= 0) {
-          // 移除自身后的插入下标修正
-          const to = dropTo > b.i ? dropTo - 1 : dropTo
-          if (to !== b.i) $emit('movescene', { from: b.i, to })
-        } else if (!moved) {
-          $emit('pickscene', b.i)
-          $emit('seek', b.startF)
-        }
-        moveI = -1
-        dropX = -1
-      }
-      window.addEventListener('mousemove', mv)
-      window.addEventListener('mouseup', up)
-    }
-
-    /* 边缘拖拽改场景时长（左边 = 上一场景） */
+    /* 场景时长边缘拖拽（左边 = 上一场景） */
     onEdgeDown = (i, e) => {
       if (readonly || !doc) return
       const s = doc.scenes[i]
@@ -356,27 +389,56 @@
       window.addEventListener('mouseup', up)
     }
 
-    /* 关键帧菱形拖拽改时间（拖动中本地摆位，松手一次性重建+上报）；Alt+点击删除 */
-    onKfDown = (el, k, ki, e) => {
+    /* 元素条体拖拽：改 start（所有类型；媒体之外 = 出现时间）；点击 = 选中 + 定位 */
+    onElBarDown = (tr, e) => {
       if (readonly || e.button !== 0) return
       e.preventDefault()
-      if (e.altKey) {
-        const arr = (el.keyframes || []).slice()
-        arr.splice(ki, 1)
-        el.keyframes = arr
-        kver++
-        $emit('docchange')
-        return
-      }
-      const bar = e.currentTarget.closest('.tl-elbar')
-      if (!bar) return
-      const dot = e.currentTarget
-      const barL = bar.getBoundingClientRect().left
-      const dur = curSceneDur()
+      const el = tr.el
+      const cd = containerDur(tr)
+      const x0 = e.clientX
+      const s0 = Math.max(0, +el.start || 0)
+      const d0 = elDurOf(el, cd)
+      let moved = false
       const mv = (ev) => {
-        const t = Math.max(0, Math.min((ev.clientX - barL) / pps, dur))
-        k.t = Math.round(t * fpsOf()) / fpsOf()
-        dot.style.left = (k.t * pps) + 'px'
+        const dt = (ev.clientX - x0) / pps
+        if (!moved && Math.abs(ev.clientX - x0) < 3) return
+        moved = true
+        el.start = round2(clamp(s0 + dt, 0, Math.max(0, cd - d0)))
+        if (!rafP) { rafP = true; requestAnimationFrame(() => { rafP = false; kver++ }) }
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        if (moved) { kver++; $emit('docchange') }
+        else onRowClick(tr)
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    /* 元素条边缘：左缘 = 切入（start↑ 且右缘不动）；右缘 = 切出（dur；media 同步 trimEnd） */
+    onElEdgeDown = (tr, which, e) => {
+      if (readonly || e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      const el = tr.el
+      const cd = containerDur(tr)
+      const x0 = e.clientX
+      const s0 = Math.max(0, +el.start || 0)
+      const d0 = elDurOf(el, cd)
+      const right0 = s0 + d0
+      const mv = (ev) => {
+        const dt = (ev.clientX - x0) / pps
+        if (which === 'l') {
+          const ns = clamp(s0 + dt, 0, right0 - 0.1)
+          el.start = round2(ns)
+          el.dur = round2(right0 - ns)
+        } else {
+          const nd = clamp(d0 + dt, 0.1, cd - s0)
+          el.dur = round2(nd)
+          if (el.type === 'media') el.trimEnd = round2((+el.trimStart || 0) + nd) // 媒体切出同步源出点（不冻结）
+        }
+        if (!rafP) { rafP = true; requestAnimationFrame(() => { rafP = false; kver++ }) }
       }
       const up = () => {
         window.removeEventListener('mousemove', mv)
@@ -388,9 +450,36 @@
       window.addEventListener('mouseup', up)
     }
 
-    curSceneDur = () => {
-      const sc = doc && doc.scenes[curSceneIdx()]
-      return sc ? +sc.duration || 1 : 1
+    /* 关键帧菱形拖拽（窗口相对时间）；Alt+点击删除 */
+    onKfDown = (tr, k, ki, e) => {
+      if (readonly || e.button !== 0) return
+      e.preventDefault()
+      const el = tr.el
+      if (e.altKey) {
+        const arr = (el.keyframes || []).slice()
+        arr.splice(ki, 1)
+        el.keyframes = arr
+        kver++
+        $emit('docchange')
+        return
+      }
+      const bar = e.currentTarget.parentElement
+      const barL = bar.getBoundingClientRect().left
+      const dur = elDurOf(el, containerDur(tr))
+      const dot = e.currentTarget
+      const mv = (ev) => {
+        const t = clamp((ev.clientX - barL) / pps, 0, dur)
+        k.t = Math.round(t * fpsOf()) / fpsOf()
+        dot.style.left = w(k.t) + 'px'
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        kver++
+        $emit('docchange')
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
     }
 
     onRulerDown = (e) => {
@@ -399,8 +488,8 @@
       if (!inner) return
       const rect = inner.getBoundingClientRect()
       const seekTo = (clientX) => {
-        const x = Math.max(0, Math.min(clientX - rect.left, totalDur() * pps))
-        $emit('seek', Math.round((x / pps) * fpsOf()))
+        const px = Math.max(0, Math.min(clientX - rect.left, totalDur() * pps))
+        $emit('seek', Math.round((px / pps) * fpsOf()))
       }
       seekTo(e.clientX)
       const mv = (ev) => seekTo(ev.clientX)
@@ -411,6 +500,11 @@
       window.addEventListener('mousemove', mv)
       window.addEventListener('mouseup', up)
     }
+
+    /* ---------------- 事件/缩放 ---------------- */
+    add = (type, sub) => { if (!readonly) $emit('addel', { type, sub }) }
+    setPps = (v) => { pps = Math.max(10, Math.min(240, +v || 60)); kver++ }
+    zoomBy = (f) => setPps(pps * f)
 
     fmtS = (s) => {
       const m = Math.floor(s / 60)
@@ -438,15 +532,20 @@
         kver++
         setTimeout(() => { scEl.scrollLeft = t0 * pps - (e.clientX - rect.left) }, 0)
       }, { passive: false })
+      // gutter 行与右区纵向滚动同步
+      const grows = $refs.grows
+      scEl.addEventListener('scroll', () => {
+        if (grows) grows.style.transform = 'translateY(' + (-scEl.scrollTop) + 'px)'
+      })
     }
 
     // 播放头跟随：超出可视区时自动滚动
     $watch(() => frame, () => {
       if (!scEl) return
-      const x = playX()
+      const px = playX()
       const vw = scEl.clientWidth
-      if (x > scEl.scrollLeft + vw - 60) scEl.scrollLeft = x - 60
-      else if (x < scEl.scrollLeft) scEl.scrollLeft = Math.max(0, x - 60)
+      if (px > scEl.scrollLeft + vw - 60) scEl.scrollLeft = px - 60
+      else if (px < scEl.scrollLeft) scEl.scrollLeft = Math.max(0, px - 60)
     })
   </script>
 </html>

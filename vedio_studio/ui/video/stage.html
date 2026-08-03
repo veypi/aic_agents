@@ -177,7 +177,7 @@
     </div>
   </body>
   <script setup>
-    import { Video, uid, mediaTimeAt, frameToScene } from './engine.js'
+    import { Video, uid, mediaTimeAt, frameToScene, elDurOf } from './engine.js'
 
     doc = null          // video/1 文档对象（父页面传入，proxy 引用，可编辑）
     assets = {}         // assetMap（父页面传入）
@@ -414,10 +414,12 @@
       mediaOv = []
     }
     mediaWin = (e) => {
+      const sc = doc.scenes[curScene]
+      const sceneDur = sc ? (+sc.duration || 1) : 1
       const start = Math.max(0, +e.start || 0)
       const ts = Math.max(0, +e.trimStart || 0)
       const te = e.trimEnd >= 0 ? +e.trimEnd : Infinity
-      return {start, ts, te, dur: te === Infinity ? Infinity : Math.max(0, te - ts)}
+      return {start, ts, te, dur: elDurOf(e, sceneDur)}
     }
     // 窗口内外状态：窗外 pause + 钉边界帧；窗内按目标时间纠正漂移并保持播放
     applyMediaWin = (o, t) => {
@@ -439,7 +441,7 @@
     }
     syncMediaOverlay = () => {
       const sc = doc.scenes[curScene]
-      const want = ((sc && sc.elements) || []).filter((e) => e.type === 'media' && e.src)
+      const want = ((sc && sc.elements) || []).filter((e) => e.type === 'media' && e.src && !e.hidden)
       const ids = want.map((e) => e.id)
       for (const o of mediaOv) if (ids.indexOf(o.id) < 0) {
         try {o.node.pause()} catch (e) { }

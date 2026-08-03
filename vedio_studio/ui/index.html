@@ -625,6 +625,54 @@
       },
 
       {
+        name: 'gen_voice', description: '文本转语音生成配音素材（--text 必填；--name 可选文件名；--set voice|music 可选：生成后自动配置到对应音轨）。TTS 限流约 3s/个',
+        handler: async (argv) => {
+          try {
+            if (!curName) throw new Error('请先打开项目（new_video 或 open_video）')
+            const text = String(arg(argv, 'text', '') || '').trim()
+            if (!text) throw new Error('--text 必填')
+            if (text.length > 5000) throw new Error('文本超长（最多 5000 字）')
+            // agent 私有 TTS API（与 ppt_studio 同款）：POST {text} → 音频 blob（按文本 hash 缓存）
+            const resp = await fetch('@' + $mod.scoped + '/api/speech', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({text}),
+            })
+            if (!resp.ok) throw new Error('TTS 合成失败 HTTP ' + resp.status)
+            const blob = await resp.blob()
+            if (!blob.size) throw new Error('TTS 返回空音频')
+            // 文件名：--name 或自动；扩展名按响应 mime（mpeg→mp3）；assets/ 内重名自动加 -N
+            let mimeExt = String((blob.type || '').split('/')[1] || 'mp3').toLowerCase()
+            if (mimeExt === 'mpeg') mimeExt = 'mp3'
+            const rawName = String(arg(argv, 'name', '') || '').replace(/[\\/:*?"<>|#%\s]+/g, '-').replace(/^-+|-+$/g, '')
+            const dot = rawName.lastIndexOf('.')
+            let base = dot > 0 ? rawName.slice(0, dot) : (rawName || 'voice-' + Date.now().toString(36))
+            const l = await fsLs(projDir(curName) + '/assets/')
+            const names = new Set((l.items || []).map((i) => i.name))
+            let name = base + '.' + mimeExt
+            let n = 1
+            while (names.has(name)) name = base + '-' + (n++) + '.' + mimeExt
+            const ref = 'assets/' + name
+            await fsPut(projDir(curName) + '/' + ref, blob)
+            // 预热 dataURL 并同步舞台（立即可用于预览/导出）
+            const dataUrl = await blobToDataURL(blob)
+            assets[ref] = dataUrl
+            const st = $refs.stage && $refs.stage.$data
+            if (st) {if (st.engine) st.engine.assets = assets; if (st.refreshFrame) st.refreshFrame()}
+            // 可选：配置到 voice/music 音轨
+            const track = String(arg(argv, 'set', '') || '')
+            if (track === 'voice' || track === 'music') {
+              doc[track] = {src: ref, volume: 1, offset: 0}
+              if (track === 'music') doc[track].loop = true
+              onDocChange()
+            }
+            await refreshAssets()
+            return reply({ok: true, ref, name, size: blob.size, track, hint: '素材引用：' + ref})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
+
+      {
         name: 'get_video', description: '当前打开项目的信息',
         handler: async () => {
           try {
@@ -1116,8 +1164,12 @@
       sel = {kind: 'scene', sceneIndex: activeSceneIdx(), elId: '', elIds: []}
     }
   }
-  onPickEl = (id) => {
-    sel = {kind: 'element', sceneIndex: activeSceneIdx(), elId: id}
+  onPickEl = (p) => {
+    // 时间轴多轨道后可跨场景选中：payload 可为 {id, scene} 或裸 id
+    const id = typeof p === 'string' ? p : p && p.id
+    if (!id) return
+    const si = (p && p.scene != null) ? Math.max(0, Math.min(p.scene, doc.scenes.length - 1)) : activeSceneIdx()
+    sel = {kind: 'element', sceneIndex: si, elId: id, elIds: [id]}
   }
   onSeek = (f) => {
     $refs.stage.$data.seekFrame(f)
@@ -1392,9 +1444,9 @@
     else if (kind === 'audio') Object.assign(el, {type: 'media', kind: 'audio', w: 320, h: 56, muted: false, start: 0, trimStart: 0, trimEnd: -1})
     return el
   }
-  onDropAsset = async ({ref, x, y}) => {
+  onDropAsset = async ({ref, x, y, scene, start}) => {
     if (!canEdit() || !doc || !ref) return
-    const i = activeSceneIdx()
+    const i = scene != null ? Math.max(0, Math.min(scene, doc.scenes.length - 1)) : activeSceneIdx()
     const sc = doc.scenes[i]
     if (!sc) return
     const meta = assetFiles.find((f) => f.ref === ref)
@@ -1403,6 +1455,7 @@
     const ok = await ensureAssetLoaded(ref)
     if (!ok) {showToast('素材缺失：' + ref); return }
     const el = assetToElement(ref, kind)
+    if (start != null && isFinite(+start)) el.start = Math.max(0, +start)
     if (x == null || y == null) {
       // 拖到时间轴/双击：场景中心
       el.x = Math.round(doc.size.width / 2 - el.w / 2)
