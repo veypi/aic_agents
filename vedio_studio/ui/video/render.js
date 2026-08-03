@@ -112,77 +112,150 @@ function inlineNestedSvgs(clone) {
   }
 }
 
-/** 序列化帧 DOM 为 SVG foreignObject data URL，绘制到 canvas 上（含 three 合成）。
- *  Deterministic; waits for image decode.
- *  Notes (SVG-as-image constraints):
- *   - root element MUST carry the XHTML namespace (children inherit it);
- *   - void elements MUST be self-closed (strict XML parsing);
- *   - only data: URLs are loadable inside the isolated document (no blob:);
- *   - nested <svg> inside foreignObject is NOT painted (see inlineNestedSvgs);
- *   - viewBox transforms do NOT apply to foreignObject content (CSS scale used). */
-export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
-  const clone = node.cloneNode(true);
-  inlineNestedSvgs(clone);
-  // <video> 在 SVG-in-img 隔离文档中不绘制（纯黑块），且 data: 大体积 src 序列化进
-  // SVG 字符串既慢又可能超限——克隆中直接移除，帧画面由下方 __mediaItems 合成。
-  for (const v of [...clone.querySelectorAll("video")]) v.remove();
-  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-  let html = clone.outerHTML;
+/* ------------------------------------------------ 分层合成（media/three 参与 DOM 覆盖关系）
+ * 预览（真实 DOM）里 media 的 <video> 与 three 的 WebGL <canvas> 是普通节点，
+ * 按 z-index/DOM 顺序参与元素层级；但 SVG-in-img 序列化画不出两者，必须事后合成——
+ * 若合成固定最后画，media/three 会永远压住所有其它元素（覆盖关系与预览不一致）。
+ * 解法：把帧按 DOM 顺序切成「普通段（foreignObject 序列化）/ 合成段（canvas 绘制）」，
+ * 逐段按序绘制，合成项回到其应有的层级；过渡帧的容器变换由 item.anc 叠加。 */
+
+// 帧内可渲染单元（深度优先顺序 = DOM 覆盖顺序）：
+// plain = 随 foreignObject 序列化的普通节点；item = media/three（canvas 合成）
+function collectUnits(root, mediaItems, threeItems) {
+  const units = [];
+  const visit = (el) => {
+    for (const child of el.children) {
+      if (child.classList.contains("vd-content") || child.classList.contains("vd-overlay")) {
+        visit(child); // 包装容器本身无视觉，其子元素（.vd-el）才是单元
+      } else if (child.classList.contains("vd-el")) {
+        const video = child.querySelector("video");
+        const cv = child.querySelector("[data-three-canvas]");
+        const mi = video && mediaItems.find((it) => it.video === video);
+        const ti = cv && threeItems.find((it) => it.canvas === cv);
+        units.push(
+          mi || ti
+            ? { kind: "item", node: child, item: mi || ti }
+            : { kind: "plain", node: child },
+        );
+      } else {
+        units.push({ kind: "plain", node: child });
+      }
+    }
+  };
+  visit(root);
+  return units;
+}
+
+// 节点在根下的子索引路径（clone 与原节点结构相同，按路径取对应克隆节点）
+function nodePath(root, node) {
+  const p = [];
+  let n = node;
+  while (n && n !== root) {
+    p.unshift([...n.parentElement.children].indexOf(n));
+    n = n.parentElement;
+  }
+  return p;
+}
+function nodeAt(root, path) {
+  let n = root;
+  for (const i of path) n = n.children[i];
+  return n;
+}
+
+// plain 节点脱离其 wrap（vd-content/vd-overlay）后重建包装链：
+// wrap 上的 transition transform/opacity 必须保留，否则元素位置漂移
+function wrapChainFor(root, node) {
+  const chain = [];
+  let p = node.parentElement;
+  while (p && p !== root) {
+    chain.unshift({ cls: p.className, style: p.style.cssText });
+    p = p.parentElement;
+  }
+  return chain;
+}
+function rebuildWrapped(tmpl, plainNodes, clone) {
+  tmpl.replaceChildren();
+  for (const n of plainNodes) {
+    let host = tmpl;
+    for (const w of wrapChainFor(clone, n)) {
+      const cls = "." + w.cls.trim().split(/\s+/).join(".");
+      let wc = host.querySelector(cls);
+      if (!wc) {
+        wc = document.createElement("div");
+        wc.className = w.cls;
+        wc.style.cssText = w.style;
+        host.appendChild(wc);
+      }
+      host = wc;
+    }
+    host.appendChild(n);
+  }
+  return tmpl;
+}
+
+function frameHtml(rootNode, width, height, rootW, rootH, sx, sy) {
+  rootNode.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  let html = rootNode.outerHTML;
   html = html.replace(
     /<(img|br|hr|input|meta|link|source|col|wbr|embed|area|base|track|param)(\s[^>]*?)?(?<!\/)>/g,
     "<$1$2 />",
   );
   // XML 不识别 HTML 具名实体（stagger 空格等产生的 &nbsp;）——换数值实体
   html = html.replace(/&nbsp;/g, "&#160;");
-  // 帧根尺寸：node.style.cssText 序列化一定是「width: 1280px」（冒号后带空格），
-  // 旧正则 /width:(\d+)px/ 永不命中 → 缩放被静默跳过（原分辨率导出看不出，
-  // 1080p 导出时内容 1:1 贴左上、右下全黑）。直接读 style.width/height。
-  const rootW = parseFloat(node.style.width) || width;
-  const rootH = parseFloat(node.style.height) || height;
-  // 分辨率缩放：Chromium 的 SVG-in-img 不对 foreignObject 应用 viewBox 变换
-  // （实测内容 1:1 渲染后被裁剪），改用 CSS transform 缩放——矢量内容
-  // （svg-img / 文本）在目标分辨率重新栅格化，任意分辨率都清晰。
-  const sx = width / rootW,
-    sy = height / rootH;
   const scaled =
     sx === 1 && sy === 1
       ? html
       : `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;position:relative">` +
         `<div style="width:${rootW}px;height:${rootH}px;transform:scale(${sx},${sy});transform-origin:0 0">${html}</div></div>`;
-  const svg =
+  return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
-    `<foreignObject width="100%" height="100%">${scaled}</foreignObject></svg>`;
-  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    `<foreignObject width="100%" height="100%">${scaled}</foreignObject></svg>`
+  );
+}
+async function decodeFrame(html, width, height) {
   const img = new Image();
   img.decoding = "async";
-  img.src = url;
-
-  // three 合成准备：WebGL canvas 序列化进 foreignObject 后是空白，按引擎
-  // buildFrame 收集的 __threeItems（文档坐标几何/变换/透明度）直接叠加。
-  // preserveDrawingBuffer=false，必须在同一任务内同步拷贝位图（await decode
-  // 之后缓冲区可能已被浏览器清空），再用副本绘制。
-  const items = node.__threeItems || [];
-  const snaps = items.map((it) => {
-    if (it.opacity <= 0.003) return null;
-    const c = document.createElement("canvas");
-    c.width = it.canvas.width;
-    c.height = it.canvas.height;
-    c.getContext("2d").drawImage(it.canvas, 0, 0);
-    return c;
-  });
-
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(html);
   await img.decode();
-  ctx.drawImage(img, 0, 0, width, height);
+  return img;
+}
 
-  // media 合成：活 video 元素（已 seek 到本帧，waitMediaSeek 保证）按元素几何
-  // 与 object-fit 数学绘制；变换/透明度与 three 合成同一套（中心原点）。
-  const mediaItems = node.__mediaItems || [];
-  if (mediaItems.length) {
-    mediaItems.forEach((it) => {
-      const v = it.video;
-      const vw = v.videoWidth || 0,
-        vh = v.videoHeight || 0;
-      if (!vw || !vh || it.opacity <= 0.003) return;
+/** 合成绘制一个 media/three 项。统一在文档坐标空间（先 scale(sx,sy)），
+ *  叠加 anc（过渡容器变换：translate/scale/opacity，transform-origin 中心）。 */
+function drawItemCompose(ctx2d, it, sx, sy, snap) {
+  const w = it.w,
+    h = it.h;
+  ctx2d.save();
+  ctx2d.scale(sx, sy); // 进入文档坐标空间
+  const a = it.anc;
+  if (a && (a.scale !== 1 || a.tx || a.ty || a.opacity !== 1)) {
+    // anc 容器变换（transform-origin 中心）：p' = (p - c)·s + c + t
+    // 矩阵序列：T(c + t) · S(s) · T(-c)——先整体平移到中心+位移，再以原点
+    // 缩放，再平移回；随后 item 绘制链的 itemCenter 与 -c 抵消，几何正确。
+    // （旧序列 T(t + c(1-s))·S·T(-c)·T(itemCenter) 在 itemCenter=docCenter 时
+    //   不抵消，合成内容被平移 c·s 画出画布外——过渡帧 media/three 全黑）
+    const cxp = a.W / 2,
+      cyp = a.H / 2;
+    ctx2d.translate(cxp + (a.tx || 0), cyp + (a.ty || 0));
+    ctx2d.scale(a.scale || 1, a.scale || 1);
+    ctx2d.translate(-cxp, -cyp);
+  }
+  ctx2d.translate(it.x + it.dx + w / 2, it.y + it.dy + h / 2);
+  if (it.rotation) ctx2d.rotate((it.rotation * Math.PI) / 180);
+  if (it.scaleX !== 1 || it.scaleY !== 1) ctx2d.scale(it.scaleX, it.scaleY);
+  ctx2d.globalAlpha =
+    Math.max(0, Math.min(1, it.opacity)) * (a && a.opacity != null ? a.opacity : 1);
+  if (it.radius && typeof ctx2d.roundRect === "function") {
+    ctx2d.beginPath();
+    ctx2d.roundRect(-w / 2, -h / 2, w, h, it.radius);
+    ctx2d.clip();
+  }
+  if (it.video) {
+    // media：object-fit 数学（contain/cover/fill）
+    const v = it.video;
+    const vw = v.videoWidth || 0,
+      vh = v.videoHeight || 0;
+    if (vw && vh) {
       let sx0 = 0,
         sy0 = 0,
         sw = vw,
@@ -205,35 +278,109 @@ export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
         ox = (it.w - dw) / 2;
         oy = (it.h - dh) / 2;
       }
-      const w = it.w * sx,
-        h = it.h * sy;
-      ctx.save();
-      ctx.translate((it.x + it.dx) * sx + w / 2, (it.y + it.dy) * sy + h / 2);
-      if (it.rotation) ctx.rotate((it.rotation * Math.PI) / 180);
-      if (it.scaleX !== 1 || it.scaleY !== 1) ctx.scale(it.scaleX, it.scaleY);
-      ctx.globalAlpha = Math.max(0, Math.min(1, it.opacity));
-      ctx.drawImage(v, sx0, sy0, sw, sh, -w / 2 + ox * sx, -h / 2 + oy * sy, dw * sx, dh * sy);
-      ctx.restore();
-    });
-    ctx.globalAlpha = 1;
+      ctx2d.drawImage(v, sx0, sy0, sw, sh, -w / 2 + ox, -h / 2 + oy, dw, dh);
+    }
+  } else if (snap) {
+    // three：快照位图直接绘制
+    ctx2d.drawImage(snap, -w / 2, -h / 2, w, h);
+  }
+  ctx2d.restore();
+}
+
+/** 序列化帧 DOM 为 SVG foreignObject data URL，绘制到 canvas 上（含 three 合成）。
+ *  Deterministic; waits for image decode.
+ *  Notes (SVG-as-image constraints):
+ *   - root element MUST carry the XHTML namespace (children inherit it);
+ *   - void elements MUST be self-closed (strict XML parsing);
+ *   - only data: URLs are loadable inside the isolated document (no blob:);
+ *   - nested <svg> inside foreignObject is NOT painted (see inlineNestedSvgs);
+ *   - viewBox transforms do NOT apply to foreignObject content (CSS scale used). */
+export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
+  // 帧根尺寸：node.style.cssText 序列化一定是「width: 1280px」（冒号后带空格），
+  // 旧正则 /width:(\d+)px/ 永不命中 → 缩放被静默跳过（原分辨率导出看不出，
+  // 1080p 导出时内容 1:1 贴左上、右下全黑）。直接读 style.width/height。
+  const rootW = parseFloat(node.style.width) || width;
+  const rootH = parseFloat(node.style.height) || height;
+  // 分辨率缩放：Chromium 的 SVG-in-img 不对 foreignObject 应用 viewBox 变换
+  // （实测内容 1:1 渲染后被裁剪），改用 CSS transform 缩放——矢量内容
+  // （svg-img / 文本）在目标分辨率重新栅格化，任意分辨率都清晰。
+  const sx = width / rootW,
+    sy = height / rootH;
+
+  const threeItems = node.__threeItems || [];
+  const mediaItems = node.__mediaItems || [];
+  const units = collectUnits(node, mediaItems, threeItems);
+  const hasItems = units.some((u) => u.kind === "item");
+
+  // three 合成准备：WebGL canvas 序列化进 foreignObject 后是空白，按引擎
+  // buildFrame 收集的 __threeItems（文档坐标几何/变换/透明度）直接叠加。
+  // preserveDrawingBuffer=false，必须在同一任务内同步拷贝位图（await decode
+  // 之后缓冲区可能已被浏览器清空），再用副本绘制。
+  const snaps = threeItems.map((it) => {
+    if (it.opacity <= 0.003) return null;
+    const c = document.createElement("canvas");
+    c.width = it.canvas.width;
+    c.height = it.canvas.height;
+    c.getContext("2d").drawImage(it.canvas, 0, 0);
+    return c;
+  });
+
+  const clone = node.cloneNode(true);
+  inlineNestedSvgs(clone);
+  // <video> 在 SVG-in-img 隔离文档中不绘制（纯黑块），且 data: 大体积 src 序列化进
+  // SVG 字符串既慢又可能超限——克隆中直接移除，帧画面由 __mediaItems 合成。
+  for (const v of [...clone.querySelectorAll("video")]) v.remove();
+
+  // ---- 无合成项：单段快速路径（与原行为一致）----
+  if (!hasItems) {
+    const html = frameHtml(clone, width, height, rootW, rootH, sx, sy);
+    const img = await decodeFrame(html, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    return;
   }
 
-  if (items.length) {
-    items.forEach((it, i) => {
-      const snap = snaps[i];
-      if (!snap) return;
-      const w = it.w * sx,
-        h = it.h * sy;
-      ctx.save();
-      ctx.translate((it.x + it.dx) * sx + w / 2, (it.y + it.dy) * sy + h / 2);
-      if (it.rotation) ctx.rotate((it.rotation * Math.PI) / 180);
-      if (it.scaleX !== 1 || it.scaleY !== 1) ctx.scale(it.scaleX, it.scaleY);
-      ctx.globalAlpha = Math.max(0, Math.min(1, it.opacity));
-      ctx.drawImage(snap, -w / 2, -h / 2, w, h);
-      ctx.restore();
-    });
-    ctx.globalAlpha = 1;
-  }
+  // ---- 分层路径：按 DOM 顺序切段，普通段（foreignObject）+ 合成段（media/three）----
+  // media/three 元素回到其在文档中的层级，而非固定压在所有元素之上。
+  const cloned = units.map((u) => nodeAt(clone, nodePath(node, u.node)));
+  const segments = [];
+  let cur = [];
+  units.forEach((u, i) => {
+    if (u.kind === "item") {
+      if (cur.length) {
+        segments.push({ plain: cur });
+        cur = [];
+      }
+      segments.push({ item: u.item });
+    } else {
+      cur.push(cloned[i]);
+    }
+  });
+  if (cur.length) segments.push({ plain: cur });
+
+  const tmpl = document.createElement("div");
+  tmpl.className = "vd-frame";
+  tmpl.style.cssText = node.style.cssText;
+  tmpl.style.background = "transparent"; // 背景由含 .vd-bg 的段绘制，避免盖住过渡 crossfade
+
+  // 各段先序列化（同步），再并行 decode，最后按序绘制（段序即覆盖序）
+  const htmls = segments.map((seg) => {
+    if (seg.item) return null;
+    rebuildWrapped(tmpl, seg.plain, clone);
+    const html = frameHtml(tmpl, width, height, rootW, rootH, sx, sy);
+    tmpl.replaceChildren();
+    return html;
+  });
+  const imgs = await Promise.all(
+    htmls.map((h) => (h ? decodeFrame(h, width, height) : null)),
+  );
+  segments.forEach((seg, i) => {
+    if (seg.item) {
+      const ti = threeItems.indexOf(seg.item);
+      drawItemCompose(ctx, seg.item, sx, sy, ti >= 0 ? snaps[ti] : null);
+    } else {
+      ctx.drawImage(imgs[i], 0, 0, width, height);
+    }
+  });
 }
 
 /** Preload every asset URL (data:) into the browser image cache so frames

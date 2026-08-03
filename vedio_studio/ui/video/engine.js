@@ -1267,12 +1267,16 @@ export function renderElement(el, doc, ctx) {
         if (el.radius) node.style.borderRadius = el.radius + "px";
         // 导出合成项：<video> 序列化进 SVG foreignObject 不绘制（与 WebGL 同类限制），
         // render.js 按此几何信息把活 video 的当前帧 drawImage 到目标画布。
+        // anc = 过渡容器变换（transition 时 content 有 translate/scale/opacity，
+        // 合成发生在序列化之后不随 DOM 变换，必须显式叠加）；radius 供合成裁剪。
         if (ctx.mediaItems) {
           ctx.mediaItems.push({
             video: m, x: el.x, y: el.y, w: el.w, h: el.h,
             dx: st.dx, dy: st.dy, rotation: st.rotation,
             scaleX: st.scale, scaleY: sy, opacity: clamp(st.opacity, 0, 1),
             fit: el.fit || "contain",
+            radius: el.radius || 0,
+            anc: ctx.anc || null,
           });
         }
       } else {
@@ -1297,6 +1301,7 @@ export function renderElement(el, doc, ctx) {
             canvas: cv, x: el.x, y: el.y, w: el.w, h: el.h,
             dx: st.dx, dy: st.dy, rotation: st.rotation,
             scaleX: st.scale, scaleY: sy, opacity: clamp(st.opacity, 0, 1),
+            anc: ctx.anc || null,
           });
         }
       } catch (e) {
@@ -1379,7 +1384,8 @@ function buildOverlay(doc, gtime, ctx) {
     const state = elementState(el, dur, lt);
     if (state.opacity <= 0.003) return;
     wrap.appendChild(
-      renderElement(el, doc, Object.assign({}, ctx, { t: lt, state })),
+      // anc 清空：overlay 不在过渡容器内，合成项不得叠加 transition 变换
+      renderElement(el, doc, Object.assign({}, ctx, { t: lt, state, anc: null })),
     );
   });
   return wrap;
@@ -1432,6 +1438,15 @@ export function buildFrame(doc, frame, opts = {}) {
     root.appendChild(bgCur);
     // incoming content with enter transform
     const def = TRANSITION_ENTER[f.scene.transition] || TRANSITION_ENTER.fade;
+    // 记录过渡容器变换：media/three 合成项发生在序列化之后，不随 DOM 变换——
+    // render.js 按此叠加 translate/scale/opacity（transform-origin 中心）
+    ctx.anc = {
+      tx: def.dx ? def.dx[0] + (def.dx[1] - def.dx[0]) * e : 0,
+      ty: def.dy ? def.dy[0] + (def.dy[1] - def.dy[0]) * e : 0,
+      scale: def.scale ? def.scale[0] + (def.scale[1] - def.scale[0]) * e : 1,
+      opacity: def.opacity ? def.opacity[0] + (def.opacity[1] - def.opacity[0]) * e : 1,
+      W: doc.size.width, H: doc.size.height,
+    };
     const content = buildSceneContent(f.scene, doc, ctx);
     let tr = "";
     if (def.dx) tr += `translateX(${def.dx[0] + (def.dx[1] - def.dx[0]) * e}px) `;
@@ -1442,6 +1457,7 @@ export function buildFrame(doc, frame, opts = {}) {
     content.style.transformOrigin = "center";
     root.appendChild(content);
   } else {
+    ctx.anc = null; // 无过渡：合成项无需叠加容器变换
     root.appendChild(sceneBackgroundNode(f.scene, doc));
     root.appendChild(buildSceneContent(f.scene, doc, ctx));
   }
