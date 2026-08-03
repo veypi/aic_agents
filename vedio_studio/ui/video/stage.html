@@ -127,7 +127,8 @@
         </div>
         <div class="vd-box" v-show="doc" ref="box"
              :style="{ width: boxW + 'px', height: boxH + 'px' }"
-             @mousedown="onBoxMouseDown" @dblclick="onBoxDblClick" @contextmenu="onBoxContextMenu">
+             @mousedown="onBoxMouseDown" @dblclick="onBoxDblClick" @contextmenu="onBoxContextMenu"
+             @dragover="onDragOverAsset" @drop="onDropAsset">
           <div class="vd-clip" ref="clip" :style="clipStyle()"></div>
           <div class="vd-sel" v-if="selBox()" :style="selStyle()">
             <div class="nm">{{ selBox().id }}</div>
@@ -176,7 +177,7 @@
     </div>
   </body>
   <script setup>
-    import { Video, uid } from './engine.js'
+    import { Video, uid, mediaTimeAt, frameToScene } from './engine.js'
 
     doc = null          // video/1 文档对象（父页面传入，proxy 引用，可编辑）
     assets = {}         // assetMap（父页面传入）
@@ -226,6 +227,7 @@
       doc = d
       assets = assetMap || {}
       engine.assets = assets
+      removeMediaOverlay()
       const f = engine.frame || 0
       engine.load(doc)
       const st = engine.getState()
@@ -282,6 +284,25 @@
       clip.replaceChildren(node)
     }
 
+    /* ------------------------------------------------------ 素材拖拽插入 */
+    // 素材面板拖入：HTML5 DnD，dataTransfer 携带素材相对引用；落点换算为 doc 坐标（box rect ÷ scale）
+    onDragOverAsset = (e) => {
+      if (!editable) return
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    }
+    onDropAsset = (e) => {
+      if (!editable || !doc) return
+      e.preventDefault()
+      e.stopPropagation()
+      const ref = e.dataTransfer && e.dataTransfer.getData('application/x-vedio-asset')
+      if (!ref) return
+      const rect = $refs.box.getBoundingClientRect()
+      const x = Math.round((e.clientX - rect.left) / scale)
+      const y = Math.round((e.clientY - rect.top) / scale)
+      $emit('dropasset', {ref, x, y})
+    }
+
     /* ---------------------------------------------------------- 播放 */
     tick = (t) => {
       if (!playing) return
@@ -306,6 +327,11 @@
       try {
         renderFrame()
       } catch (e) { console.error('[vd tick] render', e) }
+      // media 元素真实播放（仅 1x 正放）：引擎帧渲染会重建 DOM 导致 video 永远播不起来
+      if (playRate === 1) {
+        syncMediaOverlay()
+        tickMediaOverlay()
+      } else removeMediaOverlay()
       rafId = requestAnimationFrame(tick)
     }
 
@@ -332,6 +358,7 @@
     setVolume = (v) => {
       volume = Math.max(0, Math.min(1, v))
       Object.values(audioEls).forEach((a) => { if (a) a.volume = (a._base != null ? a._base : 1) * volume })
+      mediaOv.forEach((o) => { o.node.volume = Math.max(0, Math.min(1, (o.el.volume != null ? +o.el.volume : 1) * volume)) })
     }
 
     togglePlay = () => {
@@ -347,11 +374,13 @@
       } else {
         cancelAnimationFrame(rafId)
         pauseAudio()
+        removeMediaOverlay()
       }
     }
 
     seekFrame = (f) => {
       if (!doc) return
+      removeMediaOverlay()
       engine.seek(f)
       playT = engine.frame / (engine.getState().fps || 30)
       frameVal = engine.frame
@@ -367,6 +396,82 @@
     toggleMute = () => {
       muted = !muted
       Object.values(audioEls).forEach((a) => { if (a) a.muted = muted })
+      mediaOv.forEach((o) => { o.node.muted = !!o.el.muted || muted })
+    }
+
+    /* -------------------------------------------------- media 播放 overlay */
+    // 引擎帧渲染每帧重建 DOM（video 元素刚加载就被替换），播放永远卡在第一帧——
+    // 播放时（1x 正放）为当前场景 media 元素挂真实 video/audio 节点跟随播放头，
+    // 暂停/seek/变速时移除回到确定性帧渲染。
+    // overlay 严格遵守裁剪窗口：start 前与 trimEnd 后不播（钉在边界帧与确定性渲染一致）；
+    // pointer-events:none 不拦截舞台编辑；声音遵循 el.muted/el.volume 与全局静音/音量。
+    mediaOv = []        // [{id, el, node}]
+    removeMediaOverlay = () => {
+      for (const o of mediaOv) {
+        try {o.node.pause()} catch (e) { }
+        o.node.remove()
+      }
+      mediaOv = []
+    }
+    mediaWin = (e) => {
+      const start = Math.max(0, +e.start || 0)
+      const ts = Math.max(0, +e.trimStart || 0)
+      const te = e.trimEnd >= 0 ? +e.trimEnd : Infinity
+      return {start, ts, te, dur: te === Infinity ? Infinity : Math.max(0, te - ts)}
+    }
+    // 窗口内外状态：窗外 pause + 钉边界帧；窗内按目标时间纠正漂移并保持播放
+    applyMediaWin = (o, t) => {
+      const w = mediaWin(o.el)
+      const lt = t - w.start
+      if (lt < -0.05 || (w.dur !== Infinity && lt > w.dur + 0.05)) {
+        if (!o.node.paused) o.node.pause()
+        const pin = mediaTimeAt(o.el, t)
+        if (o.node.readyState >= 1 && Math.abs((o.node.currentTime || 0) - pin) > 0.3) o.node.currentTime = pin
+        return
+      }
+      const target = mediaTimeAt(o.el, t)
+      // 跑偏 >0.35s 才纠正，避免频繁 seek 卡顿
+      if (o.node.readyState >= 1 && Math.abs((o.node.currentTime || 0) - target) > 0.35) o.node.currentTime = target
+      if (o.node.paused && !o.node.ended) {
+        const p = o.node.play()
+        if (p && p.catch) p.catch(() => {})
+      }
+    }
+    syncMediaOverlay = () => {
+      const sc = doc.scenes[curScene]
+      const want = ((sc && sc.elements) || []).filter((e) => e.type === 'media' && e.src)
+      const ids = want.map((e) => e.id)
+      for (const o of mediaOv) if (ids.indexOf(o.id) < 0) {
+        try {o.node.pause()} catch (e) { }
+        o.node.remove()
+      }
+      mediaOv = mediaOv.filter((o) => ids.indexOf(o.id) >= 0)
+      const f = frameToScene(engine.doc, engine.frame)
+      const t = f ? f.localT : 0
+      for (const e of want) {
+        let o = mediaOv.find((x) => x.id === e.id)
+        if (!o) {
+          const tag = e.kind === 'audio' ? 'audio' : 'video'
+          const node = document.createElement(tag)
+          node.src = engine.assets[e.src] || e.src
+          node.loop = false // 循环由窗口逻辑控制（loop 媒体重复入窗由 mediaTimeAt 保证帧正确即可）
+          node.preload = 'auto'
+          if (tag === 'video') node.playsInline = true
+          $refs.box.appendChild(node)
+          o = {id: e.id, el: e, node}
+          mediaOv.push(o)
+        }
+        o.node.muted = !!e.muted || muted
+        o.node.volume = Math.max(0, Math.min(1, (e.volume != null ? +e.volume : 1) * volume))
+        o.node.style.cssText = `position:absolute;left:${(e.x * scale)}px;top:${(e.y * scale)}px;` +
+          `width:${(e.w * scale)}px;height:${(e.h * scale)}px;object-fit:${e.fit || 'contain'};z-index:8;pointer-events:none;`
+        applyMediaWin(o, t)
+      }
+    }
+    tickMediaOverlay = () => {
+      const f = frameToScene(engine.doc, engine.frame)
+      const t = f ? f.localT : 0
+      for (const o of mediaOv) applyMediaWin(o, t)
     }
 
     /* ---------------------------------------------------------- 音频预览 */

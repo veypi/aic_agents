@@ -212,6 +212,12 @@
           <input class="in grow" type="text" :value="curEl().src" placeholder="assets/xxx.mp4" @change="onStr(curEl(), 'src', $event)" />
           <button class="mini" @click="upElSrc(curEl())">上传</button>
         </div>
+        <div class="fgrid">
+          <div class="cell"><label>开始 s</label><input class="in" type="number" step="0.1" min="0" :value="+curEl().start || 0" @change="onNum(curEl(), 'start', $event)" /></div>
+          <div class="cell"><label>入点 s</label><input class="in" type="number" step="0.1" min="0" :value="+curEl().trimStart || 0" @change="onNum(curEl(), 'trimStart', $event)" /></div>
+          <div class="cell"><label>出点 s</label><input class="in" type="number" step="0.1" min="-1" :value="curEl().trimEnd >= 0 ? curEl().trimEnd : -1" @change="onNum(curEl(), 'trimEnd', $event)" /></div>
+          <div class="cell" style="grid-column: span 2"><span class="hint">开始=场景内开始秒；入点/出点=源裁剪（-1 为源全长）。也可在时间轴直接拖绿色块边缘</span></div>
+        </div>
         <div class="frow">
           <label class="chk"><input type="checkbox" :checked="!!curEl().loop" @change="onBool(curEl(), 'loop', $event)" /> 循环</label>
           <label class="chk"><input type="checkbox" :checked="!!curEl().muted" @change="onBool(curEl(), 'muted', $event)" /> 静音</label>

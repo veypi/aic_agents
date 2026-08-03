@@ -6,8 +6,8 @@
 
 项目文件存储在**浏览器本地 IndexedDB**（`$page_fs`，本地根 `/vedio/{项目名}/`）——不进云端、不依赖 session_id、换机器/换浏览器不跟随。页面右侧 AI 助手（ai-box）与 page_exec 指令通道需要会话（URL `?session_id=` 或自动创建隐藏会话），但**项目文件读写不依赖它**。
 
-- 每个项目一个目录：`index.json`（video/1 文档，含全部场景，单一文件）
-- 素材（图片/音频）放 `assets/` 子目录，文档中 `src` 写**相对路径**（如 `assets/bg.mp3`、`assets/logo.png`）
+- 每个项目一个目录：`index.json`（video/1 文档，含全部场景，默认单一文件；场景多时可拆分，见下文「场景子 json」）
+- 素材（图片/音频）放 `assets/` 子目录，文档中 `src` 写**相对路径**（如 `assets/bg.mp3`、`assets/logo.png`）；左侧「素材」tab 可查看/上传/删除素材——**拖拽素材到中间舞台（落点插入）或底部时间轴（插入当前场景中心），或双击素材**即可直接生成元素（图片→image、视频→media video、音频→media audio）；单击素材项复制相对引用路径
 - 导出产物自动存 `/vedio/exports/{标题}.mp4` 并触发浏览器下载
 - 注意：项目在浏览器本地，AI 用 fs 工具（1host=page）以 `$SESSION/vedio/...` 路径读写（自动映射到本地 `/vedio/...`）；外部素材用 `exec curl -o $SESSION/vedio/{项目}/assets/...` 下载
 
@@ -105,6 +105,18 @@
 }
 ```
 
+**场景子 json（拆分存档，2026-08-03 新增）**：`scenes` 数组元素可以是**字符串**（相对 index.json 的场景文件路径，如 `scenes/scene_1.json`），也可以是场景对象，两者可混用。页面加载时按引用逐个拉取组装为内存对象；保存时**拆分结构自动保留**（编辑器新增/复制场景自动分配 `scenes/scene_N.json`，删场景后失效文件自动清理）。
+
+```jsonc
+// index.json —— 只留元信息 + 引用数组，体积极小
+{ "format": "video/1", "title": "…", "size": …, "fps": 30, "theme": …, "music": …,
+  "scenes": ["scenes/scene_1.json", "scenes/scene_2.json", "scenes/scene_3.json"] }
+// scenes/scene_1.json —— 单个场景完整定义（id/duration/transition/elements 等）
+{ "id": "s1", "duration": 4, "transition": "fade", "elements": [ … ] }
+```
+
+使用建议：场景少（≤5）或元素轻量时用内联对象单文件；场景多、单场景元素重（如 showreel 样例 518+ 元素）时拆分，**改某一场景只需读写对应的 `scenes/scene_N.json`，不必动 index.json**。素材仍放 `assets/`（相对 index.json 引用，不是相对场景子文件）。
+
 元素公共字段：`id`（场景内唯一）、`x/y/w/h`（文档坐标系）、`rotation`、`opacity`、`z`（层叠，缺省按数组顺序）、`origin`（transform-origin，如 `"bottom"` 柱图从底生长）、`blur`（CSS 模糊 px，柔光/光斑）。
 
 | type | 关键字段 |
@@ -115,7 +127,7 @@
 | `svg` | `markup` 或 `asset` |
 | `table` | `columns`、`rows`、`header`、`style` |
 | `chart` | `option`：`{xAxis:{data}, series:[{type:bar/line/scatter/pie, data}], color}` |
-| `media` | `kind`: video/audio、`src`、`poster`、`loop`、`muted`（预览播放；导出取视频当前帧） |
+| `media` | `kind`: video/audio、`src`、`loop`、`muted`。**基本剪辑（2026-08-03）**：`start`（场景内开始秒）、`trimStart`/`trimEnd`（源裁剪入/出点，`trimEnd:-1`=源全长）——预览播放时真实播放（stage overlay，遵守裁剪窗口），拖动/导出按裁剪帧定位；导出把 video 当前帧合成进画面（不是黑框），未静音媒体（含视频原声）按裁剪窗口混入音轨；audio 元素预览显示为绿色音频 chip（导出无视觉）。不要写 `controls/autoplay`（确定性帧渲染忽略） |
 | `three` | `scene`：声明式 3D 场景（vendored three.js r170，WebGL 逐帧确定性渲染） |
 
 `three` 元素 scene 描述（速度单位 rad/s，Remotion 的 rad/frame × 30）：
@@ -179,7 +191,7 @@ material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/op
 3. **坐标合理**：基于 `size` 布局，避免元素越界；文字框给足高度（fontSize 64 标题至少 h=100）；`align/valign` 配合居中
 4. **动画克制的**：同屏 2~4 个入场动画即可，`delay` 错峰（0.3~0.5s 间隔）；关键帧运动轨迹明确、有终点
 5. **字幕**：口语化短句，与画面内容对应；不要整屏字幕
-6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材用 `exec curl -o $SESSION/vedio/{项目名}/assets/xxx.png <url>` 下载（不要引用外链 URL，离线失效）
+6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材用 `exec curl -o $SESSION/vedio/{项目名}/assets/xxx.png <url>` 下载（不要引用外链 URL，离线失效）；页面左侧「素材」tab 上传的素材保留原始文件名（重名自动加 -1/-2），AI 写引用时用真实文件名
 7. **写完即所见**：`fs.write` 写 index.json 后调 `reload_video` 刷新画面（保持当前帧）；用 `run_video` 播放确认效果，播放后提醒用户可再次点击播放/暂停
 8. **结果反馈**：操作完成后一两句话向用户总结（时长、场景数、效果亮点）；导出后告知文件已下载
 
@@ -188,3 +200,4 @@ material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/op
 - 用户没打开页面时指令会超时/无响应：先发 [Vedio Studio 页面](url:$AGENT/i) 链接，再重试
 - 导出需要最新版 Chrome/Edge（WebCodecs）：不支持时向用户说明
 - 导出分辨率建议 ≤1280×720（更高会明显变慢）；单视频建议 ≤60 秒
+- 视频剪辑：拖入视频素材后，时间轴上出现绿色剪辑块——**左缘拖拽改开始时间（场景内），右缘拖拽裁剪出点**；属性面板也有开始/入点/出点数字输入。预览播放时视频真实播放（变速/倒放时按帧定位显示）

@@ -744,11 +744,18 @@ doc = {
 
 out_dir = os.path.expanduser("~/.cache/aic/agents/vedio_studio/ui/cases/showreel")
 os.makedirs(os.path.join(out_dir, "assets"), exist_ok=True)
+nels = sum(len(s["elements"]) for s in doc["scenes"])
+# 拆分存档：每个场景一个 scenes/scene_N.json，index.json 只留元信息 + 引用数组
+# （对齐 ppt_studio 分页拆分；页面加载/保存自动按引用组装/写回）
+scenes_dir = os.path.join(out_dir, "scenes")
+os.makedirs(scenes_dir, exist_ok=True)
+for i, s in enumerate(doc["scenes"], 1):
+    with open(os.path.join(scenes_dir, f"scene_{i}.json"), "w") as f:
+        json.dump(s, f, ensure_ascii=False, indent=2)
+doc["scenes"] = [f"scenes/scene_{i}.json" for i in range(1, len(doc["scenes"]) + 1)]
 with open(os.path.join(out_dir, "index.json"), "w") as f:
     json.dump(doc, f, ensure_ascii=False, indent=2)
 gen_music(os.path.join(out_dir, "assets", "music.wav"))
-
-nels = sum(len(s["elements"]) for s in doc["scenes"])
 print(f"scenes={len(doc['scenes'])} duration={TOTAL}s "
       f"elements={nels}(+{len(doc['overlay'])} hud) "
       f"json={os.path.getsize(os.path.join(out_dir, 'index.json'))}B "

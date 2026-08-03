@@ -183,13 +183,14 @@ assets    // 素材 ref → dataURL 映射
 | svg | markup（textarea） |
 | table | columns/rows/header（JSON textarea + 应用按钮） |
 | chart | option（JSON textarea + 应用按钮） |
-| media | kind、src+上传、fit、loop、muted |
+| media | kind、src+上传、fit、start/trimStart/trimEnd（剪辑）、loop、muted |
 
 颜色控件统一为「色板 + 文本」双输入（色板覆盖为纯色；文本可填渐变/rgba）。
 
 ### 2.7 保存模型
 
-- 编辑即改内存 doc，600ms 防抖写 `index.json`（整文档写，KB 级，成本可忽略）。
+- 编辑即改内存 doc，600ms 防抖写盘（KB 级，成本可忽略）。
+- **拆分存档（2026-08-03）**：`scenes` 元素可为字符串引用（如 `scenes/scene_1.json`）或内联对象，两者可混用；加载时 `resolveSceneRefs` 按引用逐个拉取组装为内存对象，保存时 `writeProject` 按拆分写回（新增/复制场景自动分配 `scenes/scene_N.json`，失效子文件自动清理，内容未变的子文件增量跳过；同 id 复制多份时内联防覆盖）。样例 showreel 即拆分结构。
 - 存储后端：`$mod.$page_fs` → 浏览器本地 IndexedDB `/vedio/`（本地单根，不依赖会话）；
   会话自举（ensureSession）：URL 带 sid 直接用 → localStorage 复用 → 新建隐藏工作台会话。
 - 顶栏显示保存状态：已保存 / 未保存 / 保存中… / 保存失败。

@@ -59,6 +59,18 @@
       color: #94a3b8; white-space: nowrap; pointer-events: none;
     }
     .tl-elrow.active .tl-elname { color: #bbf7d0; }
+    /* media 剪辑块：绿色块表示 [start, start+dur] 窗口，左右边缘拖拽改开始/出点 */
+    .tl-mblock {
+      position: absolute; top: 2px; height: 18px; border-radius: 4px; box-sizing: border-box;
+      background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.55);
+      overflow: hidden;
+    }
+    .tl-elrow:hover .tl-mblock { background: rgba(34, 197, 94, 0.3); }
+    .tl-elrow.active .tl-mblock { background: rgba(34, 197, 94, 0.38); border-color: rgba(34, 197, 94, 0.8); }
+    .tl-medge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
+    .tl-medge.l { left: 0; }
+    .tl-medge.r { right: 0; }
+    .tl-medge:hover { background: rgba(134, 239, 172, 0.55); }
     .tl-kf {
       position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
       background: #fbbf24; transform: rotate(45deg); border-radius: 1px;
@@ -96,7 +108,7 @@
         <option value="100" :selected="pps === 100">缩放 100px/s</option>
       </select>
     </div>
-    <div class="tl-scroll" ref="scroll">
+    <div class="tl-scroll" ref="scroll" @dragover="onDragOverAsset" @drop="onDropAsset">
       <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }" v-if="doc">
         <div class="tl-ruler" @mousedown="onRulerDown">
           <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
@@ -112,10 +124,18 @@
           <div class="tl-drop" v-if="dropX >= 0" :style="{ left: dropX + 'px' }"></div>
         </div>
         <div class="tl-elrow" v-for="el in curEls()" :key="kver + ':' + el.id" :class="{ active: sel && sel.kind === 'element' && sel.elIds && sel.elIds.indexOf(el.id) >= 0 }" @click="pickEl(el.id)">
-          <div class="tl-elbar" :style="elBarStyle()">
-            <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"
-                 :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(el, k, ki, $event)"></div>
-          </div>
+          <template v-if="el.type === 'media'">
+            <div class="tl-mblock" :style="mediaBlockStyle(el)" :title="'左缘拖拽改开始时间，右缘拖拽裁剪出点（当前 ' + (mediaDur(el)).toFixed(1) + 's）'">
+              <div class="tl-medge l" @mousedown.stop="onMediaEdgeDown(el, 'l', $event)"></div>
+              <div class="tl-medge r" @mousedown.stop="onMediaEdgeDown(el, 'r', $event)"></div>
+            </div>
+          </template>
+          <template v-else>
+            <div class="tl-elbar" :style="elBarStyle()">
+              <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"
+                   :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(el, k, ki, $event)"></div>
+            </div>
+          </template>
           <span class="tl-elname" :style="{ left: (elNameX() + 10) + 'px' }">{{ el.id }} · {{ el.type }}</span>
         </div>
         <div class="tl-playhead" :style="{ left: playX() + 'px' }"></div>
@@ -138,6 +158,20 @@
     fpsOf = () => (doc && doc.fps) || 30
     let rafP = false
     sceneFrames = (s) => Math.max(1, Math.round((+s.duration || 1) * fpsOf()))
+
+    // 素材拖到时间轴：插入当前场景（默认位置，父级处理）；readonly 时不响应
+    onDragOverAsset = (e) => {
+      if (readonly) return
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    }
+    onDropAsset = (e) => {
+      if (readonly) return
+      e.preventDefault()
+      const ref = e.dataTransfer && e.dataTransfer.getData('application/x-vedio-asset')
+      if (!ref) return
+      $emit('dropasset', {ref})
+    }
 
     blocks = () => {
       if (!doc) return []
@@ -203,6 +237,51 @@
       return b ? b.x : 0
     }
     kfX = (k) => ((+k.t || 0) * pps) + 'px'
+
+    // ---- media 剪辑块：场景内 [start, start+dur]，dur 受场景剩余与 trim 窗口约束 ----
+    mediaDur = (el) => {
+      const sc = doc.scenes[curSceneIdx()]
+      const sceneDur = sc ? (+sc.duration || 1) : 1
+      const start = +el.start || 0
+      const ts = +el.trimStart || 0
+      const te = el.trimEnd >= 0 ? +el.trimEnd : 1e9
+      return Math.max(0.1, Math.min(sceneDur - start, te - ts))
+    }
+    mediaBlockStyle = (el) => {
+      // 与其它行一致钉在当前场景块上：场景 x 偏移 + 场景内 start
+      const b = blocks()[curSceneIdx()]
+      const start = +el.start || 0
+      return {left: ((b ? b.x : 0) + start * pps) + 'px', width: (mediaDur(el) * pps) + 'px'}
+    }
+    // 左缘拖 = 改开始时间（场景内）；右缘拖 = 裁剪出点（显示时长）；松手上报 docchange 保存
+    onMediaEdgeDown = (el, which, e) => {
+      if (readonly) return
+      e.preventDefault()
+      e.stopPropagation()
+      const sc = doc.scenes[curSceneIdx()]
+      const sceneDur = sc ? (+sc.duration || 1) : 1
+      const ts = +el.trimStart || 0
+      const x0 = e.clientX
+      const t0 = which === 'l' ? (+el.start || 0) : mediaDur(el)
+      const onMove = (ev) => {
+        const dt = (ev.clientX - x0) / pps
+        if (which === 'l') {
+          const maxS = Math.max(0, sceneDur - mediaDur(el))
+          el.start = Math.round(Math.min(maxS, Math.max(0, t0 + dt)) * 100) / 100
+        } else {
+          const maxD = Math.max(0.1, sceneDur - (+el.start || 0))
+          el.trimEnd = Math.round((ts + Math.min(maxD, Math.max(0.1, t0 + dt))) * 100) / 100
+        }
+        kver++
+      }
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        $emit('docchange')
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
 
     /* ---------------- 事件 ---------------- */
     add = (type, sub) => { if (!readonly) $emit('addel', { type, sub }) }

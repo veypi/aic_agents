@@ -137,10 +137,31 @@
     width: 196px;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
+    flex-direction: column;
     min-height: 0;
   }
 
-  .left video-scenes {
+  .left .ltabs {
+    flex: none;
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .left .ltabs button {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 13px;
+    color: #94a3b8;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .left .ltabs button:hover { color: #e2e8f0; }
+  .left .ltabs button.on { color: #e2e8f0; border-bottom-color: #4361ee; }
+
+  .left video-scenes,
+  .left video-assets {
     flex: 1;
     min-height: 0;
     display: flex;
@@ -340,12 +361,18 @@
 
   <div class="ws">
     <div class="left">
-      <video-scenes :scenes="doc ? doc.scenes : []" :cur="activeSceneIdx()" :readonly="!curName" :ver="sceneVer"
+      <div class="ltabs">
+        <button :class="{ on: ltab === 'scenes' }" @click="ltab = 'scenes'">场景</button>
+        <button :class="{ on: ltab === 'assets' }" @click="ltab = 'assets'">素材</button>
+      </div>
+      <video-scenes v-show="ltab === 'scenes'" :scenes="doc ? doc.scenes : []" :cur="activeSceneIdx()" :readonly="!curName" :ver="sceneVer"
         @pick="onPickScene" @add="addScene" @dup="dupScene" @del="delScene" @move="moveScene"></video-scenes>
+      <video-assets v-show="ltab === 'assets'" :files="assetFiles" :readonly="!curName"
+        @upload="onUploadAssets" @del="onDelAsset" @pick="onPickAsset" @insert="onInsertAsset"></video-assets>
     </div>
     <div class="center">
       <video-stage ref="stage" :editable="!!curName && !exporting" :selid="sel.kind === 'element' ? sel.elId : ''"
-        @select="onStageSelect" @mutate="onStageChange" @ctxdel="delElements"></video-stage>
+        @select="onStageSelect" @mutate="onStageChange" @ctxdel="delElements" @dropasset="onDropAsset"></video-stage>
     </div>
     <div class="right">
       <div class="rtabs">
@@ -364,7 +391,7 @@
   <div class="bottom">
     <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer" @seek="onSeek"
       @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl" @docchange="onDocChange"
-      @movescene="moveSceneTo"></video-timeline>
+      @movescene="moveSceneTo" @dropasset="onDropAsset"></video-timeline>
   </div>
 
   <div class="toast" v-if="toast">{{ toast }}</div>
@@ -391,6 +418,12 @@
   toast = ''
   saveState = ''
   sceneVer = 0        // 场景结构版本号（增删/移动后递增，强制子组件重建列表）
+  ltab = 'scenes'     // 左侧 tab：scenes | assets
+  assetFiles = []     // 素材列表 [{name, ref, size, mtime, kind}]（assets/ 目录）
+  cur_refs = {}       // 拆分文档：sceneId → 相对引用（如 scenes/scene_1.json）
+  cur_split = false   // 当前文档 scenes 是否含字符串引用（决定保存按拆分写回还是整体单写）
+  saved_scene_snap = {}   // 拆分保存快照：引用 → 已落盘场景序列化（增量跳过未变化文件）
+  saved_index_snap = ''   // index.json 已落盘内容（引用数组版）
 
   // ---- page_exec（AI 指令通道；存储走 $page_fs 本地单根，不依赖它）----
   pe = null
@@ -411,6 +444,44 @@
     d.theme = Object.assign(defaultTheme(), d.theme || {})
     d.theme.captionStyle = Object.assign(defaultTheme().captionStyle, d.theme.captionStyle || {})
     return d
+  }
+
+  // ---- 场景拆分加载：scenes 元素为字符串时，按相对 index.json 的路径逐个拉取场景 json；对象则原样使用 ----
+  // 返回 { refs, split }：refs 为 sceneId → 引用路径；split 表示文档是否含引用场景。doc.scenes 原地解析为对象数组
+  const resolveSceneRefs = async (doc, loadText) => {
+    const refs = {}
+    let split = false
+    if (doc && Array.isArray(doc.scenes)) {
+      doc.scenes = await Promise.all(doc.scenes.map(async (s, i) => {
+        if (typeof s !== 'string') return s
+        split = true
+        try {
+          const sc = JSON.parse(await loadText(s))
+          if (!sc || !Array.isArray(sc.elements)) throw new Error('场景缺少 elements 数组: ' + s)
+          if (sc.id) refs[sc.id] = s
+          return sc
+        } catch (e) {
+          // 单场景失败不拖垮整片：占位错误场景（可删除），引用保留供保存回写
+          return {id: 'broken-' + i, broken: true, brokenRef: s, brokenError: String((e && e.message) || e), elements: [], duration: 3, transition: 'fade', transitionIn: 0.6}
+        }
+      }))
+    }
+    return {refs, split}
+  }
+
+  // 打开/重载文档后初始化保存快照：拆分结构记录已落盘场景内容与引用版 index，之后自动保存只写真正变化的文件
+  const snapProjectOpen = (name) => {
+    saved_scene_snap = {}
+    saved_index_snap = ''
+    if (!cur_split) return
+    const dir = projDir(name) + '/'
+    doc.scenes.forEach((s) => {
+      const ref = s && s.id ? cur_refs[s.id] : null
+      if (ref) saved_scene_snap[ref] = JSON.stringify(s, null, 2)
+    })
+    const idx = JSON.parse(JSON.stringify(doc))
+    idx.scenes = doc.scenes.map((s) => (s && s.broken && s.brokenRef) ? s.brokenRef : (s && s.id ? cur_refs[s.id] : null)).filter(Boolean)
+    saved_index_snap = JSON.stringify(idx, null, 2)
   }
 
   // ---- 本地存储（$mod.$page_fs → 浏览器 IndexedDB 单根 /vedio/，纯本地）----
@@ -591,7 +662,15 @@
       if (!it.dir) continue
       try {
         const d = JSON.parse(await fsText(projDir(it.name) + '/index.json'))
-        out.push({name: it.name, title: d.title || it.name, duration: Math.round(((d.scenes || []).reduce((a, s) => a + (s.duration || 0), 0)) * 10) / 10, scenes: (d.scenes || []).length})
+        const scs = d.scenes || []
+        // 拆分项目：scenes 为引用数组，逐个子 json 读 duration 求和
+        let dur = 0
+        for (const s of scs) {
+          if (typeof s === 'string') {
+            try {dur += (+JSON.parse(await fsText(projDir(it.name) + '/' + s)).duration || 0)} catch (e) { }
+          } else dur += (+s.duration || 0)
+        }
+        out.push({name: it.name, title: d.title || it.name, duration: Math.round(dur * 10) / 10, scenes: scs.length})
       } catch (e) {out.push({name: it.name, title: it.name, duration: 0, scenes: 0})}
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
@@ -622,10 +701,15 @@
 
   openProject = async (name) => {
     name = normName(name)
-    const d = ensureTheme(JSON.parse(await fsText(projIndex(name))))
+    // 先解析场景引用（scenes 字符串 → 对象），再设 doc：拆分结构由此还原为内存对象数组
+    const raw = JSON.parse(await fsText(projIndex(name)))
+    const sr = await resolveSceneRefs(raw, (s) => fsText(projDir(name) + '/' + s))
+    const d = ensureTheme(raw)
     curName = name
     curTitle = d.title || name
     doc = d
+    cur_split = sr.split
+    cur_refs = sr.refs
     sel = {kind: 'none', sceneIndex: 0, elId: ''}
     saveState = '已保存'
     try {localStorage.setItem('vedio_studio_last', name)} catch (e) { }
@@ -636,17 +720,23 @@
     $refs.stage.$data.setDoc(doc, {})
     await loadAssets(d)
     if (Object.keys(assets).length) $refs.stage.$data.setDoc(doc, assets)
+    snapProjectOpen(name)
     setBaseline()
     undoStack = []
     redoStack = []
+    await refreshAssets()
     showToast('已打开：' + curTitle)
     return d
   }
 
   reloadProject = async () => {
     if (!curName) return
-    const d = ensureTheme(JSON.parse(await fsText(projIndex(curName))))
+    const raw = JSON.parse(await fsText(projIndex(curName)))
+    const sr = await resolveSceneRefs(raw, (s) => fsText(projDir(curName) + '/' + s))
+    const d = ensureTheme(raw)
     doc = d
+    cur_split = sr.split
+    cur_refs = sr.refs
     curTitle = d.title || curName
     // 选中态校验：元素/场景可能已被外部（AI）删除
     if (sel.kind === 'element') {
@@ -659,7 +749,9 @@
     $refs.stage.$data.setDoc(doc, {})
     await loadAssets(d)
     if (Object.keys(assets).length) $refs.stage.$data.setDoc(doc, assets)
+    snapProjectOpen(curName)
     setBaseline()
+    await refreshAssets()
   }
 
   newProject = async () => {
@@ -676,13 +768,25 @@
     try {
       const r = await fetch('cases/' + id + '/index.json')
       if (!r.ok) throw new Error('样例不存在: ' + id)
-      const d = ensureTheme(await r.json())
+      const raw = await r.json()
+      // 样例可能为拆分结构（index.json + scenes/scene_N.json）：按引用逐个拉取
+      const sr = await resolveSceneRefs(raw, async (s) => {
+        const ar = await fetch('cases/' + id + '/' + s)
+        if (!ar.ok) throw new Error('HTTP ' + ar.status)
+        return await ar.text()
+      })
+      const d = ensureTheme(raw)
       curName = ''
       curTitle = d.title || id
       doc = d
+      cur_split = sr.split
+      cur_refs = sr.refs
+      saved_scene_snap = {}
+      saved_index_snap = ''
       sel = {kind: 'none', sceneIndex: 0, elId: ''}
       saveState = ''
       assets = {}
+      assetFiles = []
       // 先装载以收集相对素材引用，再从样例目录预载为 dataURL（预览/导出共用）
       $refs.stage.$data.setDoc(doc, assets)
       const refs = $refs.stage.$data.engine ? $refs.stage.$data.engine.assetRefs() : []
@@ -711,7 +815,10 @@
     if (!doc || curName) return
     if (!storageReady()) {showToast('本地存储不可用，无法保存'); return }
     const name = 'video-' + Date.now().toString(36)
-    await fsPut(projIndex(name), JSON.stringify(doc, null, 2))
+    // 样例若为拆分结构（scenes 含引用）则保留拆分写盘，否则内联单文件；新项目快照置空全量写
+    saved_scene_snap = {}
+    saved_index_snap = ''
+    await writeProject(name, doc)
     await openProject(name)
     showToast('已另存为项目：' + name + '，现在可以编辑了')
   }
@@ -879,11 +986,76 @@
     clearTimeout(saveTimer)
     saveTimer = setTimeout(doSave, 600)
   }
+  // 写盘（对齐 ppt_studio 分页拆分）：拆分结构（cur_split）按引用逐场景写回，
+  // index.json 保持引用数组；编辑器新增/复制的场景自动分配 scenes/scene_N.json；
+  // 不再被引用的旧分场景文件同步清理。非拆分结构整体单写。doc 先深拷贝再处理，不污染 vhtml 代理。
+  writeProject = async (name, doc) => {
+    const out = JSON.parse(JSON.stringify(doc))
+    if (!cur_split) {
+      const text = JSON.stringify(out, null, 2)
+      if (text !== saved_index_snap) {
+        await fsPut(projIndex(name), text)
+        saved_index_snap = text
+      }
+      return
+    }
+    const dir = projDir(name) + '/'
+    const idCount = {}
+    out.scenes.forEach((s) => {if (s && s.id) idCount[s.id] = (idCount[s.id] || 0) + 1})
+    const used = new Set()
+    const nextRefs = {}
+    const refs = []
+    for (let i = 0; i < out.scenes.length; i++) {
+      const s = out.scenes[i]
+      // 加载失败的占位场景：不写文件，原引用字符串回写（补写文件后重新打开即可恢复）
+      if (s && s.broken && s.brokenRef) {
+        used.add(s.brokenRef)
+        refs.push(s.brokenRef)
+        continue
+      }
+      // 同 id 被复制出多份时不写引用（避免互相覆盖），该场景内联
+      let ref = s && s.id && idCount[s.id] === 1 ? cur_refs[s.id] : null
+      if (ref && used.has(ref)) ref = null
+      if (!ref) ref = 'scenes/scene_' + (i + 1) + '.json'
+      if (used.has(ref)) {refs.push(s); continue}
+      used.add(ref)
+      // 增量保存：序列化内容没变的场景跳过写文件
+      const text = JSON.stringify(s, null, 2)
+      if (saved_scene_snap[ref] !== text) {
+        await fsPut(dir + ref, text)
+        saved_scene_snap[ref] = text
+      }
+      if (s && s.id) nextRefs[s.id] = ref
+      refs.push(ref)
+    }
+    out.scenes = refs
+    cur_refs = nextRefs
+    const indexText = JSON.stringify(out, null, 2)
+    const indexChanged = indexText !== saved_index_snap
+    if (indexChanged) {
+      await fsPut(projIndex(name), indexText)
+      saved_index_snap = indexText
+    }
+    // 结构有变化才清理：删除不再被引用的旧分场景文件 + 过期快照
+    if (indexChanged) {
+      Object.keys(saved_scene_snap).forEach((k) => {if (!used.has(k)) delete saved_scene_snap[k]})
+      try {
+        const node = await fsLs(dir + 'scenes/')
+        if (node && node.ok && Array.isArray(node.items)) {
+          for (const it of node.items) {
+            if (!it.dir && /\.json$/i.test(it.name) && !used.has('scenes/' + it.name)) {
+              try {await fsRm(dir + 'scenes/' + it.name)} catch (e) { }
+            }
+          }
+        }
+      } catch (e) { }
+    }
+  }
   doSave = async () => {
     if (!curName || !storageReady()) return
     saveState = '保存中…'
     try {
-      await fsPut(projIndex(curName), JSON.stringify(doc, null, 2))
+      await writeProject(curName, doc)
       saveState = '已保存'
     } catch (e) {
       console.error('save failed', e)
@@ -1115,14 +1287,147 @@
   }
 
   // ---- 素材上传 ----
-  uploadAsset = async (file) => {
+  // 批量上传到 assets/：保留原始文件名（清洗非法字符），重名自动加 -1/-2 后缀；
+  // 写入后预热 dataURL（预览/导出共用）。返回相对引用数组。
+  uploadAssets = async (files) => {
     if (!curName || !storageReady()) throw new Error('请先新建或另存为项目')
-    const ext = (String((file.name || '').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin')
-    const ref = 'assets/' + Date.now().toString(36) + '.' + ext
-    await fsPut(projDir(curName) + '/' + ref, file)
-    const dataUrl = await blobToDataURL(file)
-    assets[ref] = dataUrl
-    return ref
+    const list = Array.from(files || [])
+    if (!list.length) return []
+    // 一次列目录建名字集合，去重分配
+    const l = await fsLs(projDir(curName) + '/assets/')
+    const names = new Set((l.items || []).map((i) => i.name))
+    const refs = []
+    for (const file of list) {
+      const raw = String(file.name || '').replace(/[\\/:*?"<>|#%\s]+/g, '-').replace(/^-+|-+$/g, '')
+      const dot = raw.lastIndexOf('.')
+      let base = dot > 0 ? raw.slice(0, dot) : raw
+      let ext = dot > 0 ? raw.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '') : ''
+      if (!ext) {
+        const m = /[a-z0-9.+-]+\/([a-z0-9.+-]+)/i.exec(file.type || '')
+        if (m) ext = m[1].toLowerCase().replace('jpeg', 'jpg')
+      }
+      base = base || 'asset'
+      ext = ext || 'bin'
+      let name = base + '.' + ext
+      let n = 1
+      while (names.has(name)) name = base + '-' + (n++) + '.' + ext
+      names.add(name)
+      const ref = 'assets/' + name
+      await fsPut(projDir(curName) + '/' + ref, file)
+      const dataUrl = await blobToDataURL(file)
+      assets[ref] = dataUrl
+      refs.push(ref)
+    }
+    // 上传后同步舞台素材映射（stage/engine 持有的 assets 引用可能还是旧空对象）
+    const st = $refs.stage && $refs.stage.$data
+    if (st) {
+      if (st.engine) st.engine.assets = assets
+      if (st.refreshFrame) st.refreshFrame()
+    }
+    return refs
+  }
+  uploadAsset = async (file) => {
+    const refs = await uploadAssets([file])
+    refreshAssets()
+    return refs[0]
+  }
+
+  // ---- 素材管理（左侧素材 tab）----
+  const assetKind = (name) => {
+    const ext = String(name.split('.').pop() || '').toLowerCase()
+    if (/^(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/.test(ext)) return 'image'
+    if (/^(mp3|wav|ogg|m4a|flac|aac)$/.test(ext)) return 'audio'
+    if (/^(mp4|webm|mov|m4v|avi)$/.test(ext)) return 'video'
+    if (/^(ttf|otf|woff2?)$/.test(ext)) return 'font'
+    return 'other'
+  }
+  refreshAssets = async () => {
+    if (!curName) {assetFiles = []; return }
+    const l = await fsLs(projDir(curName) + '/assets/')
+    assetFiles = (l.items || []).filter((i) => !i.dir).map((i) => ({
+      name: i.name, ref: 'assets/' + i.name, size: i.size || 0, mtime: i.mtime || 0, kind: assetKind(i.name),
+    }))
+  }
+  onUploadAssets = async (files) => {
+    try {
+      const refs = await uploadAssets(files)
+      await refreshAssets()
+      showToast('已上传 ' + refs.length + ' 个素材')
+    } catch (e) {showToast('上传失败：' + ((e && e.message) || e))}
+  }
+  onDelAsset = async (ref) => {
+    try {
+      await fsRm(projDir(curName) + '/' + ref)
+      delete assets[ref]
+      await refreshAssets()
+      showToast('已删除：' + ref)
+    } catch (e) {showToast('删除失败：' + ((e && e.message) || e))}
+  }
+  onPickAsset = (ref) => {
+    copyText(ref)
+    showToast('已复制引用：' + ref)
+  }
+
+  // ---- 素材插入（拖到舞台/时间轴 或 双击素材）----
+  // 确保素材 dataURL 在 assets map（上传已预热；AI 下载/外部引用的补加载），返回是否可用
+  ensureAssetLoaded = async (ref) => {
+    if (assets[ref]) return true
+    try {
+      const r = await fsGet(projDir(curName) + '/' + ref)
+      if (r.content instanceof Blob) assets[ref] = await blobToDataURL(r.content)
+      else assets[ref] = r.content
+    } catch (e) {return false}
+    const st = $refs.stage && $refs.stage.$data
+    if (st) {if (st.engine) st.engine.assets = assets}
+    return true
+  }
+  // 按素材类型创建元素：image → image；video → media video；audio → media audio。
+  // 不带原生 controls（确定性帧渲染 + overlay 接管播放）；默认不静音（导出混音带原声）
+  assetToElement = (ref, kind) => {
+    if (kind !== 'video' && kind !== 'audio') kind = 'image'
+    const el = makeElement('image')
+    el.id = kind + '-' + uid()
+    el.src = ref
+    if (kind === 'video') Object.assign(el, {type: 'media', kind: 'video', w: 480, h: 270, muted: false, fit: 'contain', start: 0, trimStart: 0, trimEnd: -1})
+    else if (kind === 'audio') Object.assign(el, {type: 'media', kind: 'audio', w: 320, h: 56, muted: false, start: 0, trimStart: 0, trimEnd: -1})
+    return el
+  }
+  onDropAsset = async ({ref, x, y}) => {
+    if (!canEdit() || !doc || !ref) return
+    const i = activeSceneIdx()
+    const sc = doc.scenes[i]
+    if (!sc) return
+    const meta = assetFiles.find((f) => f.ref === ref)
+    const kind = meta ? meta.kind : assetKind(ref)
+    if (kind !== 'image' && kind !== 'video' && kind !== 'audio') {showToast('暂不支持插入该类型素材：' + kind); return }
+    const ok = await ensureAssetLoaded(ref)
+    if (!ok) {showToast('素材缺失：' + ref); return }
+    const el = assetToElement(ref, kind)
+    if (x == null || y == null) {
+      // 拖到时间轴/双击：场景中心
+      el.x = Math.round(doc.size.width / 2 - el.w / 2)
+      el.y = Math.round(doc.size.height / 2 - el.h / 2)
+    } else {
+      el.x = Math.round(x - el.w / 2)
+      el.y = Math.round(y - el.h / 2)
+    }
+    el.x = Math.max(0, Math.min(el.x, doc.size.width - el.w))
+    el.y = Math.max(0, Math.min(el.y, doc.size.height - el.h))
+    spliceEls(sc, (a) => a.push(el))
+    sel = {kind: 'element', sceneIndex: i, elId: el.id, elIds: [el.id]}
+    onDocChange()
+    showToast('已插入素材：' + ref)
+  }
+  onInsertAsset = (ref) => onDropAsset({ref})
+  const copyText = async (t) => {
+    try {await navigator.clipboard.writeText(t)} catch (e) {
+      const ta = document.createElement('textarea')
+      ta.value = t
+      document.body.appendChild(ta)
+      ta.select()
+      try {document.execCommand('copy')} catch (e2) { }
+      ta.remove()
+    }
   }
 
   // ---- 导出 ----

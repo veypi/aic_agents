@@ -12,6 +12,7 @@
  */
 
 import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.js";
+import { prepareMedia, waitMediaSeek } from "./engine.js";
 
 const SR = 48000;
 
@@ -65,6 +66,9 @@ function inlineNestedSvgs(clone) {
 export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   const clone = node.cloneNode(true);
   inlineNestedSvgs(clone);
+  // <video> 在 SVG-in-img 隔离文档中不绘制（纯黑块），且 data: 大体积 src 序列化进
+  // SVG 字符串既慢又可能超限——克隆中直接移除，帧画面由下方 __mediaItems 合成。
+  for (const v of [...clone.querySelectorAll("video")]) v.remove();
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   let html = clone.outerHTML;
   html = html.replace(
@@ -109,6 +113,50 @@ export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
 
   await img.decode();
   ctx.drawImage(img, 0, 0, width, height);
+
+  // media 合成：活 video 元素（已 seek 到本帧，waitMediaSeek 保证）按元素几何
+  // 与 object-fit 数学绘制；变换/透明度与 three 合成同一套（中心原点）。
+  const mediaItems = node.__mediaItems || [];
+  if (mediaItems.length) {
+    mediaItems.forEach((it) => {
+      const v = it.video;
+      const vw = v.videoWidth || 0,
+        vh = v.videoHeight || 0;
+      if (!vw || !vh || it.opacity <= 0.003) return;
+      let sx0 = 0,
+        sy0 = 0,
+        sw = vw,
+        sh = vh,
+        dw = it.w,
+        dh = it.h,
+        ox = 0,
+        oy = 0;
+      if (it.fit === "cover") {
+        const s = Math.max(it.w / vw, it.h / vh);
+        sw = it.w / s;
+        sh = it.h / s;
+        sx0 = (vw - sw) / 2;
+        sy0 = (vh - sh) / 2;
+      } else if (it.fit !== "fill") {
+        // contain（默认）：完整画面居中，两侧留白
+        const s = Math.min(it.w / vw, it.h / vh);
+        dw = vw * s;
+        dh = vh * s;
+        ox = (it.w - dw) / 2;
+        oy = (it.h - dh) / 2;
+      }
+      const w = it.w * sx,
+        h = it.h * sy;
+      ctx.save();
+      ctx.translate((it.x + it.dx) * sx + w / 2, (it.y + it.dy) * sy + h / 2);
+      if (it.rotation) ctx.rotate((it.rotation * Math.PI) / 180);
+      if (it.scaleX !== 1 || it.scaleY !== 1) ctx.scale(it.scaleX, it.scaleY);
+      ctx.globalAlpha = Math.max(0, Math.min(1, it.opacity));
+      ctx.drawImage(v, sx0, sy0, sw, sh, -w / 2 + ox * sx, -h / 2 + oy * sy, dw * sx, dh * sy);
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+  }
 
   if (items.length) {
     items.forEach((it, i) => {
@@ -204,9 +252,13 @@ export async function exportVideo(engine, opts = {}) {
 
   // ---- video track: deterministic frames ----
   const BATCH = 24;
+  // 预热 media 池元素（解码缓存共享，逐帧 seek 快），循环中等待 seeked 保证画面帧正确；
+  // forExport：audio 元素不产生视觉（声音走混音）
+  prepareMedia(engine.doc, engine.assets);
   for (let f = 0; f < totalFrames; f++) {
     checkAbort(signal);
-    const node = engine.buildFrame(f);
+    const node = engine.buildFrame(f, { forExport: true });
+    await waitMediaSeek(node);
     await drawFrameToCanvas(node, canvas, ctx, width, height);
     const frame = new VideoFrame(canvas, { timestamp: Math.round((f / fps) * 1e6) });
     encoder.encode(frame, { keyFrame: f % (fps * 2) === 0 });

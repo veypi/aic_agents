@@ -447,12 +447,27 @@ function normalizeEl(el, i) {
   if (el.rotation == null) el.rotation = 0;
   if (el.opacity == null) el.opacity = 1;
   el.z = el.z != null ? +el.z : i; // explicit z or document order
+  if (el.type === "media") {
+    // 基本剪辑字段：start=场景内开始秒；trimStart/trimEnd=源裁剪入/出点（trimEnd<0=源全长）
+    if (el.start == null) el.start = 0;
+    if (el.trimStart == null) el.trimStart = 0;
+    if (el.trimEnd == null || el.trimEnd < 0) el.trimEnd = -1;
+  }
   if (el.fx) {
     if (el.fx.enterDur == null) el.fx.enterDur = 0.6;
     if (el.fx.delay == null) el.fx.delay = 0;
     if (el.fx.exitDur == null) el.fx.exitDur = 0.5;
   }
   return el;
+}
+
+/** media 元素在场景时间 t（秒）对应的源时间：start 后进入播放窗口，超窗冻结在 trimEnd */
+export function mediaTimeAt(el, t) {
+  const start = +el.start || 0;
+  const ts = +el.trimStart || 0;
+  const te = el.trimEnd >= 0 ? +el.trimEnd : Infinity;
+  const lt = Math.max(0, t - start);
+  return Math.min(te, ts + lt);
 }
 function normalizeScene(s, doc) {
   s = deepClone(s || {});
@@ -463,6 +478,92 @@ function normalizeScene(s, doc) {
   s.background = s.background || doc.theme.background;
   s.elements = (s.elements || []).map((el, i) => normalizeEl(el, i));
   return s;
+}
+
+/* -------------------------------------------------- media 元素池（预览/导出共用） */
+
+// el.id → { video, url }：同一媒体元素的 <video> 跨帧复用——
+// 帧渲染每帧重建 DOM，新建 video 每次都要重新加载/解码（黑闪+卡顿，大体积
+// dataURL 下基本不可用）；池化后元素持续存活，seek 即显，导出逐帧 seek 也快。
+const mediaPool = new Map();
+
+/** 清理不在当前文档中的池条目（engine.load 时调用；id 经 normalizeDoc 深拷贝保持不变） */
+function pruneMediaPool(doc) {
+  const ids = new Set();
+  const scan = (els) =>
+    (els || []).forEach((el) => {
+      if (el.type === "media") ids.add(el.id);
+    });
+  ((doc && doc.scenes) || []).forEach((s) => scan(s.elements));
+  scan(doc && doc.overlay);
+  for (const [id, o] of mediaPool) {
+    if (!ids.has(id)) {
+      try { o.video.pause(); } catch (e) {}
+      o.video.removeAttribute("src");
+      mediaPool.delete(id);
+    }
+  }
+}
+
+/** 取元素池化的 video 节点（解析后 URL 变化时重建）；无有效源返回 null */
+function mediaVideoFor(el, assetMap) {
+  const url = el.src ? resolveAssetUrl(el.src, assetMap) : "";
+  if (!url) return null;
+  let o = mediaPool.get(el.id);
+  if (o && o.url !== url) {
+    try { o.video.pause(); } catch (e) {}
+    mediaPool.delete(el.id);
+    o = null;
+  }
+  if (!o) {
+    const v = document.createElement("video");
+    v.src = url;
+    v.preload = "auto";
+    v.muted = true; // 帧定位渲染恒静音（声音走 stage overlay / 导出混音）
+    v.playsInline = true;
+    v.style.cssText = "width:100%;height:100%;display:block;";
+    v.addEventListener("seeked", () => { v._vdDirty = false; });
+    o = { video: v, url };
+    mediaPool.set(el.id, o);
+  }
+  return o.video;
+}
+
+/** 导出前调用：预热 doc 中所有 media video 的池元素（首帧不必等元数据加载） */
+export function prepareMedia(doc, assetMap) {
+  const warm = (els) =>
+    (els || []).forEach((el) => {
+      if (el.type === "media" && el.kind !== "audio" && el.src) mediaVideoFor(el, assetMap);
+    });
+  (doc.scenes || []).forEach((s) => warm(s.elements));
+  warm(doc.overlay);
+}
+
+/** 等待节点内 video 元素完成帧定位（_vdDirty 在 seeked 时清除）。
+ *  注意不能用 currentTime≈_vdT 判断：Chrome 设置 currentTime 后属性立即反映目标值，
+ *  但画面要等 seeked 才更新——提前 drawImage 会抓到上一帧。 */
+export function waitMediaSeek(node, timeout = 800) {
+  const vs = node ? Array.from(node.querySelectorAll("video")) : [];
+  if (!vs.length) return Promise.resolve();
+  return Promise.all(
+    vs.map((v) => {
+      if (v._vdT == null) return Promise.resolve();
+      if (!v._vdDirty && v.readyState >= 2) return Promise.resolve();
+      return new Promise((res) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          v.removeEventListener("seeked", finish);
+          v.removeEventListener("error", finish);
+          res();
+        };
+        v.addEventListener("seeked", finish);
+        v.addEventListener("error", finish);
+        setTimeout(finish, timeout);
+      });
+    }),
+  );
 }
 
 /* -------------------------------------------------------- timeline */
@@ -1086,17 +1187,60 @@ export function renderElement(el, doc, ctx) {
   } else if (el.type === "chart") {
     node.innerHTML = renderChart(el, doc, ctx);
   } else if (el.type === "media") {
-    const tag = el.kind === "audio" ? "audio" : "video";
-    const m = document.createElement(tag);
-    m.src = resolveAssetUrl(el.src, ctx.assetMap);
-    if (el.poster && tag === "video") m.poster = resolveAssetUrl(el.poster, ctx.assetMap);
-    if (el.controls) m.controls = true;
-    if (el.loop) m.loop = true;
-    if (el.muted) m.muted = true;
-    if (el.autoplay) m.autoplay = true;
-    m.preload = "auto";
-    m.style.cssText = `width:100%;height:100%;object-fit:${el.fit || "contain"};`;
-    node.appendChild(m);
+    if (el.kind === "audio") {
+      // 音频元素无画面：预览渲染成「音频 chip」（纯 DOM 可点选、导出安全）；
+      // 导出时无任何视觉（声音由 audioTracks 混音进音轨）。
+      if (!ctx.forExport) {
+        const name = String(el.src || "audio").split("/").pop();
+        const ts = +el.trimStart || 0;
+        const te = el.trimEnd >= 0 ? +el.trimEnd : 0;
+        node.innerHTML =
+          `<div style="width:100%;height:100%;display:flex;align-items:center;gap:8px;box-sizing:border-box;` +
+          `padding:0 12px;border-radius:8px;background:rgba(34,197,94,0.14);border:1px solid rgba(34,197,94,0.45);` +
+          `color:#86efac;font:500 13px/1.2 sans-serif;overflow:hidden;white-space:nowrap">` +
+          `<span style="font-size:15px">♪</span><span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>` +
+          (te > 0
+            ? `<span style="margin-left:auto;font-size:11px;opacity:.75">${Math.max(0, te - ts).toFixed(1)}s</span>`
+            : "") +
+          `</div>`;
+      }
+    } else {
+      // 帧确定性渲染：池化 video 定位到裁剪后当前帧（预览拖动/导出逐帧取帧；播放由 stage overlay 接管）。
+      // 不用原生 controls/loop/autoplay——确定性帧渲染只负责「显示该时刻的画面」。
+      const m = mediaVideoFor(el, ctx.assetMap);
+      if (m) {
+        const mt = mediaTimeAt(el, ctx.t);
+        m._vdT = mt;
+        if (m.readyState >= 1) {
+          if (Math.abs((m.currentTime || 0) - mt) > 0.001) {
+            m._vdDirty = true;
+            m.currentTime = mt;
+          }
+        } else {
+          m._vdDirty = true;
+          m.addEventListener("loadedmetadata", () => { m.currentTime = mt; }, { once: true });
+        }
+        m.style.objectFit = el.fit || "contain";
+        node.appendChild(m);
+        node.style.overflow = "hidden";
+        if (el.radius) node.style.borderRadius = el.radius + "px";
+        // 导出合成项：<video> 序列化进 SVG foreignObject 不绘制（与 WebGL 同类限制），
+        // render.js 按此几何信息把活 video 的当前帧 drawImage 到目标画布。
+        if (ctx.mediaItems) {
+          ctx.mediaItems.push({
+            video: m, x: el.x, y: el.y, w: el.w, h: el.h,
+            dx: st.dx, dy: st.dy, rotation: st.rotation,
+            scaleX: st.scale, scaleY: sy, opacity: clamp(st.opacity, 0, 1),
+            fit: el.fit || "contain",
+          });
+        }
+      } else {
+        node.style.background = "rgba(148,163,184,0.12)";
+        node.innerHTML =
+          `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;` +
+          `color:#94a3b8;font:500 13px sans-serif">视频源缺失：${escapeHtml(String(el.src || "").split("/").pop())}</div>`;
+      }
+    }
   } else if (el.type === "three") {
     // WebGL 位图无法序列化进 foreignObject（隔离文档不会同步解码每帧新
     // dataURL），因此预览与导出都直接挂活 canvas；导出路径在 render.js
@@ -1215,7 +1359,7 @@ export function buildFrame(doc, frame, opts = {}) {
     },
     opts.fields || {},
   );
-  const ctx = { t: f.localT, assetMap, fields, fps: doc.fps, threeItems: [] };
+  const ctx = { t: f.localT, assetMap, fields, fps: doc.fps, threeItems: [], mediaItems: [], forExport: !!opts.forExport };
 
   // transition: incoming scene enter anim + outgoing background crossfade
   const tin = f.scene.transitionIn || 0;
@@ -1272,6 +1416,7 @@ export function buildFrame(doc, frame, opts = {}) {
   }
 
   root.__threeItems = ctx.threeItems;
+  root.__mediaItems = ctx.mediaItems;
   return root;
 }
 
@@ -1309,6 +1454,7 @@ export class Video {
 
   load(doc) {
     this.doc = normalizeDoc(doc);
+    pruneMediaPool(this.doc); // 媒体池按文档元素 id 收容（删元素/换文档后释放 video）
     this.frame = 0;
     this.emit("statechange", this.getState());
     return this;
@@ -1390,18 +1536,30 @@ export class Video {
         duration: null,
       });
     }
-    d.scenes.forEach((s, si) => {
+    d.scenes.forEach((s) => {
+      const sceneStart = s._start / d.fps;
+      const sceneDur = +s.duration || 1;
       (s.elements || []).forEach((el) => {
-        if (el.type === "media" && el.kind === "audio" && el.src) {
-          out.push({
-            kind: "element",
-            src: el.src,
-            offset: s._start / d.fps + (el.audioOffset || 0),
-            volume: el.volume != null ? el.volume : 1,
-            loop: !!el.loop,
-            duration: null,
-          });
-        }
+        // media 元素（含视频自带音轨）按裁剪窗口进混音；muted 元素静音
+        if (el.type !== "media" || !el.src || el.muted) return;
+        const start = Math.max(0, +el.start || 0);
+        if (start >= sceneDur) return;
+        const ts = Math.max(0, +el.trimStart || 0);
+        const te = el.trimEnd >= 0 ? +el.trimEnd : Infinity;
+        const win = Math.max(0, sceneDur - start); // 场景内窗口
+        let dur = Math.min(win, Math.max(0, te - ts)); // 非循环播放长度
+        if (el.loop) dur = win; // 循环：铺满窗口（loopEnd 截住源）
+        if (dur <= 0) return;
+        out.push({
+          kind: "element",
+          src: el.src,
+          offset: sceneStart + start, // 文档时间起点
+          srcOffset: ts, // 源内裁剪入点
+          duration: dur, // 源内/窗口播放长度
+          loopEnd: te === Infinity ? 0 : te,
+          volume: el.volume != null ? el.volume : 1,
+          loop: !!el.loop,
+        });
       });
     });
     return out;
@@ -1424,12 +1582,21 @@ export class Video {
     items.forEach(({ t, audio }) => {
       const srcNode = ctx.createBufferSource();
       srcNode.buffer = audio;
-      srcNode.loop = t.loop;
+      const so = Math.max(0, Math.min(t.srcOffset || 0, Math.max(0, audio.duration - 0.001)));
+      if (t.loop) {
+        srcNode.loop = true;
+        srcNode.loopStart = so;
+        srcNode.loopEnd = t.loopEnd ? Math.min(t.loopEnd, audio.duration) : audio.duration;
+      }
       const gain = ctx.createGain();
       gain.gain.value = t.volume;
       srcNode.connect(gain).connect(ctx.destination);
-      srcNode.start(Math.max(0, t.offset), 0, t.loop ? undefined : audio.duration);
-      if (!t.loop && t.offset > 0) srcNode.stop(Math.max(0, t.offset) + audio.duration);
+      // start(when, offset, duration)：duration 到点自停（替代旧 stop() 写法）
+      let dur;
+      if (t.loop) dur = t.duration != null ? t.duration : undefined;
+      else dur = t.duration != null ? Math.min(t.duration, audio.duration - so) : audio.duration - so;
+      if (dur != null && dur <= 0) return;
+      srcNode.start(Math.max(0, t.offset), so, dur);
     });
     const rendered = await ctx.startRendering();
     return rendered; // AudioBuffer 48k stereo
