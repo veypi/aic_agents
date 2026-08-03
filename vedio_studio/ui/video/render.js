@@ -134,8 +134,11 @@ export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   );
   // XML 不识别 HTML 具名实体（stagger 空格等产生的 &nbsp;）——换数值实体
   html = html.replace(/&nbsp;/g, "&#160;");
-  const rootW = +((/width:(\d+)px/.exec(node.style.cssText) || [])[1] || width);
-  const rootH = +((/height:(\d+)px/.exec(node.style.cssText) || [])[1] || height);
+  // 帧根尺寸：node.style.cssText 序列化一定是「width: 1280px」（冒号后带空格），
+  // 旧正则 /width:(\d+)px/ 永不命中 → 缩放被静默跳过（原分辨率导出看不出，
+  // 1080p 导出时内容 1:1 贴左上、右下全黑）。直接读 style.width/height。
+  const rootW = parseFloat(node.style.width) || width;
+  const rootH = parseFloat(node.style.height) || height;
   // 分辨率缩放：Chromium 的 SVG-in-img 不对 foreignObject 应用 viewBox 变换
   // （实测内容 1:1 渲染后被裁剪），改用 CSS transform 缩放——矢量内容
   // （svg-img / 文本）在目标分辨率重新栅格化，任意分辨率都清晰。
