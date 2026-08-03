@@ -68,7 +68,7 @@
     .tl-scroll { flex: 1; overflow: auto; position: relative; min-width: 0; }
     .tl-inner { position: relative; min-width: 100%; padding-bottom: 6px; }
 
-    .tl-ruler { position: relative; height: 22px; cursor: ew-resize; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .tl-ruler { position: sticky; top: 0; z-index: 4; height: 22px; cursor: ew-resize; border-bottom: 1px solid rgba(255, 255, 255, 0.06); background: rgba(13, 17, 28, 0.97); }
     .tl-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(255, 255, 255, 0.13); padding-left: 3px; font-size: 10px; color: #64748b; line-height: 20px; user-select: none; }
     .tl-tick.minor { border-left-color: rgba(255, 255, 255, 0.05); }
 
@@ -228,8 +228,44 @@
     ver = 0            // prop：场景结构版本号
     pps = 60           // 像素/秒（滑条/Ctrl+滚轮 10–240 连续缩放）
     kver = 0           // keyed 列表重建版本号：原地写 doc 后 ++，拼进 :key 强制 v-for 重建
-    collapsed = {}     // 场景折叠状态 sceneId → true
+    collapsed = {}     // 场景折叠状态 sceneId → true（默认闭合：打开文档时全部置 true，点箭头展开）
 
+    // 场景默认闭合：新文档/场景结构变化时重置为全部折叠（用户点左侧箭头展开）
+    $watch(() => (doc && doc.scenes ? doc.scenes.map((s) => s.id).join(',') : ''), (ids) => {
+      const next = {}
+      String(ids || '').split(',').filter(Boolean).forEach((id) => { next[id] = true })
+      collapsed = next
+    })
+    // 滚动联动：$refs 在 setup 阶段为空，watch 到 scroll 元素后一次性注册
+    // （此前写在 <script> 里 $refs 取不到，Ctrl+滚轮缩放与 gutter 同步从未生效）
+    const clampN = (v, a, b) => (v < a ? a : v > b ? b : v)
+    $watch(() => $refs.scroll, (scEl) => {
+      if (!scEl) return
+      const grows = $refs.grows
+      // Ctrl+滚轮缩放时间轴（以鼠标位置为锚点）
+      scEl.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey || !doc) return
+        e.preventDefault()
+        const rect = scEl.getBoundingClientRect()
+        const t0 = (e.clientX - rect.left + scEl.scrollLeft) / pps
+        pps = clampN(pps * (e.deltaY < 0 ? 1.25 : 0.8), 10, 240)
+        kver++
+        setTimeout(() => { scEl.scrollLeft = t0 * pps - (e.clientX - rect.left) }, 0)
+      }, {passive: false})
+      // gutter 行与右区纵向滚动同步
+      scEl.addEventListener('scroll', () => {
+        if (grows) grows.style.transform = 'translateY(' + (-scEl.scrollTop) + 'px)'
+      })
+    })
+    // 播放头跟随：超出可视区时自动滚动
+    $watch(() => frame, () => {
+      const scEl = $refs.scroll
+      if (!scEl) return
+      const px = playX()
+      const vw = scEl.clientWidth
+      if (px > scEl.scrollLeft + vw - 60) scEl.scrollLeft = px - 60
+      else if (px < scEl.scrollLeft) scEl.scrollLeft = Math.max(0, px - 60)
+    })
     fpsOf = () => (doc && doc.fps) || 30
     let rafP = false
     sceneFrames = (s) => Math.max(1, Math.round((+s.duration || 1) * fpsOf()))
@@ -517,35 +553,5 @@
       const d = Math.floor((s % 1) * 10)
       return m + ':' + String(r).padStart(2, '0') + '.' + d
     }
-  </script>
-  <script>
-    // Ctrl+滚轮缩放时间轴（以鼠标位置为锚点）
-    const clampN = (v, a, b) => (v < a ? a : v > b ? b : v)
-    const scEl = $refs.scroll
-    if (scEl) {
-      scEl.addEventListener('wheel', (e) => {
-        if (!e.ctrlKey || !doc) return
-        e.preventDefault()
-        const rect = scEl.getBoundingClientRect()
-        const t0 = (e.clientX - rect.left + scEl.scrollLeft) / pps
-        pps = clampN(pps * (e.deltaY < 0 ? 1.25 : 0.8), 10, 240)
-        kver++
-        setTimeout(() => { scEl.scrollLeft = t0 * pps - (e.clientX - rect.left) }, 0)
-      }, { passive: false })
-      // gutter 行与右区纵向滚动同步
-      const grows = $refs.grows
-      scEl.addEventListener('scroll', () => {
-        if (grows) grows.style.transform = 'translateY(' + (-scEl.scrollTop) + 'px)'
-      })
-    }
-
-    // 播放头跟随：超出可视区时自动滚动
-    $watch(() => frame, () => {
-      if (!scEl) return
-      const px = playX()
-      const vw = scEl.clientWidth
-      if (px > scEl.scrollLeft + vw - 60) scEl.scrollLeft = px - 60
-      else if (px < scEl.scrollLeft) scEl.scrollLeft = Math.max(0, px - 60)
-    })
   </script>
 </html>
