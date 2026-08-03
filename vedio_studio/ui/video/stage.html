@@ -27,6 +27,26 @@
 
     /* ---- 选中框与八向手柄 ---- */
     .vd-sel { position: absolute; border: 1.5px solid #4f6ef7; pointer-events: none; z-index: 10; }
+    .vd-sel-one { position: absolute; border: 1px dashed rgba(79, 110, 247, 0.9); pointer-events: none; z-index: 10; }
+    .vd-guide { position: absolute; pointer-events: none; z-index: 11; background: #f472b6; }
+    .vd-guide.v { top: 0; bottom: 0; width: 1px; }
+    .vd-guide.h { left: 0; right: 0; height: 1px; }
+    .vd-rubber { position: absolute; border: 1px solid #4f6ef7; background: rgba(79, 110, 247, 0.12); z-index: 12; pointer-events: none; }
+    .vd-rot {
+      position: absolute; width: 11px; height: 11px; border-radius: 50%;
+      background: #fff; border: 1.5px solid #4f6ef7; cursor: grab; pointer-events: auto; z-index: 11;
+    }
+    .vd-ctx {
+      position: absolute; z-index: 30; display: flex; flex-direction: column; min-width: 108px;
+      background: #1a2233; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 9px;
+      padding: 4px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+    }
+    .vd-ctx button {
+      border: none; background: transparent; color: #cbd5e1; font-size: 12px;
+      text-align: left; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    }
+    .vd-ctx button:hover { background: rgba(67, 97, 238, 0.25); color: #fff; }
+    .vd-ctx button.danger:hover { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
     .vd-sel .nm {
       position: absolute; top: -20px; left: -1.5px; font-size: 11px; line-height: 16px;
       color: #e0e7ff; background: rgba(79, 110, 247, 0.92); padding: 0 7px;
@@ -82,6 +102,12 @@
       background: #4361ee; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     }
     .vd-time { color: #9ca3af; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
+    .vd-rate {
+      background: rgba(255, 255, 255, 0.07); color: #c7d2fe; border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 7px; font-size: 12px; padding: 4px 3px; outline: none; flex: none;
+    }
+    .vd-btn.on { background: rgba(67, 97, 238, 0.55); color: #fff; }
+    .vd-vol { width: 64px; flex: none; accent-color: #4361ee; cursor: pointer; }
 
     .vd-exporting {
       position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -101,11 +127,24 @@
         </div>
         <div class="vd-box" v-show="doc" ref="box"
              :style="{ width: boxW + 'px', height: boxH + 'px' }"
-             @mousedown="onBoxMouseDown" @dblclick="onBoxDblClick">
+             @mousedown="onBoxMouseDown" @dblclick="onBoxDblClick" @contextmenu="onBoxContextMenu">
           <div class="vd-clip" ref="clip" :style="clipStyle()"></div>
           <div class="vd-sel" v-if="selBox()" :style="selStyle()">
             <div class="nm">{{ selBox().id }}</div>
             <div v-for="h in handles" :key="h" class="vd-handle" :class="'vh-' + h" :data-vd-handle="h"></div>
+            <div class="vd-rot" :style="rotStyle()" data-vd-handle="rot" title="拖拽旋转（Shift=15°吸附）"></div>
+          </div>
+          <div v-for="b in multiBoxes()" :key="'so:' + b.id" class="vd-sel-one" :style="b"></div>
+          <div v-for="(g, gi) in guidesV" :key="'gv' + gi" class="vd-guide v" :style="{ left: (g * scale) + 'px' }"></div>
+          <div v-for="(g, gi) in guidesH" :key="'gh' + gi" class="vd-guide h" :style="{ top: (g * scale) + 'px' }"></div>
+          <div class="vd-rubber" v-if="rubber" :style="rubberStyle()"></div>
+          <div class="vd-ctx" v-if="ctxMenu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+            <button @click="ctxAct('front')">置顶</button>
+            <button @click="ctxAct('back')">置底</button>
+            <button @click="ctxAct('fwd')">上移一层</button>
+            <button @click="ctxAct('back1')">下移一层</button>
+            <button @click="ctxAct('dup')">复制</button>
+            <button class="danger" @click="ctxAct('del')">删除</button>
           </div>
           <div class="vd-textedit" v-if="editing" :style="teStyle()">
             <textarea ref="te" v:value="editHtml" @keydown.esc="cancelText()"></textarea>
@@ -122,15 +161,22 @@
         </div>
       </div>
       <div class="vd-controls" v-if="doc">
+        <button class="vd-btn" title="上一帧（←，Shift=10帧）" @click="stepFrame(-1)">‹</button>
         <button class="vd-btn primary" @click="togglePlay()">{{ playing ? '❚❚' : '▶' }}</button>
+        <button class="vd-btn" title="下一帧（→，Shift=10帧）" @click="stepFrame(1)">›</button>
         <input class="vd-seek" type="range" min="0" :max="totalFrames" v:value="frameVal" @input="seekFromSlider()" />
         <div class="vd-time">{{ timeText() }} / {{ durText() }} · {{ frameVal }}/{{ totalFrames }}f</div>
+        <select class="vd-rate" title="播放倍速（J/L 穿梭）" :value="rateLabel()" @change="setRate(+$event.target.value)">
+          <option v-for="r in rateOpts" :value="r" :selected="rateLabel() === String(r)">{{ r }}x</option>
+        </select>
+        <button class="vd-btn" :class="{ on: loop }" title="循环播放" @click="toggleLoop()">🔁</button>
         <button class="vd-btn" title="静音" @click="toggleMute()">{{ muted ? '🔇' : '🔊' }}</button>
+        <input class="vd-vol" type="range" min="0" max="1" step="0.05" v:value="volume" @input="setVolume(+volume)" title="音量" />
       </div>
     </div>
   </body>
   <script setup>
-    import { Video } from './engine.js'
+    import { Video, uid } from './engine.js'
 
     doc = null          // video/1 文档对象（父页面传入，proxy 引用，可编辑）
     assets = {}         // assetMap（父页面传入）
@@ -154,6 +200,15 @@
     editingId = ''
     editHtml = ''
     handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+    selids = []         // 选中元素 id 数组（末位为主选；父级 selid prop 为主选镜像）
+    guidesV = []        // 拖拽吸附参考线（doc 坐标）
+    guidesH = []
+    rubber = null       // 框选矩形 {x0,y0,x1,y1}（box CSS px）
+    ctxMenu = null      // 右键菜单 {x, y}
+    playRate = 1        // 播放速率（负值 = 倒放，J/L 穿梭设置）
+    loop = true         // 循环播放
+    volume = 1          // 主音量（作用于 music/voice 预览）
+    rateOpts = [0.25, 0.5, 1, 1.5, 2, 4]
 
     // 私有
     engine = null        // 注册到 $data（父组件需要访问 frame / export）
@@ -232,10 +287,18 @@
       if (!playing) return
       const dt = lastT ? Math.min(Math.max((t - lastT) / 1000, 0), 0.25) : 0
       lastT = t
-      playT += dt
-      if (playT >= totalFrames / engine.getState().fps) { playT = 0; engine.seek(0) }
+      const fps = engine.getState().fps || 30
+      const dur = totalFrames / fps
+      playT += dt * playRate
+      if (playT >= dur) {
+        if (loop) playT = 0
+        else { playT = 0; engine.seek(totalFrames - 1); frameVal = engine.frame; syncScene(); renderFrame(); togglePlay(); return }
+      } else if (playT < 0) {
+        if (loop) playT = Math.max(0, dur - 1 / fps)
+        else { playT = 0; engine.seek(0); frameVal = 0; syncScene(); renderFrame(); togglePlay(); return }
+      }
       try {
-        engine.seek(playT * engine.getState().fps)
+        engine.seek(playT * fps)
       } catch (e) { console.error('[vd tick] seek', e) }
       frameVal = engine.frame
       syncScene()
@@ -246,11 +309,37 @@
       rafId = requestAnimationFrame(tick)
     }
 
+    // J/K/L 穿梭：J 倒放 / K 暂停 / L 正放；同方向连按 1→2→4→1 循环加速
+    shuttle = (dir) => {
+      if (!doc) return
+      if (dir === 0) { if (playing) togglePlay(); return }
+      if (!playing) { playRate = dir; togglePlay(); return }
+      const sameDir = (playRate < 0) === (dir < 0)
+      const m = Math.abs(playRate)
+      playRate = sameDir ? dir * (m >= 4 ? 1 : m * 2) : dir
+    }
+
+    stepFrame = (n) => {
+      if (!doc) return
+      seekFrame(engine.frame + n)
+    }
+
+    setRate = (r) => {
+      playRate = Math.abs(r) || 1
+    }
+    rateLabel = () => String(Math.abs(playRate))
+    toggleLoop = () => { loop = !loop }
+    setVolume = (v) => {
+      volume = Math.max(0, Math.min(1, v))
+      Object.values(audioEls).forEach((a) => { if (a) a.volume = (a._base != null ? a._base : 1) * volume })
+    }
+
     togglePlay = () => {
       if (!doc) return
       playing = !playing
       if (playing) {
-        if (engine.frame >= totalFrames - 1) { playT = 0; engine.seek(0) }
+        if (playRate >= 0 && engine.frame >= totalFrames - 1) { playT = 0; engine.seek(0) }
+        else if (playRate < 0 && engine.frame <= 0) { engine.seek(totalFrames - 1) }
         playT = engine.frame / (engine.getState().fps || 30)
         lastT = 0
         rafId = requestAnimationFrame(tick)
@@ -290,7 +379,8 @@
         const a = new Audio()
         a.src = (engine.assets[track.src] || track.src)
         a.loop = !!track.loop
-        a.volume = track.volume != null ? track.volume : 1
+        a._base = track.volume != null ? track.volume : 1
+        a.volume = a._base * volume
         a.muted = muted
         a.preload = 'auto'
         audioEls[key] = a
@@ -340,6 +430,7 @@
     // 窗口外保持暂停（修复连续播放越过 offset 边界时音乐不启动/不停止）
     syncAudioTick = () => {
       if (!doc || !playing) return
+      if (playRate < 0 || Math.abs(playRate) !== 1) { pauseAudio(); return } // 倒放/变速时音轨不对齐，直接静音
       const t = engine.frame / (engine.getState().fps || 30)
       const syncOne = (a, track) => {
         if (!a || !track || !track.src) return
@@ -384,9 +475,22 @@
       return (sc.elements || []).find((e) => e.id === id) || null
     }
 
+    selEls = () => {
+      if (!doc) return []
+      const sc = doc.scenes[curScene]
+      if (!sc) return []
+      return (sc.elements || []).filter((e) => selids.indexOf(e.id) >= 0)
+    }
+
+    emitSel = () => {
+      const primary = selids.length ? selids[selids.length - 1] : ''
+      $emit('select', primary ? { kind: 'element', sceneIndex: curScene, id: primary, ids: selids.slice() } : null)
+    }
+
     selBox = () => {
-      if (!editable || !selid || !doc || editing) return null
-      const el = findEl(selid)
+      if (!editable || !doc || editing) return null
+      if (selids.length !== 1) return null
+      const el = findEl(selids[0])
       if (!el) return null
       return {
         x: (+el.x || 0) * scale,
@@ -396,6 +500,18 @@
         rot: +el.rotation || 0,
         id: el.id,
       }
+    }
+
+    multiBoxes = () => {
+      if (selids.length < 2) return []
+      return selEls().map((el) => ({
+        id: el.id,
+        left: (+el.x || 0) * scale + 'px',
+        top: (+el.y || 0) * scale + 'px',
+        width: Math.max(0, (+el.w || 0) * scale) + 'px',
+        height: Math.max(0, (+el.h || 0) * scale) + 'px',
+        transform: (+el.rotation || 0) ? 'rotate(' + el.rotation + 'deg)' : '',
+      }))
     }
 
     selStyle = () => {
@@ -409,68 +525,298 @@
       }
     }
 
+    rotStyle = () => {
+      const b = selBox()
+      if (!b) return {}
+      const cx = b.x + b.w / 2,
+        cy = b.y + b.h / 2
+      const r = b.h / 2 + 22
+      const rad = ((b.rot || 0) * Math.PI) / 180
+      return { left: cx + r * Math.sin(rad) - 5.5 + 'px', top: cy - r * Math.cos(rad) - 5.5 + 'px' }
+    }
+
+    /* 吸附：以拖拽盒的边缘/中线对齐画布中线/边缘与其他元素边缘 */
+    snapMove = (ox, oy, ow, oh, dx, dy, ids) => {
+      const W = doc.size.width,
+        H = doc.size.height
+      const th = 6 / scale
+      const xs = [0, W / 2, W],
+        ys = [0, H / 2, H]
+      const sc = doc.scenes[curScene]
+      for (const el of (sc.elements || [])) {
+        if (ids.indexOf(el.id) >= 0) continue
+        const ex = +el.x || 0,
+          ey = +el.y || 0,
+          ew = +el.w || 0,
+          eh = +el.h || 0
+        xs.push(ex, ex + ew / 2, ex + ew)
+        ys.push(ey, ey + eh / 2, ey + eh)
+      }
+      const exs = [ox + dx, ox + ow / 2 + dx, ox + ow + dx]
+      const eys = [oy + dy, oy + oh / 2 + dy, oy + oh + dy]
+      let bx = null,
+        by = null
+      for (const c of xs)
+        for (const v of exs) {
+          const d = Math.abs(c - v)
+          if (d < th && (!bx || d < bx.d)) bx = { d, adj: c - v, line: c }
+        }
+      for (const c of ys)
+        for (const v of eys) {
+          const d = Math.abs(c - v)
+          if (d < th && (!by || d < by.d)) by = { d, adj: c - v, line: c }
+        }
+      guidesV = bx ? [bx.line] : []
+      guidesH = by ? [by.line] : []
+      return { dx: dx + (bx ? bx.adj : 0), dy: dy + (by ? by.adj : 0) }
+    }
+
     onBoxMouseDown = (e) => {
       if (!editable || !doc || exporting || editing) return
       if (e.button !== 0) return
+      ctxMenu = null
       const h = e.target.closest ? e.target.closest('[data-vd-handle]') : null
-      if (h && selid) {
-        startDrag(e, selid, h.getAttribute('data-vd-handle'))
+      if (h && selids.length === 1) {
+        const hm = h.getAttribute('data-vd-handle')
+        startDrag(e, selids[0], hm === 'rot' ? 'rotate' : hm)
         return
       }
       const elNode = e.target.closest ? e.target.closest('[data-el-id]') : null
       if (elNode) {
         const id = elNode.getAttribute('data-el-id')
-        if (id !== selid) $emit('select', { kind: 'element', sceneIndex: curScene, id })
-        startDrag(e, id, 'move')
+        if (e.shiftKey) {
+          // Shift 加选/减选
+          selids = selids.indexOf(id) >= 0 ? selids.filter((x) => x !== id) : selids.concat([id])
+          emitSel()
+          return
+        }
+        if (selids.indexOf(id) < 0) selids = [id]
+        emitSel()
+        if (e.altKey) {
+          // Alt 拖拽 = 复制后拖走
+          dupLocal(selids)
+        }
+        startDragMulti(e, selids)
       } else {
-        $emit('select', null)
+        startRubber(e)
       }
+    }
+
+    /* Alt 拖拽复制：本地复制（新 id，+24 偏移），返回新选中 */
+    dupLocal = (ids) => {
+      const sc = doc.scenes[curScene]
+      if (!sc) return
+      const arr = (sc.elements || []).slice()
+      const news = []
+      for (const id of ids) {
+        const src = arr.find((e) => e.id === id)
+        if (!src) continue
+        const c = JSON.parse(JSON.stringify(src))
+        c.id = (c.type || 'el') + '-' + uid()
+        c.x = (+c.x || 0) + 24
+        c.y = (+c.y || 0) + 24
+        news.push(c)
+      }
+      if (!news.length) return
+      sc.elements = arr.concat(news)
+      selids = news.map((c) => c.id)
+      emitSel()
+      refreshFrame()
+      $emit('mutate')
     }
 
     startDrag = (e, id, mode) => {
       const el = findEl(id)
       if (!el) return
       if (playing) togglePlay()
+      const rect = $refs.box.getBoundingClientRect()
+      const cx = rect.left + ((+el.x || 0) + (+el.w || 10) / 2) * scale
+      const cy = rect.top + ((+el.y || 0) + (+el.h || 10) / 2) * scale
       drag = {
         id, mode,
         sx: e.clientX, sy: e.clientY,
         ox: +el.x || 0, oy: +el.y || 0, ow: +el.w || 10, oh: +el.h || 10,
+        orot: +el.rotation || 0,
+        cx, cy,
+        ang0: Math.atan2(e.clientY - cy, e.clientX - cx),
+        items: [{ el, x: +el.x || 0, y: +el.y || 0, kfs: el.keyframes ? JSON.parse(JSON.stringify(el.keyframes)) : null }],
+        ids: [id],
       }
       e.preventDefault()
+      bindDragListeners()
+    }
+
+    startDragMulti = (e, ids) => {
+      const sc = doc.scenes[curScene]
+      const items = ((sc && sc.elements) || [])
+        .filter((el) => ids.indexOf(el.id) >= 0)
+        .map((el) => ({ el, x: +el.x || 0, y: +el.y || 0, kfs: el.keyframes ? JSON.parse(JSON.stringify(el.keyframes)) : null }))
+      if (!items.length) return
+      if (playing) togglePlay()
+      const first = items[0]
+      drag = {
+        id: items[items.length - 1].el.id,
+        mode: 'move',
+        sx: e.clientX, sy: e.clientY,
+        ox: +first.el.x || 0, oy: +first.el.y || 0,
+        ow: +first.el.w || 10, oh: +first.el.h || 10,
+        orot: 0, cx: 0, cy: 0, ang0: 0,
+        items,
+        ids: ids.slice(),
+      }
+      e.preventDefault()
+      bindDragListeners()
+    }
+
+    bindDragListeners = () => {
       const mv = (ev) => onDragMove(ev)
       const up = () => {
         window.removeEventListener('mousemove', mv)
         window.removeEventListener('mouseup', up)
         drag = null
+        guidesV = []
+        guidesH = []
         $emit('mutate')
       }
       window.addEventListener('mousemove', mv)
       window.addEventListener('mouseup', up)
     }
 
+    scheduleRender = () => {
+      if (rafPending) return
+      rafPending = true
+      requestAnimationFrame(() => { rafPending = false; refreshFrame() })
+    }
+
     onDragMove = (ev) => {
       if (!drag) return
-      const el = findEl(drag.id)
-      if (!el) return
       const dx = (ev.clientX - drag.sx) / scale
       const dy = (ev.clientY - drag.sy) / scale
       const r1 = (v) => Math.round(v * 10) / 10
+      if (drag.mode === 'rotate') {
+        const el = findEl(drag.id)
+        if (!el) return
+        const a = Math.atan2(ev.clientY - drag.cy, ev.clientX - drag.cx)
+        let deg = drag.orot + ((a - drag.ang0) * 180) / Math.PI
+        if (ev.shiftKey) deg = Math.round(deg / 15) * 15
+        el.rotation = r1(((deg % 360) + 360) % 360)
+        scheduleRender()
+        return
+      }
       if (drag.mode === 'move') {
-        el.x = r1(drag.ox + dx)
-        el.y = r1(drag.oy + dy)
-      } else {
-        const m = drag.mode
-        let x = drag.ox, y = drag.oy, w = drag.ow, h = drag.oh
-        if (m.indexOf('e') >= 0) w = Math.max(8, drag.ow + dx)
-        if (m.indexOf('s') >= 0) h = Math.max(8, drag.oh + dy)
-        if (m.indexOf('w') >= 0) { w = Math.max(8, drag.ow - dx); x = drag.ox + (drag.ow - w) }
-        if (m.indexOf('n') >= 0) { h = Math.max(8, drag.oh - dy); y = drag.oy + (drag.oh - h) }
-        el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h)
+        const adj = snapMove(drag.ox, drag.oy, drag.ow, drag.oh, dx, dy, drag.ids)
+        for (const it of drag.items) {
+          // x/y 关键帧轨道驱动位置的元素：整体平移轨道而不是改 el.x/y
+          if (it.kfs && it.kfs.some((k) => k.x != null || k.y != null)) {
+            const nk = it.kfs.map((k) => {
+              const c = Object.assign({}, k)
+              if (c.x != null) c.x = r1(c.x + adj.dx)
+              if (c.y != null) c.y = r1(c.y + adj.dy)
+              return c
+            })
+            it.el.keyframes = nk
+          } else {
+            it.el.x = r1(it.x + adj.dx)
+            it.el.y = r1(it.y + adj.dy)
+          }
+        }
+        scheduleRender()
+        return
       }
-      if (!rafPending) {
-        rafPending = true
-        requestAnimationFrame(() => { rafPending = false; refreshFrame() })
+      // 八向缩放（单选）
+      const el = findEl(drag.id)
+      if (!el) return
+      const m = drag.mode
+      let x = drag.ox, y = drag.oy, w = drag.ow, h = drag.oh
+      if (m.indexOf('e') >= 0) w = Math.max(8, drag.ow + dx)
+      if (m.indexOf('s') >= 0) h = Math.max(8, drag.oh + dy)
+      if (m.indexOf('w') >= 0) { w = Math.max(8, drag.ow - dx); x = drag.ox + (drag.ow - w) }
+      if (m.indexOf('n') >= 0) { h = Math.max(8, drag.oh - dy); y = drag.oy + (drag.oh - h) }
+      el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h)
+      scheduleRender()
+    }
+
+    /* 空白处框选 */
+    startRubber = (e) => {
+      const rect = $refs.box.getBoundingClientRect()
+      rubber = { x0: e.clientX - rect.left, y0: e.clientY - rect.top, x1: e.clientX - rect.left, y1: e.clientY - rect.top }
+      e.preventDefault()
+      const mv = (ev) => {
+        rubber = { x0: rubber.x0, y0: rubber.y0, x1: ev.clientX - rect.left, y1: ev.clientY - rect.top }
+        const rr = rubberDocRect()
+        const sc = doc.scenes[curScene]
+        const ids = []
+        for (const el of ((sc && sc.elements) || [])) {
+          const ex = +el.x || 0, ey = +el.y || 0, ew = +el.w || 0, eh = +el.h || 0
+          if (ex < rr.x + rr.w && ex + ew > rr.x && ey < rr.y + rr.h && ey + eh > rr.y) ids.push(el.id)
+        }
+        selids = ids
       }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        rubber = null
+        emitSel()
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    rubberDocRect = () => ({
+      x: Math.min(rubber.x0, rubber.x1) / scale,
+      y: Math.min(rubber.y0, rubber.y1) / scale,
+      w: Math.abs(rubber.x1 - rubber.x0) / scale,
+      h: Math.abs(rubber.y1 - rubber.y0) / scale,
+    })
+    rubberStyle = () => ({
+      left: Math.min(rubber.x0, rubber.x1) + 'px',
+      top: Math.min(rubber.y0, rubber.y1) + 'px',
+      width: Math.abs(rubber.x1 - rubber.x0) + 'px',
+      height: Math.abs(rubber.y1 - rubber.y0) + 'px',
+    })
+
+    /* 右键菜单 */
+    onBoxContextMenu = (e) => {
+      if (!editable || !doc || exporting || editing) return
+      const elNode = e.target.closest ? e.target.closest('[data-el-id]') : null
+      if (!elNode) return
+      e.preventDefault()
+      const id = elNode.getAttribute('data-el-id')
+      if (selids.indexOf(id) < 0) { selids = [id]; emitSel() }
+      const rect = $refs.box.getBoundingClientRect()
+      ctxMenu = {
+        x: Math.max(0, Math.min(e.clientX - rect.left, rect.width - 120)),
+        y: Math.max(0, Math.min(e.clientY - rect.top, rect.height - 160)),
+      }
+    }
+
+    ctxAct = (a) => {
+      ctxMenu = null
+      const sc = doc.scenes[curScene]
+      if (!sc || !selids.length) return
+      const ids = selids.slice()
+      if (a === 'del') { $emit('ctxdel', ids); return }
+      if (a === 'dup') { dupLocal(ids); return }
+      const arr = (sc.elements || []).slice()
+      const picked = arr.filter((e) => ids.indexOf(e.id) >= 0)
+      const rest = arr.filter((e) => ids.indexOf(e.id) < 0)
+      let next = null
+      if (a === 'front') next = rest.concat(picked)
+      else if (a === 'back') next = picked.concat(rest)
+      else if (a === 'fwd' || a === 'back1') {
+        next = arr.slice()
+        const sorted = a === 'fwd' ? ids.slice().reverse() : ids
+        for (const id of sorted) {
+          const i = next.findIndex((e) => e.id === id)
+          const j = i + (a === 'fwd' ? 1 : -1)
+          if (i >= 0 && j >= 0 && j < next.length) {
+            const t = next[i]
+            next[i] = next[j]
+            next[j] = t
+          }
+        }
+      }
+      if (next) { sc.elements = next; refreshFrame(); $emit('mutate') }
     }
 
     /* ---------------------------------------------------------- 文本编辑 */
@@ -481,7 +827,7 @@
       const id = elNode.getAttribute('data-el-id')
       const el = findEl(id)
       if (!el || el.type !== 'text') return
-      if (id !== selid) $emit('select', { kind: 'element', sceneIndex: curScene, id })
+      if (selids.length !== 1 || selids[0] !== id) { selids = [id]; emitSel() }
       editing = true
       editingId = id
       editHtml = el.html || ''
@@ -530,5 +876,16 @@
     // DOM 就绪后：宿主尺寸变化 → 重新适配缩放
     const ro = new ResizeObserver(() => { fit() })
     ro.observe($refs.host)
+
+    // 外部（时间轴/inspector/撤销）改变主选时重置多选；舞台自身 emit 的不重置
+    $watch(() => selid, (v) => {
+      const primary = selids.length ? selids[selids.length - 1] : ''
+      if ((v || '') !== primary) selids = v ? [v] : []
+    })
+
+    // 点击右键菜单外任意处关闭菜单
+    window.addEventListener('mousedown', (e) => {
+      if (ctxMenu && !(e.target.closest && e.target.closest('.vd-ctx'))) ctxMenu = null
+    })
   </script>
 </html>

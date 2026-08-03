@@ -591,19 +591,23 @@ function applyKey(out, k) {
 }
 
 /** Combined per-frame element state: {opacity, dx, dy, scale, scaleY, rotation}.
- *  Keyframe x/y are absolute document coordinates → converted to offsets. */
+ *  Keyframe x/y are absolute document coordinates → converted to offsets.
+ *  rotation：关键帧轨道存在 rotation 字段时由关键帧驱动（绝对值），否则用
+ *  元素静态 rotation（舞台旋转手柄 / inspector 输入，此前被完全忽略）。 */
 export function elementState(el, sceneDur, t) {
   const kf = sampleKeyframes(el, t);
   const en = enterProgress(el, t);
   const ex = exitProgress(el, sceneDur, t);
   let op = (el.opacity == null ? 1 : el.opacity) * kf.opacity * en * ex;
+  const hasKfRot =
+    Array.isArray(el.keyframes) && el.keyframes.some((k) => k.rotation != null);
   const state = {
     opacity: op,
     dx: kf.x != null ? kf.x - (+el.x || 0) : 0,
     dy: kf.y != null ? kf.y - (+el.y || 0) : 0,
     scale: kf.scale,
     scaleY: kf.scaleY,
-    rotation: kf.rotation,
+    rotation: hasKfRot ? kf.rotation : +el.rotation || 0,
   };
 
   const fx = el.fx;
