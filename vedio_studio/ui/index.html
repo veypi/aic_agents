@@ -495,7 +495,7 @@
 </body>
 
 <script setup>
-  import {starterDoc, defaultTheme, uid, waitMediaSeek} from './video/engine.js'
+  import {starterDoc, defaultTheme, uid, waitMediaSeek, easing, easingOf, springPhysics, bezierEasing, interpolate} from './video/engine.js'
   document.body.setAttribute('theme', 'dark')
 
   // ---- 状态 ----
@@ -836,6 +836,18 @@
       },
 
       {
+        name: 'run_js', description: '纯数值/曲线/3D 建模计算 JS（软沙箱：仅 Math + M 数学包 + T three.js 核心数学几何 + console/copy，无 DOM/网络/存储/定时器/构造器）。--code 必填（表达式/IIFE，或语句体自己 return）。M 包：TAU, lerp, clamp, smoothstep, map, deg, rad, round(v,n), range(n,a,b), rand(seed)→fn, easing, easingOf, bezier(x1..)→fn, spring(d,s,m)→fn, interpolate。T 包（three r170 纯计算类，无渲染器）：Vector2/3/4, Matrix3/4, Quaternion, Euler, Color, Spherical, CatmullRomCurve3, SplineCurve, CurvePath, Path, Shape, BufferGeometry 及 Box/Sphere/TorusKnot/Tube/Lathe/Extrude/Shape 等 Geometry 类, MathUtils。console.log 收进 logs；copy(v) 写剪贴板。返回 {ok, result, result_type, logs, copied}。适合先算好路径/顶点/曲线参数再 fs.write 写入文档或素材',
+        handler: async (argv) => {
+          try {
+            const code = optArg(argv, 'code') || String((argv || [])[0] || '')
+            if (!code.trim()) throw new Error('--code 必填')
+            const T = await runJsThreeKit()
+            return reply(runJsSandbox(code, T))
+          } catch (e) {return reply({ok: false, error: String((e && e.message) || e)})}
+        }
+      },
+
+      {
         name: 'get_video', description: '当前打开项目的信息',
         handler: async () => {
           try {
@@ -886,6 +898,110 @@
     a.src = u
   })
 
+  // ---- run_js 数值计算软沙箱 ----
+  // 仅暴露 Math + M 数学包 + console/copy；DOM/网络/存储/定时器/构造器用参数遮蔽为 undefined，
+  // "use strict" 防 this 逃逸。（用途是 AI 算曲线/数值，非防恶意代码的安全边界）
+  const JS_SHADOW = [
+    'window', 'document', 'globalThis', 'self', 'top', 'parent', 'frames', 'opener',
+    'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'Worker', 'SharedWorker',
+    'localStorage', 'sessionStorage', 'indexedDB', 'caches', 'cookieStore',
+    'navigator', 'location', 'history', 'open', 'alert', 'confirm', 'prompt', 'print',
+    'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask', 'requestAnimationFrame',
+    'Function', 'AsyncFunction', 'GeneratorFunction', 'importScripts', 'require',
+    'process', 'Buffer', 'postMessage', 'BroadcastChannel', 'MessageChannel', 'Notification',
+    // 注意：不能放 'eval'/'arguments'——strict 模式下它们是非法参数名，会直接 SyntaxError
+  ]
+  const runJsMathKit = () => ({
+    TAU: Math.PI * 2,
+    lerp: (a, b, t) => a + (b - a) * t,
+    clamp: (v, a, b) => Math.max(a, Math.min(b, v)),
+    smoothstep: (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t) },
+    map: (v, a, b, c, d) => c + (d - c) * ((v - a) / (b - a)),
+    deg: (r) => (r * 180) / Math.PI,
+    rad: (d) => (d * Math.PI) / 180,
+    round: (v, n) => { const p = Math.pow(10, n == null ? 2 : n); return Math.round(v * p) / p },
+    range: (n, a, b) => Array.from({length: Math.max(0, n | 0)}, (_, i) => a == null ? i : a + (b - a) * (n <= 1 ? 0 : i / (n - 1))),
+    // mulberry32 种子随机（可复现）
+    rand: (seed) => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 } },
+    easing, easingOf, bezier: bezierEasing, spring: springPhysics, interpolate,
+  })
+  // three.js 核心纯数学/几何类（无 WebGL 依赖），首次 run_js 用时才懒加载（691KB 不进首屏）
+  // 注意：vhtml 编译后动态 import 的相对路径基准是 /vhtml/（非组件目录）——
+  // 必须用 $mod.scoped 拼绝对路径（静态 import 才会按组件路径重写）
+  let threeCoreP = null
+  const runJsThreeKit = async () => {
+    const m = await (threeCoreP || (threeCoreP = import($mod.scoped + '/video/vendor/three.module.js')))
+    const keys = ['Vector2', 'Vector3', 'Vector4', 'Matrix3', 'Matrix4', 'Quaternion', 'Euler', 'Color',
+      'Spherical', 'Cylindrical', 'Plane', 'Ray', 'Triangle', 'Line3', 'Box2', 'Box3', 'Sphere',
+      'Curve', 'CurvePath', 'Path', 'Shape',
+      'CatmullRomCurve3', 'CubicBezierCurve', 'CubicBezierCurve3', 'QuadraticBezierCurve', 'QuadraticBezierCurve3',
+      'LineCurve', 'LineCurve3', 'EllipseCurve', 'ArcCurve', 'SplineCurve',
+      'BufferGeometry', 'BufferAttribute', 'Float32BufferAttribute', 'Uint16BufferAttribute', 'Uint32BufferAttribute',
+      'BoxGeometry', 'CapsuleGeometry', 'CircleGeometry', 'ConeGeometry', 'CylinderGeometry',
+      'DodecahedronGeometry', 'ExtrudeGeometry', 'IcosahedronGeometry', 'LatheGeometry', 'OctahedronGeometry',
+      'PlaneGeometry', 'RingGeometry', 'ShapeGeometry', 'SphereGeometry', 'TetrahedronGeometry',
+      'TorusGeometry', 'TorusKnotGeometry', 'TubeGeometry', 'WireframeGeometry', 'EdgesGeometry', 'MathUtils']
+    const T = {}
+    keys.forEach((k) => { if (m[k]) T[k] = m[k] })
+    // 建模辅助：几何体 → geo json（引擎 three geo 元素格式；法线由引擎 computeVertexNormals 补齐）
+    T.geoPack = (g) => {
+      const out = { positions: Array.from(g.attributes.position.array) }
+      if (g.attributes.uv) out.uvs = Array.from(g.attributes.uv.array)
+      if (g.index) out.index = Array.from(g.index.array)
+      return out
+    }
+    // 参数曲面采样（克莱因瓶等）：fn(u,v)→[x,y,z]；ur=[u0,u1,segU]，vr=[v0,v1,segV]
+    T.surfaceMesh = (fn, ur, vr) => {
+      const u0 = ur[0], u1 = ur[1], nu = Math.max(1, (ur[2] || 48) | 0)
+      const v0 = vr[0], v1 = vr[1], nv = Math.max(1, (vr[2] || 24) | 0)
+      const positions = [], index = []
+      for (let j = 0; j <= nv; j++)
+        for (let i = 0; i <= nu; i++) {
+          const p = fn(u0 + (u1 - u0) * (i / nu), v0 + (v1 - v0) * (j / nv))
+          positions.push(p[0], p[1], p[2])
+        }
+      for (let j = 0; j < nv; j++)
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1
+          index.push(a, b, d, b, c, d)
+        }
+      return { positions, index }
+    }
+    return T
+  }
+  const runJsSandbox = (code, T) => {
+    const logs = []
+    let copied = false
+    const fmtVal = (v) => {
+      if (typeof v === 'string') return v
+      if (v === undefined) return 'undefined'
+      try { return JSON.stringify(v) } catch (e) { return String(v) }
+    }
+    const fakeConsole = {}
+    ;['log', 'info', 'warn', 'error', 'debug'].forEach((k) => { fakeConsole[k] = (...a) => logs.push('[' + k + '] ' + a.map(fmtVal).join(' ')) })
+    const copy = (v) => {
+      copied = true
+      const text = typeof v === 'string' ? v : fmtVal(v)
+      copyText(text).catch(() => {}) // 写系统剪贴板（尽力而为，无手势可能失败，但返回值不受影响）
+    }
+    let fn
+    try {
+      // 首选：表达式 / IIFE（如 (() => {...})()）
+      fn = new Function('Math', 'M', 'T', 'console', 'copy', ...JS_SHADOW, '"use strict";\nreturn (\n' + code + '\n);')
+    } catch (e1) {
+      // 次选：语句体（需自己 return）
+      fn = new Function('Math', 'M', 'T', 'console', 'copy', ...JS_SHADOW, '"use strict";\n' + code)
+    }
+    const result = fn(Math, runJsMathKit(), T || {}, fakeConsole, copy, ...JS_SHADOW.map(() => undefined))
+    let out
+    if (result === undefined) out = null
+    else if (typeof result === 'string') out = result.length > 200000 ? result.slice(0, 200000) + '…[截断]' : result
+    else {
+      try { out = JSON.parse(JSON.stringify(result)) } catch (e) { out = String(result) }
+    }
+    return {ok: true, result: out, result_type: typeof result, logs, copied}
+  }
+
   // ---- 项目读写 ----
   listProjects = async () => {
     const l = await fsLs(projRoot() + '/')
@@ -919,9 +1035,10 @@
     for (const ref of refs) {
       try {
         const r = await fsGet(projDir(curName) + '/' + ref)
-        if (r.content instanceof Blob) {
-          assets[ref] = await blobToDataURL(r.content)
-        }
+        // 文本文件（.json/.svg 等 page_fs 返回 string）也要转 dataURL——
+        // resolveAssetUrl 只认 data:/http/blob，裸文本会被当 URL fetch 而失败
+        if (r.content instanceof Blob) assets[ref] = await blobToDataURL(r.content)
+        else if (typeof r.content === 'string') assets[ref] = await blobToDataURL(new Blob([r.content], {type: r.mime || 'application/octet-stream'}))
       } catch (e) {console.warn('asset missing:', ref, e)}
     }
   }
@@ -945,6 +1062,7 @@
     cur_split = sr.split
     cur_refs = sr.refs
     sel = {kind: 'none', sceneIndex: 0, elId: ''}
+    sceneVer++        // 换文档必须递增：时间轴/场景列表 keyed 行全部重建
     saveState = '已保存'
     try {localStorage.setItem('vedio_studio_last', name)} catch (e) { }
     // 先装载以收集相对素材引用（openCase 同款顺序），再从本地加载为 dataURL（预览/导出共用）
@@ -979,6 +1097,7 @@
     } else if (sel.kind === 'scene' && sel.sceneIndex >= d.scenes.length) {
       sel = {kind: 'none', sceneIndex: 0, elId: ''}
     }
+    sceneVer++        // 外部（AI）改过的文档结构未知，强制时间轴/场景列表重建
     // 先装载收集素材引用，再加载 dataURL 后重挂（修复导出黑屏：素材必须 data: URL）
     $refs.stage.$data.setDoc(doc, {})
     await loadAssets(d)
@@ -1018,6 +1137,7 @@
       saved_scene_snap = {}
       saved_index_snap = ''
       sel = {kind: 'none', sceneIndex: 0, elId: ''}
+      sceneVer++        // 换文档必须递增：时间轴/场景列表 keyed 行全部重建
       saveState = ''
       assets = {}
       assetFiles = []
@@ -1613,7 +1733,8 @@
     try {
       const r = await fsGet(projDir(curName) + '/' + ref)
       if (r.content instanceof Blob) assets[ref] = await blobToDataURL(r.content)
-      else assets[ref] = r.content
+      else if (typeof r.content === 'string') assets[ref] = await blobToDataURL(new Blob([r.content], {type: r.mime || 'application/octet-stream'}))
+      else return false
     } catch (e) {return false}
     const st = $refs.stage && $refs.stage.$data
     if (st) {if (st.engine) st.engine.assets = assets}

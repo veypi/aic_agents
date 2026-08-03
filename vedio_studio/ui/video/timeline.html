@@ -309,7 +309,8 @@
         if (!collapsed[s.id]) {
           ;(s.elements || []).forEach((el) => {
             const st = Math.max(0, +el.start || 0)
-            out.push({ kind: 'el', key: 'e:' + el.id, i, id: el.id, el, start: acc / fps + st, dur: elDurOf(el, sd), hidden: !!el.hidden })
+            // key 含场景下标：跨场景同 id（dupScene/样例）不撞 v-for key
+            out.push({ kind: 'el', key: 'e:' + i + ':' + el.id, i, id: el.id, el, start: acc / fps + st, dur: elDurOf(el, sd), hidden: !!el.hidden })
           })
         }
         acc += frames

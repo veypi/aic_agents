@@ -416,6 +416,12 @@ export function normalizeDoc(input) {
   const scanEl = (el) => {
     if (el.src && !/^(data:|https?:|blob:)/i.test(el.src)) assets.add(el.src);
     if (el.poster && !/^(data:|https?:|blob:)/i.test(el.poster)) assets.add(el.poster);
+    // three 元素内 geo 对象的网格数据文件（assets/xxx.geo.json）
+    if (el.type === "three" && el.scene && Array.isArray(el.scene.objects)) {
+      el.scene.objects.forEach((o) => {
+        if (o && o.type === "geo" && o.src && !/^(data:|https?:|blob:)/i.test(o.src)) assets.add(o.src);
+      });
+    }
   };
   doc.scenes.forEach((s) => s.elements.forEach(scanEl));
   doc.overlay.forEach(scanEl);
@@ -788,7 +794,7 @@ export function captionsAt(scene, t) {
  * 懒加载：首次遇到 three 元素时由 prepareThree 动态 import；buildFrame 同步
  * 渲染（renderThree 输出 dataURL <img>，导出 foreignObject 走 data: 路径）。 */
 let threeMod = null;
-export async function prepareThree(doc) {
+export async function prepareThree(doc, assetMap) {
   const has =
     !!doc &&
     ((doc.scenes || []).some((s) =>
@@ -800,6 +806,28 @@ export async function prepareThree(doc) {
       threeMod = await import("./three.js");
     } catch (e) {
       console.warn("[vedio engine] three.js 加载失败：", e);
+    }
+  }
+  // geo 自定义网格：预取资产数据（assets/xxx.geo.json → BufferGeometry 缓存），
+  // 保证 buildFrame 同步可用（预览 prepare().then 重绘、导出 prepare 已 await）
+  if (has && threeMod && threeMod.prepareGeo) {
+    const srcs = new Set();
+    const scan = (el) => {
+      if (el.type === "three" && el.scene && Array.isArray(el.scene.objects)) {
+        el.scene.objects.forEach((o) => {
+          if (o && o.type === "geo" && o.src) srcs.add(o.src);
+        });
+      }
+    };
+    (doc.scenes || []).forEach((s) => (s.elements || []).forEach(scan));
+    (doc.overlay || []).forEach(scan);
+    if (srcs.size) {
+      const fetchText = (src) =>
+        fetch(resolveAssetUrl(src, assetMap)).then((r) => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        });
+      await threeMod.prepareGeo([...srcs], fetchText);
     }
   }
   return !!threeMod;
@@ -1529,9 +1557,9 @@ export class Video {
     return this.doc ? this.doc._assets.slice() : [];
   }
 
-  /** 懒加载扩展渲染器（three 元素）。预览 setDoc 与导出前各调一次。 */
+  /** 懒加载扩展渲染器（three 元素 + geo 网格资产）。预览 setDoc 与导出前各调一次。 */
   async prepare() {
-    return prepareThree(this.doc);
+    return prepareThree(this.doc, this.assets);
   }
 
   /* ------------------------------------------------------ audio graph */

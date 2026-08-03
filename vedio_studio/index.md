@@ -78,6 +78,21 @@
 
 复用导出管线（确定性 DOM → canvas）截取指定帧为 PNG，保存到 `/vedio/screenshots/`（不移动播放头）。返回 `{ ok, path, frame, width, height, size }`；用 `fs.read`（1host=page，路径 `$SESSION/vedio/screenshots/...`）查看画面。注意：动画入场起点（如 frame 0）元素可能未显现，截关键帧建议指定 `--frame`。
 
+### run_js — 纯数值计算（动画曲线 / 3D 建模参数）
+
+| argv | 说明 |
+|---|---|
+| `--code <代码>` | 必填，JS 表达式/IIFE（如 `(() => {...})()`）或语句体（最后 `return`） |
+
+软沙箱执行：仅 `Math` + `M` 数学包 + `T` three.js 核心数学几何 + `console`/`copy`，无 DOM/网络/存储/定时器/构造器。
+
+- `M` 包：`TAU`、`lerp(a,b,t)`、`clamp(v,a,b)`、`smoothstep(a,b,v)`、`map(v,a,b,c,d)`、`deg`、`rad`、`round(v,n)`、`range(n,a,b)`（均分数组）、`rand(seed)`（可复现种子随机）、`easing`、`easingOf(name)`、`bezier(x1,y1,x2,y2)→fn`、`spring(d,s,m)→fn`、`interpolate(v,[a,b],[c,d],{easing})`
+- `T` 包（three r170 纯计算类，无渲染器）：`Vector2/3/4`、`Matrix3/4`、`Quaternion`、`Euler`、`Color`、`Spherical/Cylindrical`、`CatmullRomCurve3`、`SplineCurve`、`CurvePath`、`Path`、`Shape`、`BufferGeometry` 与 `Box/Sphere/TorusKnot/Tube/Lathe/Extrude/Shape` 等 Geometry 类、`MathUtils`——几何体的顶点数据经 `geometry.attributes.position.array` / `toJSON()` 取出；建模辅助：`T.surfaceMesh(fn,[u0,u1,segU],[v0,v1,segV])`（参数曲面采样 → geo json `{positions,index}`）与 `T.geoPack(bufferGeometry)`（任意几何体 → geo json），产物 `fs.write` 到项目 `assets/` 后供 three 元素 `geo` 类型引用（见下文 three 元素说明）
+
+返回 `{ ok, result, result_type, logs, copied }`（`console.log` 收进 `logs`，`copy(v)` 写系统剪贴板）。
+
+典型用法：动画设计时先算好 SVG path / 关键帧数组 / 曲线采样 / 参数化 3D 顶点，再用 `fs.write` 写进 index.json 或项目 `assets/`（Klein 瓶/利萨茹/文字路径/管状网格等参数化图形）。
+
 ### get_video — 当前打开项目信息
 
 返回 `{ ok, open, name, title, duration, fps, size, scenes }`。
@@ -167,6 +182,11 @@
 单体几何：`torusKnot` / `icosahedron` / `sphere` / `box`（args 透传 three 构造函数）；
 material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/opacity/emissive/emissiveIntensity`；
 动画字段：`rotation`（rad/s）、`scalePulse{amp,speed}`、`position`、`scale`；`orbiters` 为群组轨道卫星。
+
+**参数曲面 parametric（2026-08-04 新增）**：`{ "type": "parametric", "eq": "(u,v)=>[x,y,z]", "u0":0, "u1":6.283, "v0":0, "v1":6.283, "segU":48, "segV":24, "material": {...} }`——按参数方程采样生成网格（u/v 默认 [0, 2π]），自动计算法线、双面渲染。例：克莱因瓶 `eq: "(u,v)=>{const R=2.2;const w=R+Math.cos(u/2)*Math.sin(v)-Math.sin(u/2)*Math.sin(2*v);return [w*Math.cos(u),w*Math.sin(u),Math.sin(u/2)*Math.sin(v)+Math.cos(u/2)*Math.sin(2*v)]}"`。eq 只注入 `Math`（无 DOM/网络），适合利萨茹/环面/波形/螺旋等可解析曲面。
+
+**自定义网格 geo（2026-08-04 新增）**：`{ "type": "geo", "src": "assets/xxx.geo.json", "material": {...} }`——渲染预计算的网格数据（或内联 `data` 字段）。geo json 格式：`{ "positions": [x,y,z,...], "index": [i0,i1,i2,...], "uvs": [u,v,...]?, "normals": [...]? }`（缺法线引擎自动 computeVertexNormals）。数据用 `run_js` 的 `T.surfaceMesh(fn,[u0,u1,segU],[v0,v1,segV])` 或 `T.geoPack(bufferGeometry)` 生成后 `fs.write` 到项目 `assets/`，**写完必须调 `reload_video`**（资产 dataURL 与几何缓存需要重载预热）。
+
 元素本身的 keyframes/fx（透明度/缩放入场等）照常作用于外层 div。预览直接挂活 canvas（无每帧 dataURL 开销）；
 导出由 render.js 将 WebGL canvas 按几何合成到目标画布（foreignObject 无法序列化 WebGL 位图）。
 
