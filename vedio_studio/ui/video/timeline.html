@@ -37,7 +37,14 @@
     }
     .tl-scene:hover { background: rgba(67, 97, 238, 0.28); }
     .tl-scene.active { background: rgba(67, 97, 238, 0.4); border-color: #6366f1; color: #fff; }
+    .tl-scene.moving { opacity: 0.55; cursor: grabbing; }
     .tl-tr { color: #818cf8; margin-left: 4px; }
+    .tl-dur { color: #64748b; font-size: 10px; margin-left: 5px; }
+    .tl-edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
+    .tl-edge.l { left: 0; }
+    .tl-edge.r { right: 0; }
+    .tl-edge:hover { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
+    .tl-drop { position: absolute; top: 20px; bottom: 0; width: 2px; background: #f472b6; z-index: 6; pointer-events: none; }
 
     .tl-elrow { position: relative; height: 22px; margin-top: 2px; cursor: pointer; }
     .tl-elbar {
@@ -53,9 +60,11 @@
     }
     .tl-elrow.active .tl-elname { color: #bbf7d0; }
     .tl-kf {
-      position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px;
+      position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
       background: #fbbf24; transform: rotate(45deg); border-radius: 1px;
+      cursor: ew-resize; z-index: 3;
     }
+    .tl-kf:hover { background: #fde68a; box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3); }
     .tl-playhead {
       position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid #f43f5e;
       pointer-events: none; z-index: 5;
@@ -81,27 +90,31 @@
       </div>
       <div class="sp"></div>
       <span class="tl-time">{{ fmtT(frame / fpsOf()) }} / {{ fmtT(totalDur()) }}</span>
-      <select class="tl-zoom" :value="pps" @change="pps = +$event.target.value">
+      <select class="tl-zoom" :value="pps" @change="setPps(+$event.target.value)">
         <option value="30" :selected="pps === 30">缩放 30px/s</option>
         <option value="60" :selected="pps === 60">缩放 60px/s</option>
         <option value="100" :selected="pps === 100">缩放 100px/s</option>
       </select>
     </div>
-    <div class="tl-scroll">
+    <div class="tl-scroll" ref="scroll">
       <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }" v-if="doc">
         <div class="tl-ruler" @mousedown="onRulerDown">
           <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
         </div>
         <div class="tl-row">
-          <div v-for="b in blocks()" :key="ver + ':' + b.id" class="tl-scene" :class="{ active: b.i === curSceneIdx() }"
+          <div v-for="b in blocks()" :key="ver + ':' + kver + ':' + b.id" class="tl-scene" :class="{ active: b.i === curSceneIdx(), moving: moveI === b.i }"
                :style="{ left: b.x + 'px', width: b.w + 'px' }"
-               @mousedown="onSceneDown(b)">
-            S{{ b.i + 1 }}<span v-if="b.trans" class="tl-tr">⇢</span>
+               @mousedown="onSceneDown(b, $event)">
+            S{{ b.i + 1 }}<span v-if="b.trans" class="tl-tr">⇢</span><span class="tl-dur">{{ b.dur }}</span>
+            <div class="tl-edge l" title="拖拽改上一场景时长" @mousedown.stop="onEdgeDown(b.i - 1, $event)"></div>
+            <div class="tl-edge r" title="拖拽改本场景时长" @mousedown.stop="onEdgeDown(b.i, $event)"></div>
           </div>
+          <div class="tl-drop" v-if="dropX >= 0" :style="{ left: dropX + 'px' }"></div>
         </div>
-        <div class="tl-elrow" v-for="el in curEls()" :key="el.id" :class="{ active: sel && sel.kind === 'element' && sel.elId === el.id }" @click="pickEl(el.id)">
+        <div class="tl-elrow" v-for="el in curEls()" :key="kver + ':' + el.id" :class="{ active: sel && sel.kind === 'element' && sel.elIds && sel.elIds.indexOf(el.id) >= 0 }" @click="pickEl(el.id)">
           <div class="tl-elbar" :style="elBarStyle()">
-            <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"></div>
+            <div v-for="(k, ki) in (el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: kfX(k) }"
+                 :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(el, k, ki, $event)"></div>
           </div>
           <span class="tl-elname" :style="{ left: (elNameX() + 10) + 'px' }">{{ el.id }} · {{ el.type }}</span>
         </div>
@@ -113,12 +126,17 @@
   <script setup>
     doc = null         // prop
     frame = 0          // prop：当前帧（父级 rAF 同步）
-    sel = null         // prop：{ kind, sceneIndex, elId }
+    sel = null         // prop：{ kind, sceneIndex, elId, elIds }
     readonly = false   // prop
     ver = 0            // prop：场景结构版本号
-    pps = 60           // 像素/秒
+    pps = 60           // 像素/秒（Ctrl+滚轮 10–240 连续缩放）
+    moveI = -1         // 正在拖拽排序的场景下标
+    dropX = -1         // 插入位指示线（px，<0 隐藏）
+    kver = 0           // keyed 列表重建版本号：原地写 doc（时长/关键帧/pps）后 ++，
+                       // 拼进 :key 强制 v-for 重建（vhtml keyed 列表同 key 复用旧值）
 
     fpsOf = () => (doc && doc.fps) || 30
+    let rafP = false
     sceneFrames = (s) => Math.max(1, Math.round((+s.duration || 1) * fpsOf()))
 
     blocks = () => {
@@ -131,6 +149,7 @@
           startF: acc, frames: fr,
           x: (acc / fpsOf()) * pps,
           w: (fr / fpsOf()) * pps,
+          dur: (+s.duration || 0).toFixed(1) + 's',
           trans: i > 0 && s.transition && s.transition !== 'none',
         }
         acc += fr
@@ -189,9 +208,110 @@
     add = (type, sub) => { if (!readonly) $emit('addel', { type, sub }) }
     pickEl = (id) => $emit('pickel', id)
 
-    onSceneDown = (b) => {
-      $emit('pickscene', b.i)
-      $emit('seek', b.startF)
+    setPps = (v) => { pps = v; kver++ }
+
+    onSceneDown = (b, e) => {
+      if (!doc || e.button !== 0) return
+      const inner = $refs.inner
+      if (!inner) return
+      const rect = inner.getBoundingClientRect()
+      const x0 = e.clientX
+      let moved = false
+      let dropTo = -1
+      const mv = (ev) => {
+        if (!moved && Math.abs(ev.clientX - x0) < 5) return
+        if (readonly) return
+        moved = true
+        moveI = b.i
+        // 插入位：按各场景块中点判定
+        const bs = blocks()
+        const mx = ev.clientX - rect.left
+        let to = bs.length
+        for (let k = 0; k < bs.length; k++) {
+          if (mx < bs[k].x + bs[k].w / 2) { to = k; break }
+        }
+        dropTo = to
+        dropX = bs[to] ? bs[to].x : (bs.length ? bs[bs.length - 1].x + bs[bs.length - 1].w : 0)
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        if (moved && dropTo >= 0) {
+          // 移除自身后的插入下标修正
+          const to = dropTo > b.i ? dropTo - 1 : dropTo
+          if (to !== b.i) $emit('movescene', { from: b.i, to })
+        } else if (!moved) {
+          $emit('pickscene', b.i)
+          $emit('seek', b.startF)
+        }
+        moveI = -1
+        dropX = -1
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    /* 边缘拖拽改场景时长（左边 = 上一场景） */
+    onEdgeDown = (i, e) => {
+      if (readonly || !doc) return
+      const s = doc.scenes[i]
+      if (!s) return
+      e.preventDefault()
+      const d0 = +s.duration || 1
+      const x0 = e.clientX
+      let changed = false
+      const mv = (ev) => {
+        const nd = Math.max(0.5, Math.round((d0 + (ev.clientX - x0) / pps) * 10) / 10)
+        if (nd !== (+s.duration || 0)) {
+          s.duration = nd
+          changed = true
+          if (!rafP) { rafP = true; requestAnimationFrame(() => { rafP = false; kver++ }) }
+        }
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        if (changed) $emit('docchange')
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    /* 关键帧菱形拖拽改时间（拖动中本地摆位，松手一次性重建+上报）；Alt+点击删除 */
+    onKfDown = (el, k, ki, e) => {
+      if (readonly || e.button !== 0) return
+      e.preventDefault()
+      if (e.altKey) {
+        const arr = (el.keyframes || []).slice()
+        arr.splice(ki, 1)
+        el.keyframes = arr
+        kver++
+        $emit('docchange')
+        return
+      }
+      const bar = e.currentTarget.closest('.tl-elbar')
+      if (!bar) return
+      const dot = e.currentTarget
+      const barL = bar.getBoundingClientRect().left
+      const dur = curSceneDur()
+      const mv = (ev) => {
+        const t = Math.max(0, Math.min((ev.clientX - barL) / pps, dur))
+        k.t = Math.round(t * fpsOf()) / fpsOf()
+        dot.style.left = (k.t * pps) + 'px'
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', mv)
+        window.removeEventListener('mouseup', up)
+        kver++
+        $emit('docchange')
+      }
+      window.addEventListener('mousemove', mv)
+      window.addEventListener('mouseup', up)
+    }
+
+    curSceneDur = () => {
+      const sc = doc && doc.scenes[curSceneIdx()]
+      return sc ? +sc.duration || 1 : 1
     }
 
     onRulerDown = (e) => {
@@ -224,5 +344,30 @@
       const d = Math.floor((s % 1) * 10)
       return m + ':' + String(r).padStart(2, '0') + '.' + d
     }
+  </script>
+  <script>
+    // Ctrl+滚轮缩放时间轴（以鼠标位置为锚点）
+    const clampN = (v, a, b) => (v < a ? a : v > b ? b : v)
+    const scEl = $refs.scroll
+    if (scEl) {
+      scEl.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey || !doc) return
+        e.preventDefault()
+        const rect = scEl.getBoundingClientRect()
+        const t0 = (e.clientX - rect.left + scEl.scrollLeft) / pps
+        pps = clampN(pps * (e.deltaY < 0 ? 1.25 : 0.8), 10, 240)
+        kver++
+        setTimeout(() => { scEl.scrollLeft = t0 * pps - (e.clientX - rect.left) }, 0)
+      }, { passive: false })
+    }
+
+    // 播放头跟随：超出可视区时自动滚动
+    $watch(() => frame, () => {
+      if (!scEl) return
+      const x = playX()
+      const vw = scEl.clientWidth
+      if (x > scEl.scrollLeft + vw - 60) scEl.scrollLeft = x - 60
+      else if (x < scEl.scrollLeft) scEl.scrollLeft = Math.max(0, x - 60)
+    })
   </script>
 </html>
