@@ -903,7 +903,9 @@
           } else dur += (+s.duration || 0)
         }
         out.push({name: it.name, title: d.title || it.name, duration: Math.round(dur * 10) / 10, scenes: scs.length})
-      } catch (e) {out.push({name: it.name, title: it.name, duration: 0, scenes: 0})}
+      } catch (e) {
+        // 无合法 index.json 的目录（exports/ screenshots/ 及其它杂物）不是项目，跳过
+      }
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
     projects = out
