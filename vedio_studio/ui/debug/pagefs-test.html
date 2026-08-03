@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head><title>PageFS v0.13.1 单根回归测试</title></head>
+  <style>
+    body { background: #0a0e16; color: #cbd5e1; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 16px; }
+    .ok { color: #4ade80; }
+    .fail { color: #f87171; }
+  </style>
+  <body>
+    <div id="out">running…</div>
+  </body>
+  <script setup>
+    import { PageFS } from '@/aic/assets/libs/page_fs.js'
+
+    run = async () => {
+      const el = document.getElementById('out')
+      if (!el) { console.error('no #out yet'); return }
+      const lines = []
+      const push = (s, ok = true) => lines.push(`<div class="${ok ? 'ok' : 'fail'}">${s}</div>`)
+      const assert = (name, cond, extra = '') =>
+        push(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`, cond)
+      try {
+        const pfs = new PageFS() // 无参构造（无 uid/sid）
+
+        // ---- 单根读写（无任何会话绑定）----
+        assert('put 文本', (await pfs.put('/a.txt', 'hello 世界')).bytes === 12)
+        const g1 = await pfs.get('/a.txt')
+        assert('get 文本', g1.content === 'hello 世界' && g1.path === '/a.txt')
+
+        const blob = new Blob([new Uint8Array([0, 1, 2, 255])], { type: 'application/octet-stream' })
+        await pfs.put('/dir/sub/b.bin', blob)
+        const g2 = await pfs.get('/dir/sub/b.bin')
+        assert('put/get Blob 原样', g2.content instanceof Blob && g2.size === 4)
+
+        const d = await pfs.get('/dir')
+        assert('get 目录 {dir:true,items}', d.dir === true &&
+          JSON.stringify(d.items.map((i) => i.name + (i.dir ? '/' : ''))) === JSON.stringify(['sub/']))
+
+        // ---- 云语义容器前缀剥离（AI 经 exec 发来）----
+        assert('$SESSION/foo → /foo', pfs.resolve('$SESSION/foo.txt') === '/foo.txt')
+        assert('$USER/foo → /foo', pfs.resolve('$USER/foo.txt') === '/foo.txt')
+        assert('$AGENT/foo → /foo', pfs.resolve('$AGENT/foo.txt') === '/foo.txt')
+        assert('/sessions/s1/x → /x', pfs.resolve('/sessions/s1/x.md') === '/x.md')
+        assert('/home/u1/x → /x', pfs.resolve('/home/u1/x.md') === '/x.md')
+        assert('workdir 缺省 /', pfs.resolve('rel/path') === '/rel/path')
+        assert('相对基于 workdir', pfs.resolve('rel/path', { workdir: '/base' }) === '/base/rel/path')
+        // 翻译后实际读写同一文件
+        await pfs.put('$SESSION/via-session.txt', 'via session')
+        assert('$SESSION 写入实际落 /via-session.txt', (await pfs.get('/via-session.txt')).content === 'via session')
+
+        // ---- 根与防护 ----
+        const root = await pfs.get('/')
+        assert('get(/) 恒存在', root.dir === true && root.items.length >= 2)
+        assert('exists(/) 恒存在', (await pfs.exists('/')).exists === true)
+        assert('stat(/) 恒存在', (await pfs.stat('/')).dir === true)
+        const rmRoot = await pfs.rm('/').then(() => 'ok', (e) => 'err:' + e.message)
+        assert('rm(/) 拒绝', rmRoot.startsWith('err:') && rmRoot.includes('cannot remove root'), rmRoot)
+
+        // ---- rm 递归 / exists / ls ----
+        await pfs.put('/dir2/a.txt', 'a')
+        await pfs.put('/dir2/sub/b.txt', 'b')
+        assert('exists 目录', (await pfs.exists('/dir2')).exists === true)
+        const l = await pfs.ls('/')
+        assert('ls(/) 顶层', l.ok && l.items.some((i) => i.name === 'dir2' && i.dir))
+        assert('rm 递归', (await pfs.rm('/dir2')).removed === '/dir2')
+        assert('rm 后 exists false', (await pfs.exists('/dir2')).exists === false)
+        assert('get 已删抛错', await pfs.get('/dir2').then(() => 'no', (e) => e.message.includes('no such file')))
+
+        // ---- 清理 ----
+        await pfs.rm('/a.txt')
+        await pfs.rm('/dir')
+        await pfs.rm('/via-session.txt')
+        push('ALL DONE')
+      } catch (e) {
+        push('EXCEPTION: ' + e.message, false)
+      }
+      el.innerHTML = lines.join('')
+    }
+  </script>
+  <script>
+    // DOM 编译后运行（setup 阶段 #out 尚不存在）
+    setTimeout(() => { run() }, 100)
+  </script>
+</html>

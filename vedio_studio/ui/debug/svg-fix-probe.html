@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"><title>svg-as-img fix probe</title>
+<style>body{background:#111;color:#ddd;font:13px monospace;padding:16px} canvas{border:1px solid #444;margin:4px}</style>
+</head>
+<body>
+<div id="out"></div>
+<script type="module">
+  const out = document.getElementById('out')
+  const log = (s) => out.insertAdjacentHTML('beforeend', s)
+  const W = 300, H = 120
+
+  const svgUrlCache = new Map()
+  function svgToDataUrl(markup) {
+    let url = svgUrlCache.get(markup)
+    if (!url) {
+      url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+      svgUrlCache.set(markup, url)
+    }
+    return url
+  }
+  function inlineNestedSvgs(clone) {
+    for (const s of [...clone.querySelectorAll('svg')]) {
+      let markup = s.outerHTML
+      if (!/xmlns\s*=/.test(markup)) markup = markup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
+      const img = document.createElement('img')
+      img.src = svgToDataUrl(markup)
+      img.alt = ''
+      img.style.cssText = 'width:100%;height:100%;display:block;'
+      s.replaceWith(img)
+    }
+  }
+
+  const cases = [
+    ['shape bar scaleY', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;transform:scale(1,0.5);transform-origin:center bottom;"><svg viewBox="0 0 200 80" width="100%" height="100%" preserveAspectRatio="none"><rect x="0" y="0" width="200" height="80" rx="6" fill="#d9a53a"/></svg></div>', [100, 70]],
+    ['wash blur', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;filter:blur(18px);"><svg viewBox="0 0 200 80" width="100%" height="100%" preserveAspectRatio="none"><ellipse cx="100" cy="40" rx="90" ry="30" fill="#3ab0c9"/></svg></div>', [100, 40]],
+    ['ring stroke low-op', '<div style="position:absolute;left:10px;top:10px;width:100px;height:100px;opacity:0.31;transform:scale(1.25);transform-origin:center;"><svg viewBox="0 0 100 100" width="100%" height="100%"><ellipse cx="50" cy="50" rx="45" ry="45" fill="none" stroke="#ffffff" stroke-width="2"/></svg></div>', [60, 12]],
+    ['wave dashoffset', '<div style="position:absolute;left:10px;top:10px;width:280px;height:60px;"><svg viewBox="0 0 280 60" width="100%" height="100%"><path d="M5,50 L275,10" stroke="#ffffff" stroke-width="4" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0.3" fill="none"/></svg></div>', [140, 30]],
+    ['gradient bar', '<div style="position:absolute;left:10px;top:10px;width:60px;height:80px;"><svg viewBox="0 0 60 80" width="100%" height="100%" preserveAspectRatio="none"><defs><linearGradient id="g1" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs><rect x="0" y="0" width="60" height="80" rx="4" fill="url(#g1)"/></svg></div>', [40, 20]],
+    ['chart svg text', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="100%" height="100%"><rect x="0" y="0" width="200" height="80" fill="#182034"/><text x="20" y="45" font-size="24" fill="#ffffff">ABC123</text></svg></div>', [30, 40]],
+  ]
+
+  const selfClose = (html) => html.replace(
+    /<(img|br|hr|input|meta|link|source|col|wbr|embed|area|base|track|param)(\s[^>]*?)?(?<!\/)>/g, '<$1$2 />')
+
+  for (const [name, inner, [sx, sy]] of cases) {
+    const root = document.createElement('div')
+    root.style.cssText = `position:relative;overflow:hidden;width:${W}px;height:${H}px;background:#101828;`
+    root.innerHTML = inner
+    const clone = root.cloneNode(true)
+    inlineNestedSvgs(clone)
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml')
+    let html = selfClose(clone.outerHTML).replace(/&nbsp;/g, '&#160;')
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`
+    const img = new Image()
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+    try { await img.decode() } catch (e) { log(`<div>${name}: DECODE FAIL ${e.message}</div>`); continue }
+    const c = document.createElement('canvas'); c.width = W; c.height = H
+    const x = c.getContext('2d', { willReadFrequently: true })
+    x.drawImage(img, 0, 0, W, H)
+    const px = x.getImageData(sx, sy, 1, 1).data
+    const bg = Math.abs(px[0] - 16) + Math.abs(px[1] - 24) + Math.abs(px[2] - 40) < 12
+    log(`<div>${name}: rgb(${px[0]},${px[1]},${px[2]}) ${bg ? 'MISSING' : 'PAINTED'}</div>`)
+    out.appendChild(c)
+  }
+  log('<h3>done</h3>')
+</script>
+</body>
+</html>

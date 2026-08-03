@@ -235,13 +235,13 @@
   saveState = ''
   sceneVer = 0        // 场景结构版本号（增删/移动后递增，强制子组件重建列表）
 
-  // ---- page_exec（AI 指令通道；存储走 $cloud_fs 不依赖它）----
+  // ---- page_exec（AI 指令通道；存储走 $page_fs 本地单根，不依赖它）----
   pe = null
 
   let toastTimer = 0
   let saveTimer = 0
 
-  const projRoot = () => '/sessions/' + sid + '/vedio'
+  const projRoot = () => '/vedio'
   const projDir = (name) => projRoot() + '/' + name
   const projIndex = (name) => projDir(name) + '/index.json'
   const normName = (n) => String(n || '').trim().replace(/[\\/:\*\?"<>\|#%\s]+/g, '-').replace(/^-+|-+$/g, '') || 'video-' + Date.now().toString(36)
@@ -261,18 +261,18 @@
     return d
   }
 
-  // ---- 云存储（$mod.$cloud_fs → 服务端 UFS /sessions/{sid}/vedio/）----
-  storageReady = () => !!(sid && $mod.$cloud_fs)
+  // ---- 本地存储（$mod.$page_fs → 浏览器 IndexedDB 单根 /vedio/，纯本地）----
+  storageReady = () => !!$mod.$page_fs
   const fsText = async (path) => {
-    const r = await $mod.$cloud_fs.get(path)
+    const r = await $mod.$page_fs.get(path)
     return typeof r.content === 'string' ? r.content : await r.content.text()
   }
-  const fsGet = (path) => $mod.$cloud_fs.get(path)         // {ok, content(string|Blob), mime, size}
-  const fsPut = (path, content) => $mod.$cloud_fs.put(path, content)   // string | Blob
+  const fsGet = (path) => $mod.$page_fs.get(path)         // {ok, content(string|Blob), mime, size}
+  const fsPut = (path, content) => $mod.$page_fs.put(path, content)   // string | Blob
   const fsLs = async (path) => {
-    try { return await $mod.$cloud_fs.ls(path) } catch (e) { return { ok: false, items: [] } }
+    try { return await $mod.$page_fs.ls(path) } catch (e) { return { ok: false, items: [] } }
   }
-  const fsRm = (path) => $mod.$cloud_fs.rm(path)
+  const fsRm = (path) => $mod.$page_fs.rm(path)
   // 目录删除：先试整删，失败则递归逐文件
   const rmDir = async (dir) => {
     try { await fsRm(dir); return } catch (e) { }
@@ -293,7 +293,8 @@
     await ensureSession()
   }
 
-  // 会话自举：URL 带 sid 直接用；否则复用 localStorage 的工作台会话；再否则新建（隐藏会话）
+  // 会话自举（仅 AI 通道用：page_exec 指令 + ai-box 助手；本地存储 $page_fs 不依赖 sid）：
+  // URL 带 sid 直接用；否则复用 localStorage 的工作台会话；再否则新建（隐藏会话）
   ensureSession = async () => {
     if (!sid) {
       const saved = localStorage.getItem('vedio_studio_sid') || ''
@@ -550,7 +551,7 @@
   }
 
   newProject = async () => {
-    if (!storageReady()) { showToast('会话未建立，无法保存项目'); return }
+    if (!storageReady()) { showToast('本地存储不可用，无法保存项目'); return }
     const name = 'video-' + Date.now().toString(36)
     const d = starterDoc()
     d.title = '未命名视频'
@@ -596,7 +597,7 @@
 
   saveAsProject = async () => {
     if (!doc || curName) return
-    if (!storageReady()) { showToast('会话未建立，无法保存'); return }
+    if (!storageReady()) { showToast('本地存储不可用，无法保存'); return }
     const name = 'video-' + Date.now().toString(36)
     await fsPut(projIndex(name), JSON.stringify(doc, null, 2))
     await openProject(name)

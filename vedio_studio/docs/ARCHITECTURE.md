@@ -33,8 +33,8 @@ AI 侧栏（ai-box）保留在 UI 中（tab 切换），但 Phase 1 不为其开
 │ ui/video/render.js —— 导出器（纯 JS）                              │
 │   DOM → SVG foreignObject → canvas → WebCodecs H.264 + AAC → MP4   │
 ├──────────────────────────────────────────────────────────────────┤
-│ $mod.$cloud_fs（服务端 UFS，/aic/fs httpfs）                      │
-│   sessions/{sid}/vedio/{项目名}/index.json · assets/ · exports/    │
+│ $mod.$page_fs（浏览器 IndexedDB 本地单根，纯本地不依赖会话）     │
+│   /vedio/{项目名}/index.json · assets/ · exports/                │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -42,12 +42,13 @@ AI 侧栏（ai-box）保留在 UI 中（tab 切换），但 Phase 1 不为其开
 
 - **engine.js = 数据 + 逻辑**：输入文档 JSON，输出确定性帧 DOM（预览与导出共用同一渲染内核）。
 - **html 组件 = 渲染 + 交互**：index 持有文档真身与选中态，子组件各自负责一块交互。
-- **cloud_fs = 存储**：项目文件、素材、导出产物全在服务端 UFS（与 AI 会话同一 $SESSION 根，
-  AI 可直接用 fs 工具读写——page_exec 文件指令与其等价，仅存 UI 联动差异）。
+- **page_fs = 存储**：项目文件、素材、导出产物全在浏览器本地 IndexedDB（本地根 /vedio/，
+  不依赖 session_id、不进云端）。AI 读写走 page_exec 文件指令（asset_download/write_video_file），
+  页面侧落地到本地。
 
-> 存储选型注记：初版设计为浏览器 IndexedDB（page_fs），但 `page_fs()` 前端操作对象
-> 仅暴露 get/put(文本)/ls/rm/exists，无二进制写能力，无法支撑素材上传与 MP4 落盘。
-> cloud_fs（ppt_studio 同款）put 直收 Blob、AI 同根可读写，Phase 2 因此无需额外协议。
+> 存储选型注记（2026-08-03 定案）：v0.13.1 后 page_fs 为本地单根实现（IndexedDB，无用户/会话隔离），
+> put 直收 Blob、get 支持目录、API 与 cloud_fs 一致——初版因 page_fs 无二进制写能力而选型
+> cloud_fs（云端 UFS）的原因已消除，vedio_studio 存储切回本地 page_fs（/vedio/，纯本地不依赖会话）。
 
 ## 2. Phase 1 编辑器设计
 
@@ -189,13 +190,13 @@ assets    // 素材 ref → dataURL 映射
 ### 2.7 保存模型
 
 - 编辑即改内存 doc，600ms 防抖写 `index.json`（整文档写，KB 级，成本可忽略）。
-- 存储后端：`$mod.$cloud_fs` → 服务端 UFS `/sessions/{sid}/vedio/`；
+- 存储后端：`$mod.$page_fs` → 浏览器本地 IndexedDB `/vedio/`（本地单根，不依赖会话）；
   会话自举（ensureSession）：URL 带 sid 直接用 → localStorage 复用 → 新建隐藏工作台会话。
 - 顶栏显示保存状态：已保存 / 未保存 / 保存中… / 保存失败。
 - `localStorage.vedio_studio_last` 记住最后打开的项目，刷新自动恢复。
 - 素材上传：`uploadAsset(file)` → `assets/{时间戳}.{ext}` Blob 直写项目目录 + 生成
   dataURL 进 assets 映射（预览/导出立即可用），返回相对引用给元素 src。
-- 导出产物写 `vedio/exports/{标题}.mp4`（cloud_fs put Blob）并触发浏览器下载。
+- 导出产物写 `/vedio/exports/{标题}.mp4`（page_fs put Blob）并触发浏览器下载。
 
 ### 2.8 快捷键
 

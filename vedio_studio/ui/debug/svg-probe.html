@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"><title>svg-in-fo probe</title>
+<style>body{background:#111;color:#ddd;font:13px monospace;padding:16px} canvas{border:1px solid #444;margin:4px} .row{display:flex;gap:10px;align-items:flex-start}</style>
+</head>
+<body>
+<div id="out"></div>
+<script type="module">
+  const out = document.getElementById('out')
+  const log = (s) => out.insertAdjacentHTML('beforeend', s)
+  const W = 300, H = 120
+
+  const cases = [
+    ['svg pct size', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="100%" height="100%"><rect x="0" y="0" width="200" height="80" fill="#3a6ff7"/></svg></div>'],
+    ['svg px size', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="200" height="80"><rect x="0" y="0" width="200" height="80" fill="#3abf7c"/></svg></div>'],
+    ['svg pct preserveAspectRatio=none', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="100%" height="100%" preserveAspectRatio="none"><rect x="0" y="0" width="200" height="80" fill="#f0773a"/></svg></div>'],
+    ['div bg (control)', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;background:#b04ad9;"></div>'],
+    ['svg scaleY transform', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;transform:scale(1,0.5);transform-origin:center bottom;"><svg viewBox="0 0 200 80" width="100%" height="100%"><rect x="0" y="0" width="200" height="80" fill="#d9a53a"/></svg></div>'],
+    ['svg blur filter', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;filter:blur(20px);"><svg viewBox="0 0 200 80" width="100%" height="100%"><rect x="0" y="0" width="200" height="80" fill="#3ab0c9"/></svg></div>'],
+    ['svg gradient def', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="100%" height="100%"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a6ff7"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs><rect x="0" y="0" width="200" height="80" fill="url(#g1)"/></svg></div>'],
+    ['svg dashoffset', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;"><svg viewBox="0 0 200 80" width="100%" height="100%"><path d="M10,70 L190,10" stroke="#fff" stroke-width="4" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0.3" fill="none"/></svg></div>'],
+    ['svg low opacity parent', '<div style="position:absolute;left:10px;top:10px;width:200px;height:80px;opacity:0.31;"><svg viewBox="0 0 200 80" width="100%" height="100%"><rect x="0" y="0" width="200" height="80" fill="#3a6ff7"/></svg></div>'],
+  ]
+
+  const selfClose = (html) => html.replace(
+    /<(img|br|hr|input|meta|link|source|col|wbr|embed|area|base|track|param)(\s[^>]*?)?(?<!\/)>/g, '<$1$2 />')
+
+  for (const [name, inner] of cases) {
+    const root = document.createElement('div')
+    root.style.cssText = `position:relative;overflow:hidden;width:${W}px;height:${H}px;background:#101828;`
+    root.innerHTML = inner
+    const clone = root.cloneNode(true)
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml')
+    let html = selfClose(clone.outerHTML).replace(/&nbsp;/g, '&#160;')
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+    const img = new Image()
+    img.src = url
+    try { await img.decode() } catch (e) { log(`<div>${name}: DECODE FAIL ${e.message}</div>`); continue }
+    const c = document.createElement('canvas'); c.width = W; c.height = H
+    const x = c.getContext('2d', { willReadFrequently: true })
+    x.drawImage(img, 0, 0, W, H)
+    // sample center pixel of where the rect should be
+    const px = x.getImageData(60, 50, 1, 1).data
+    const lit = px[0] + px[1] + px[2] > 40
+    log(`<div>${name}: center rgb(${px[0]},${px[1]},${px[2]}) ${lit ? 'PAINTED' : 'MISSING'}</div>`)
+    out.appendChild(c)
+  }
+  log('<h3>done</h3>')
+</script>
+</body>
+</html>
