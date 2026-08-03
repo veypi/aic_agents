@@ -25,14 +25,46 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Serialize a frame DOM node to an SVG foreignObject data URL, then draw it
- *  onto the given canvas at (0,0). Deterministic; waits for image decode.
+/** Chromium 的 SVG-in-img 隔离文档完全不绘制 foreignObject 内嵌的 <svg>
+ *  （长年未修的渲染 bug）——导出前把每个内嵌 svg 换成等价的
+ *  data:image/svg+xml <img>（独立 svg 文档可正常栅格化）。
+ *  缓存按 markup 命中：shape/svg 元素的动画走外层 transform，
+ *  markup 跨帧不变，只有 draw 描边动画逐帧变化。 */
+const svgUrlCache = new Map();
+function svgToDataUrl(markup) {
+  let url = svgUrlCache.get(markup);
+  if (!url) {
+    url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markup);
+    if (svgUrlCache.size > 4000) svgUrlCache.clear();
+    svgUrlCache.set(markup, url);
+  }
+  return url;
+}
+function inlineNestedSvgs(clone) {
+  for (const s of [...clone.querySelectorAll("svg")]) {
+    let markup = s.outerHTML;
+    if (!/xmlns\s*=/.test(markup)) {
+      markup = markup.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    const img = document.createElement("img");
+    img.src = svgToDataUrl(markup);
+    img.alt = "";
+    img.style.cssText = "width:100%;height:100%;display:block;";
+    s.replaceWith(img);
+  }
+}
+
+/** 序列化帧 DOM 为 SVG foreignObject data URL，绘制到 canvas 上（含 three 合成）。
+ *  Deterministic; waits for image decode.
  *  Notes (SVG-as-image constraints):
  *   - root element MUST carry the XHTML namespace (children inherit it);
  *   - void elements MUST be self-closed (strict XML parsing);
- *   - only data: URLs are loadable inside the isolated document (no blob:). */
-async function drawFrameToCanvas(node, canvas, ctx, width, height) {
+ *   - only data: URLs are loadable inside the isolated document (no blob:);
+ *   - nested <svg> inside foreignObject is NOT painted (see inlineNestedSvgs);
+ *   - viewBox transforms do NOT apply to foreignObject content (CSS scale used). */
+export async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   const clone = node.cloneNode(true);
+  inlineNestedSvgs(clone);
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   let html = clone.outerHTML;
   html = html.replace(
@@ -41,34 +73,57 @@ async function drawFrameToCanvas(node, canvas, ctx, width, height) {
   );
   // XML 不识别 HTML 具名实体（stagger 空格等产生的 &nbsp;）——换数值实体
   html = html.replace(/&nbsp;/g, "&#160;");
+  const rootW = +((/width:(\d+)px/.exec(node.style.cssText) || [])[1] || width);
+  const rootH = +((/height:(\d+)px/.exec(node.style.cssText) || [])[1] || height);
+  // 分辨率缩放：Chromium 的 SVG-in-img 不对 foreignObject 应用 viewBox 变换
+  // （实测内容 1:1 渲染后被裁剪），改用 CSS transform 缩放——矢量内容
+  // （svg-img / 文本）在目标分辨率重新栅格化，任意分辨率都清晰。
+  const sx = width / rootW,
+    sy = height / rootH;
+  const scaled =
+    sx === 1 && sy === 1
+      ? html
+      : `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;position:relative">` +
+        `<div style="width:${rootW}px;height:${rootH}px;transform:scale(${sx},${sy});transform-origin:0 0">${html}</div></div>`;
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
-    `<foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
+    `<foreignObject width="100%" height="100%">${scaled}</foreignObject></svg>`;
   const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   const img = new Image();
   img.decoding = "async";
   img.src = url;
+
+  // three 合成准备：WebGL canvas 序列化进 foreignObject 后是空白，按引擎
+  // buildFrame 收集的 __threeItems（文档坐标几何/变换/透明度）直接叠加。
+  // preserveDrawingBuffer=false，必须在同一任务内同步拷贝位图（await decode
+  // 之后缓冲区可能已被浏览器清空），再用副本绘制。
+  const items = node.__threeItems || [];
+  const snaps = items.map((it) => {
+    if (it.opacity <= 0.003) return null;
+    const c = document.createElement("canvas");
+    c.width = it.canvas.width;
+    c.height = it.canvas.height;
+    c.getContext("2d").drawImage(it.canvas, 0, 0);
+    return c;
+  });
+
   await img.decode();
   ctx.drawImage(img, 0, 0, width, height);
 
-  // three 合成：WebGL canvas 序列化进 foreignObject 后是空白，按引擎
-  // buildFrame 收集的 __threeItems（文档坐标几何/变换/透明度）直接叠加。
-  const items = node.__threeItems || [];
   if (items.length) {
-    const rootW = +((/width:(\d+)px/.exec(node.style.cssText) || [])[1] || width);
-    const rootH = +((/height:(\d+)px/.exec(node.style.cssText) || [])[1] || height);
-    const sx = width / rootW, sy = height / rootH;
-    for (const it of items) {
-      if (it.opacity <= 0.003) continue;
-      const w = it.w * sx, h = it.h * sy;
+    items.forEach((it, i) => {
+      const snap = snaps[i];
+      if (!snap) return;
+      const w = it.w * sx,
+        h = it.h * sy;
       ctx.save();
       ctx.translate((it.x + it.dx) * sx + w / 2, (it.y + it.dy) * sy + h / 2);
       if (it.rotation) ctx.rotate((it.rotation * Math.PI) / 180);
       if (it.scaleX !== 1 || it.scaleY !== 1) ctx.scale(it.scaleX, it.scaleY);
       ctx.globalAlpha = Math.max(0, Math.min(1, it.opacity));
-      ctx.drawImage(it.canvas, -w / 2, -h / 2, w, h);
+      ctx.drawImage(snap, -w / 2, -h / 2, w, h);
       ctx.restore();
-    }
+    });
     ctx.globalAlpha = 1;
   }
 }
