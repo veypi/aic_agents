@@ -245,11 +245,6 @@
   const projDir = (name) => projRoot() + '/' + name
   const projIndex = (name) => projDir(name) + '/index.json'
   const normName = (n) => String(n || '').trim().replace(/[\\/:\*\?"<>\|#%\s]+/g, '-').replace(/^-+|-+$/g, '') || 'video-' + Date.now().toString(36)
-  const normRel = (p) => {
-    p = String(p || '').trim().replace(/^\/+/, '')
-    if (!p || p.indexOf('..') >= 0) throw new Error('非法路径: ' + p)
-    return p
-  }
   const showToast = (msg) => {
     toast = msg
     clearTimeout(toastTimer)
@@ -336,7 +331,7 @@
     if (pe) { try { pe.stop() } catch (e) { } }
     pe = null
     pe = $mod.$page_exec(sid, [
-      { name: 'list_video', description: '列出云端存储的视频项目与内置样例',
+      { name: 'list_video', description: '列出本地存储的视频项目与内置样例',
         handler: async () => {
           try {
             const list = await listProjects()
@@ -367,44 +362,6 @@
           try {
             await openProject(arg(argv, 'name'))
             return reply({ ok: true, name: curName, title: curTitle, duration: Math.round((doc.totalFrames || 0) / (doc.fps || 30)) })
-          } catch (e) { return reply(errReply(e)) }
-        } },
-
-      { name: 'read_video_file', description: '读项目内文件（--name 项目名，--path 相对路径如 index.json），返回文本',
-        handler: async (argv) => {
-          try {
-            const name = normName(arg(argv, 'name'))
-            const rel = normRel(arg(argv, 'path') || 'index.json')
-            const r = await fsGet(projDir(name) + '/' + rel)
-            return reply({ ok: true, path: rel, size: r.size, content: typeof r.content === 'string' ? r.content : '[binary]' })
-          } catch (e) { return reply(errReply(e)) }
-        } },
-
-      { name: 'write_video_file', description: '写项目内文件（--name 项目名，--path 相对路径，--content JSON 文本）。写 index.json 后页面自动刷新',
-        handler: async (argv) => {
-          try {
-            const name = normName(arg(argv, 'name'))
-            const rel = normRel(arg(argv, 'path') || 'index.json')
-            const content = arg(argv, 'content')
-            if (content == null) throw new Error('--content 必填')
-            await fsPut(projDir(name) + '/' + rel, content)
-            if (rel === 'index.json' && name === curName) await reloadProject()
-            return reply({ ok: true, path: rel, bytes: String(content).length })
-          } catch (e) { return reply(errReply(e)) }
-        } },
-
-      { name: 'asset_download', description: '下载外部素材到项目（--name 项目名，--url 必填，--path 目标相对路径如 assets/bg.mp3）',
-        handler: async (argv) => {
-          try {
-            const name = normName(arg(argv, 'name'))
-            const url = arg(argv, 'url')
-            if (!url) throw new Error('--url 必填')
-            const rel = normRel(arg(argv, 'path') || 'assets/' + (url.split('/').pop() || 'asset.bin'))
-            const r = await fetch(url)
-            if (!r.ok) throw new Error('下载失败 HTTP ' + r.status)
-            const blob = await r.blob()
-            const out = await fsPut(projDir(name) + '/' + rel, blob)
-            return reply({ ok: true, path: rel, size: out.bytes || blob.size })
           } catch (e) { return reply(errReply(e)) }
         } },
 
@@ -443,13 +400,12 @@
           } catch (e) { return reply(errReply(e)) }
         } },
 
-      { name: 'delete_video', description: '删除项目（--name 必填，不可恢复）',
-        handler: async (argv) => {
+      { name: 'reload_video', description: '重新加载当前项目（AI 用 fs 工具写完 index.json/素材后调用，页面刷新画面并保持当前帧）',
+        handler: async () => {
           try {
-            const name = normName(arg(argv, 'name'))
-            await rmDir(projDir(name))
-            if (curName === name) { doc = null; curName = ''; curTitle = ''; saveState = '' }
-            return reply({ ok: true, deleted: name })
+            if (!curName) throw new Error('没有已打开的项目')
+            await reloadProject()
+            return reply({ ok: true, name: curName, title: curTitle })
           } catch (e) { return reply(errReply(e)) }
         } },
 
@@ -464,6 +420,10 @@
           } catch (e) { return reply(errReply(e)) }
         } },
     ])
+    // 开启 AI 通道：start() 注册自定义指令；start_fs() 开启文件读写响应
+    // （fs.read/write/edit + ls/rg/tree/rm/curl 虚拟指令；AI 路径 $SESSION/vedio/x → 本地 /vedio/x）
+    pe.start()
+    pe.start_fs()
   }
 
   const errReply = (e) => ({ ok: false, error: String((e && e.message) || e) })

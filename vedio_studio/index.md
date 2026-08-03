@@ -17,17 +17,18 @@
 
 1. 构思：脚本 → 场景划分（每个场景 3~6 秒）→ 每场景元素（文字/形状/图片/图表）+ 动画（入场 fx / 关键帧 keyframes）
 2. `new_video --name x-主题 --title "标题"` 创建项目
-3. `read_video_file --name x-主题 --path index.json` 读当前骨架 → 用 `write_video_file --name x-主题 --path index.json --content '<完整JSON>'` 写入完整文档（JSON 用 2 空格缩进展开）
-4. 需要配图/配乐：`asset_download --name x-主题 --url <http链接> --path assets/cover.png`（仅 http/https；下载完成后在文档中写相对路径引用）
-5. `open_video --name x-主题` 让页面加载 → `run_video --name x-主题` 预览播放
-6. 修改：`read_video_file` → 改 → `write_video_file`（写 index.json 后页面自动刷新）
-7. 完成：`export_video --name x-主题` 导出 MP4（页面显示进度，产物自动下载）
+3. 读写项目文件用**标准 fs 工具**（1host=page，start_fs 已开启）：`fs.read {"1host":"page","path":"$SESSION/vedio/x-主题/index.json"}` 读骨架 → `fs.write` 写完整文档（JSON 用 2 空格缩进展开）——`$SESSION/vedio/...` 自动映射到本地 `/vedio/...`
+4. 改完 `index.json` 或素材后调 `reload_video` 让页面刷新画面（保持当前帧）
+5. 需要配图/配乐：`exec {"1host":"page","action":"curl","argv":["-o","$SESSION/vedio/x-主题/assets/cover.png","<http链接>"]}` 下载到项目（下载完成后在文档中写相对路径引用）
+6. `open_video --name x-主题` 让页面加载 → `run_video --name x-主题` 预览播放
+7. 删除文件/项目：`fs.rm` / `exec rm`（本地文件操作）；清理项目用 `fs.rm` 删 `/vedio/{name}` 目录
+8. 完成：`export_video --name x-主题` 导出 MP4（页面显示进度，产物自动下载）
 
 用户说「来个样例看看」：`open_video` 前先用页面上的「样例」按钮，或 `list_video` 查看，告知用户点样例即可（样例只读，用户可在页面右侧「另存为项目」后手动编辑）。
 
 ## 可用 page_exec 指令（exec 1host=page）
 
-事件仅在用户打开 Vedio Studio 页面时响应。成功返回 `{ok:true,...}`，失败 `{ok:false,error}`。
+事件仅在用户打开 Vedio Studio 页面时响应（页面已开启 `start_fs`：AI 可直接用 fs 工具读写本地 `/vedio/` 项目文件，路径写 `$SESSION/vedio/...` 自动映射）。成功返回 `{ok:true,...}`，失败 `{ok:false,error}`。
 
 ### list_video — 项目列表
 
@@ -49,32 +50,9 @@
 |---|---|
 | `--name <名称>` | 必填 |
 
-### read_video_file — 读项目内文件
+### reload_video — 重新加载当前项目
 
-| argv | 说明 |
-|---|---|
-| `--name <名称>` | 必填 |
-| `--path <相对路径>` | 如 `index.json`、`assets/bg.mp3`（二进制返回 `[binary]` 标记） |
-
-返回 `{ ok, path, size, content }`。
-
-### write_video_file — 写项目内文件（内容创作主通道）
-
-| argv | 说明 |
-|---|---|
-| `--name <名称>` | 必填 |
-| `--path <相对路径>` | 默认 `index.json` |
-| `--content <文本>` | 完整文件内容，必填 |
-
-写 `index.json` 且是当前项目时页面自动刷新。**一次只写一个文件**；内容较长时分多次写（先写骨架再写场景）。JSON 用 2 空格缩进展开。
-
-### asset_download — 下载外部素材到项目
-
-| argv | 说明 |
-|---|---|
-| `--name <名称>` | 必填 |
-| `--url <http/https 链接>` | 必填 |
-| `--path <相对路径>` | 如 `assets/cover.png`；缺省按 URL 文件名 |
+无参数。AI 用 fs 工具写完 `index.json`/素材后调用，页面刷新画面并保持当前帧。返回 `{ ok, name, title }`。
 
 ### run_video / stop_video — 预览播放 / 停止
 
@@ -88,12 +66,6 @@
 | `--width/--height/--fps` | 可选覆盖导出分辨率/帧率（默认同文档，≤1280×720 为宜） |
 
 返回 `{ ok, path, size, bytes }`。导出时间约等于视频时长（720p 硬编）；页面有进度显示。
-
-### delete_video — 删除项目（不可恢复）
-
-| argv | 说明 |
-|---|---|
-| `--name <名称>` | 必填 |
 
 ### get_video — 当前打开项目信息
 
