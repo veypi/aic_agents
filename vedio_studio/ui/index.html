@@ -139,6 +139,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
   }
 
   .left .ltabs {
@@ -188,6 +189,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
   }
 
   .rtabs {
@@ -243,6 +245,15 @@
     min-height: 0;
     display: flex;
   }
+
+  /* ---- 面板拖拽分割条 ---- */
+  .pd { flex: none; position: relative; background: transparent; z-index: 5; }
+  .pd.v { width: 5px; cursor: col-resize; }
+  .pd.h { height: 5px; cursor: row-resize; }
+  .pd::after { content: ''; position: absolute; background: transparent; transition: background 0.12s; }
+  .pd.v::after { left: 2px; top: 0; bottom: 0; width: 1px; }
+  .pd.h::after { top: 2px; left: 0; right: 0; height: 1px; }
+  .pd:hover::after, .pd.dragging::after { background: #4361ee; }
 
   .popover {
     position: absolute;
@@ -360,7 +371,7 @@
   </div>
 
   <div class="ws">
-    <div class="left">
+    <div class="left" :style="{ width: leftW + 'px' }">
       <div class="ltabs">
         <button :class="{ on: ltab === 'scenes' }" @click="ltab = 'scenes'">场景</button>
         <button :class="{ on: ltab === 'assets' }" @click="ltab = 'assets'">素材</button>
@@ -370,11 +381,13 @@
       <video-assets v-show="ltab === 'assets'" :files="assetFiles" :readonly="!curName"
         @upload="onUploadAssets" @del="onDelAsset" @pick="onPickAsset" @insert="onInsertAsset"></video-assets>
     </div>
+    <div class="pd v" :class="{ dragging: resizing === 'left' }" @mousedown="startResize('left', $event)" title="拖拽调整左侧宽度"></div>
     <div class="center">
       <video-stage ref="stage" :editable="!!curName && !exporting" :selid="sel.kind === 'element' ? sel.elId : ''"
         @select="onStageSelect" @mutate="onStageChange" @ctxdel="delElements" @dropasset="onDropAsset"></video-stage>
     </div>
-    <div class="right">
+    <div class="pd v" :class="{ dragging: resizing === 'right' }" @mousedown="startResize('right', $event)" title="拖拽调整右侧宽度"></div>
+    <div class="right" :style="{ width: rightW + 'px' }">
       <div class="rtabs">
         <button :class="{ on: rtab === 'props' }" @click="rtab = 'props'">属性</button>
         <button :class="{ on: rtab === 'ai' }" @click="rtab = 'ai'">AI 助手</button>
@@ -388,7 +401,8 @@
     </div>
   </div>
 
-  <div class="bottom">
+  <div class="pd h" :class="{ dragging: resizing === 'bottom' }" @mousedown="startResize('bottom', $event)" title="拖拽调整时间轴高度"></div>
+  <div class="bottom" :style="{ height: bottomH + 'px' }">
     <video-timeline :doc="doc" :frame="curFrame" :sel="sel" :readonly="!curName" :ver="sceneVer" @seek="onSeek"
       @pickscene="onPickScene" @pickel="onPickEl" @addel="onAddEl" @docchange="onDocChange"
       @movescene="moveSceneTo" @dropasset="onDropAsset"></video-timeline>
@@ -398,7 +412,7 @@
 </body>
 
 <script setup>
-  import {starterDoc, defaultTheme, uid} from './video/engine.js'
+  import {starterDoc, defaultTheme, uid, waitMediaSeek} from './video/engine.js'
   document.body.setAttribute('theme', 'dark')
 
   // ---- 状态 ----
@@ -424,6 +438,41 @@
   cur_split = false   // 当前文档 scenes 是否含字符串引用（决定保存按拆分写回还是整体单写）
   saved_scene_snap = {}   // 拆分保存快照：引用 → 已落盘场景序列化（增量跳过未变化文件）
   saved_index_snap = ''   // index.json 已落盘内容（引用数组版）
+  // ---- 面板尺寸（分割条拖拽，localStorage 记忆）----
+  leftW = 196
+  rightW = 322
+  bottomH = 188
+  resizing = ''       // 正在拖拽的分割条：left | right | bottom
+  try {
+    const p = JSON.parse(localStorage.getItem('vedio_studio_panels') || '{}')
+    if (p.left) leftW = Math.max(140, Math.min(480, +p.left))
+    if (p.right) rightW = Math.max(240, Math.min(560, +p.right))
+    if (p.bottom) bottomH = Math.max(120, Math.min(520, +p.bottom))
+  } catch (e) { }
+  const clampP = (v, min, max) => Math.max(min, Math.min(max, v))
+  // 拖拽分割条：实时更新面板尺寸 + stage fit 适配（scale 变化经响应式自动重排），松手记忆
+  startResize = (axis, e) => {
+    e.preventDefault()
+    resizing = axis
+    const x0 = e.clientX, y0 = e.clientY
+    const l0 = leftW, r0 = rightW, b0 = bottomH
+    const onMove = (ev) => {
+      if (axis === 'left') leftW = clampP(l0 + (ev.clientX - x0), 140, 480)
+      else if (axis === 'right') rightW = clampP(r0 - (ev.clientX - x0), 240, 560)
+      // 底部分割线是时间轴顶部边界：往上拖（clientY 减小）→ 高度增大
+      else bottomH = clampP(b0 - (ev.clientY - y0), 120, 520)
+      const st = $refs.stage && $refs.stage.$data
+      if (st && st.fit) st.fit()
+    }
+    const onUp = () => {
+      resizing = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      try {localStorage.setItem('vedio_studio_panels', JSON.stringify({left: leftW, right: rightW, bottom: bottomH}))} catch (err) { }
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   // ---- page_exec（AI 指令通道；存储走 $page_fs 本地单根，不依赖它）----
   pe = null
@@ -641,12 +690,13 @@
             if (!resp.ok) throw new Error('TTS 合成失败 HTTP ' + resp.status)
             const blob = await resp.blob()
             if (!blob.size) throw new Error('TTS 返回空音频')
-            // 文件名：--name 或自动；扩展名按响应 mime（mpeg→mp3）；assets/ 内重名自动加 -N
+            // 文件名：--name 或自动（voice-时间戳）；可选参数显式取值（不 fallback 位置参数）；
+            // 截断防长文本；扩展名按响应 mime（mpeg→mp3）；assets/ 内重名自动加 -N
             let mimeExt = String((blob.type || '').split('/')[1] || 'mp3').toLowerCase()
             if (mimeExt === 'mpeg') mimeExt = 'mp3'
-            const rawName = String(arg(argv, 'name', '') || '').replace(/[\\/:*?"<>|#%\s]+/g, '-').replace(/^-+|-+$/g, '')
+            const rawName = cleanName(optArg(argv, 'name'), 60)
             const dot = rawName.lastIndexOf('.')
-            let base = dot > 0 ? rawName.slice(0, dot) : (rawName || 'voice-' + Date.now().toString(36))
+            const base = dot > 0 ? rawName.slice(0, dot) : (rawName || 'voice-' + Date.now().toString(36))
             const l = await fsLs(projDir(curName) + '/assets/')
             const names = new Set((l.items || []).map((i) => i.name))
             let name = base + '.' + mimeExt
@@ -666,8 +716,47 @@
               if (track === 'music') doc[track].loop = true
               onDocChange()
             }
+            const duration = await audioDuration(blob)
             await refreshAssets()
-            return reply({ok: true, ref, name, size: blob.size, track, hint: '素材引用：' + ref})
+            return reply({ok: true, ref, name, size: blob.size, duration, track, hint: '素材引用：' + ref + '（时长 ' + duration + 's）'})
+          } catch (e) {return reply(errReply(e))}
+        }
+      },
+
+      {
+        name: 'shot_video', description: '截图当前画面为 PNG（--frame 可选指定帧号，--name 可选文件名，--scale 可选 0.25~2 分辨率倍率）。返回图片路径，用 fs.read（1host=page，路径 $SESSION/vedio/screenshots/...）查看画面',
+        handler: async (argv) => {
+          try {
+            if (!doc || !curName) throw new Error('请先打开项目')
+            const st = $refs.stage && $refs.stage.$data
+            const engine = st && st.engine
+            if (!engine) throw new Error('引擎未就绪')
+            // 关键：totalFrames 只在引擎规范化后的 doc 上（页面 proxy doc 是原始 JSON，没有该字段）——
+            // 用 doc.totalFrames 会得到 undefined → total=1 → 任何 --frame 都被钳到第 0 帧
+            const total = (engine.doc && engine.doc.totalFrames) || st.totalFrames || 1
+            const fr = parseInt(optArg(argv, 'frame'), 10)
+            const f = isNaN(fr) ? engine.frame : Math.max(0, Math.min(fr, total - 1))
+            // 复用导出管线：确定性 DOM → SVG foreignObject → canvas（不动播放头）
+            if (engine.prepare) await engine.prepare()   // three 元素懒加载就绪
+            const {drawFrameToCanvas} = await import('./video/render.js')
+            // forExport：与导出画面一致（audio 元素不画 chip；media 合成真帧）
+            const node = engine.buildFrame(f, {forExport: true})
+            await waitMediaSeek(node)
+            const scale = Math.max(0.25, Math.min(2, parseFloat(optArg(argv, 'scale') || '1') || 1))
+            const W = Math.round(doc.size.width * scale)
+            const H = Math.round(doc.size.height * scale)
+            const canvas = document.createElement('canvas')
+            canvas.width = W
+            canvas.height = H
+            const ctx = canvas.getContext('2d', {alpha: false})
+            ctx.fillStyle = '#000'
+            ctx.fillRect(0, 0, W, H)
+            await drawFrameToCanvas(node, canvas, ctx, W, H)
+            const blob = await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'))
+            const rawName = cleanName(optArg(argv, 'name'), 60)
+            const name = (rawName || safeTitle() + '-f' + f) + '.png'
+            const out = await fsPut(projRoot() + '/screenshots/' + name, blob)
+            return reply({ok: true, path: '/vedio/screenshots/' + name, frame: f, total, width: W, height: H, size: blob.size, hint: 'fs.read {"1host":"page","path":"$SESSION/vedio/screenshots/' + name + '"}'})
           } catch (e) {return reply(errReply(e))}
         }
       },
@@ -701,6 +790,27 @@
     const pos = (argv || []).find((a) => typeof a === 'string' && !String(a).startsWith('--'))
     return pos !== undefined ? pos : dft
   }
+  // 可选参数显式取值：不带位置参数 fallback（否则多 flag 场景会误取其它 flag 的值，如 --text 长文本被当成 --name）
+  const optArg = (argv, key) => {
+    const a = argv || []
+    const i = a.indexOf('--' + key)
+    return i >= 0 && a[i + 1] !== undefined ? String(a[i + 1]) : ''
+  }
+  // 文件名清洗 + 截断（防长文本/超长文件名）
+  const cleanName = (s, max) => {
+    s = String(s || '').replace(/[\\/:*?"<>|#%\s]+/g, '-').replace(/^-+|-+$/g, '')
+    if (max && s.length > max) s = s.slice(0, max)
+    return s
+  }
+  // 音频时长（秒，两位小数）：加载元数据获取，失败返回 0
+  const audioDuration = (blob) => new Promise((res) => {
+    const u = URL.createObjectURL(blob)
+    const a = new Audio()
+    const done = (v) => {URL.revokeObjectURL(u); res(v)}
+    a.onloadedmetadata = () => done(Math.round(a.duration * 100) / 100)
+    a.onerror = () => done(0)
+    a.src = u
+  })
 
   // ---- 项目读写 ----
   listProjects = async () => {
