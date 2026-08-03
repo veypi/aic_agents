@@ -311,6 +311,19 @@
     color: #f87171;
   }
 
+  /* ---- 导出设置弹层 ---- */
+  .exf-t { font-size: 13px; font-weight: 600; color: #e2e8f0; padding: 4px 6px 8px; }
+  .exf-r { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+  .exf-r label { flex: none; width: 52px; font-size: 12px; color: #64748b; }
+  .exf-r .hint { font-size: 11px; color: #475569; line-height: 1.6; }
+  .exf-sel, .exf-in {
+    flex: 1; min-width: 0; background: rgba(255, 255, 255, 0.06); color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px;
+    font-size: 12px; padding: 5px 7px; outline: none;
+  }
+  .exf-in { flex: none; width: 72px; }
+  .exf-b { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 6px 4px; }
+
   .pop-title {
     padding: 6px 8px 4px;
     font-size: 11px;
@@ -362,7 +375,61 @@
     <button class="tbtn" @click="newProject()">新建</button>
     <button class="tbtn" @click="undoEdit()" :disabled="!undoStack.length" title="撤销（Cmd/Ctrl+Z）">撤销</button>
     <button class="tbtn" @click="redoEdit()" :disabled="!redoStack.length" title="重做（Cmd/Ctrl+Shift+Z）">重做</button>
-    <button class="tbtn primary" @click="exportMp4()" :disabled="exporting || !doc">导出 MP4</button>
+    <button class="tbtn primary" @click="showExport = !showExport; showCases = false; showProjects = false" :disabled="exporting || !doc">导出</button>
+  </div>
+
+  <div class="popover" v-if="showExport" style="width: 330px" @mousedown.stop>
+    <div class="exf-t">导出设置</div>
+    <div class="exf-r">
+      <label>格式</label>
+      <select class="exf-sel" :value="exFormat" @change="exFormat = $event.target.value">
+        <option value="mp4" :selected="exFormat === 'mp4'">MP4 · H.264 + AAC</option>
+        <option value="webm" :selected="exFormat === 'webm'">WebM · VP9 + Opus</option>
+        <option value="webm-vp8" :selected="exFormat === 'webm-vp8'">WebM · VP8 + Opus</option>
+        <option value="wav" :selected="exFormat === 'wav'">WAV · 仅音频（48kHz 立体声）</option>
+      </select>
+    </div>
+    <template v-if="exFormat !== 'wav'">
+      <div class="exf-r">
+        <label>分辨率</label>
+        <select class="exf-sel" :value="exRes" @change="exRes = $event.target.value">
+          <option value="orig" :selected="exRes === 'orig'">原始（{{ doc ? doc.size.width : 0 }}×{{ doc ? doc.size.height : 0 }}）</option>
+          <option value="1080" :selected="exRes === '1080'">1080p 全高清</option>
+          <option value="720" :selected="exRes === '720'">720p 高清</option>
+          <option value="480" :selected="exRes === '480'">480p 标清</option>
+          <option value="custom" :selected="exRes === 'custom'">自定义…</option>
+        </select>
+      </div>
+      <div class="exf-r" v-if="exRes === 'custom'">
+        <label>尺寸</label>
+        <input class="exf-in" type="number" min="16" step="2" v:value="exW" /> ×
+        <input class="exf-in" type="number" min="16" step="2" v:value="exH" />
+      </div>
+      <div class="exf-r">
+        <label>帧率</label>
+        <select class="exf-sel" :value="exFps" @change="exFps = $event.target.value">
+          <option value="orig" :selected="exFps === 'orig'">原始（{{ doc ? doc.fps : 30 }} fps）</option>
+          <option value="24" :selected="exFps === '24'">24 fps</option>
+          <option value="25" :selected="exFps === '25'">25 fps</option>
+          <option value="30" :selected="exFps === '30'">30 fps</option>
+          <option value="60" :selected="exFps === '60'">60 fps</option>
+        </select>
+      </div>
+      <div class="exf-r">
+        <label>质量</label>
+        <select class="exf-sel" :value="exQuality" @change="exQuality = $event.target.value">
+          <option value="low" :selected="exQuality === 'low'">低（文件更小）</option>
+          <option value="medium" :selected="exQuality === 'medium'">中（推荐）</option>
+          <option value="high" :selected="exQuality === 'high'">高（更清晰）</option>
+        </select>
+      </div>
+      <div class="exf-r"><span class="hint">{{ exSummary() }}</span></div>
+    </template>
+    <div class="exf-r" v-else><span class="hint">仅导出混音音轨（音乐 / 配音 / 未静音媒体），PCM 无压缩。</span></div>
+    <div class="exf-b">
+      <button class="tbtn" @click="showExport = false">取消</button>
+      <button class="tbtn primary" @click="startExport()" :disabled="exporting">{{ exporting ? '导出中…' : '开始导出' }}</button>
+    </div>
   </div>
 
   <div class="popover" v-if="showCases">
@@ -444,6 +511,14 @@
   projects = []
   showCases = false
   showProjects = false
+  // ---- 导出配置（对话框）----
+  showExport = false
+  exFormat = 'mp4'    // mp4 | webm | webm-vp8 | wav
+  exRes = 'orig'      // orig | 1080 | 720 | 480 | custom
+  exW = 1280
+  exH = 720
+  exFps = 'orig'      // orig | 24 | 25 | 30 | 60
+  exQuality = 'medium' // low | medium | high
   exporting = false
   toast = ''
   saveState = ''
@@ -1593,17 +1668,45 @@
   }
 
   // ---- 导出 ----
+  const even2 = (v) => Math.max(16, Math.round((+v || 16) / 2) * 2)
+  // 目标分辨率：orig=文档原始；1080/720/480=按文档宽高比缩放（偶数对齐 H.264）；custom=自定义
+  exSize = () => {
+    const dw = doc ? doc.size.width : 1280, dh = doc ? doc.size.height : 720
+    if (exRes === 'custom') return {w: even2(exW || dw), h: even2(exH || dh)}
+    if (exRes === 'orig') return {w: even2(dw), h: even2(dh)}
+    const h = even2(exRes)
+    return {w: even2((dw / dh) * h), h}
+  }
+  exFpsOf = () => (exFps === 'orig' ? (doc ? doc.fps : 30) : +exFps || 30)
+  // 与 render.js estimateBitrate 同式（码率 bps）
+  const exBitrateEst = (w, h, fps, q) => {
+    const bpp = {low: 0.06, medium: 0.12, high: 0.22}[q] || 0.12
+    return Math.max(500000, Math.min(40000000, Math.round(w * h * fps * bpp)))
+  }
+  exSummary = () => {
+    const st = $refs.stage && $refs.stage.$data
+    const total = st && st.totalFrames ? st.totalFrames : 0
+    const fps = exFpsOf()
+    const {w, h} = exSize()
+    const dur = total / (st && st.engine ? st.engine.doc.fps : fps)
+    const mb = (exBitrateEst(w, h, fps, exQuality) * dur + 128000 * dur) / 8 / 1048576
+    return '时长 ' + dur.toFixed(1) + 's · ' + total + 'f · ' + w + '×' + h + '@' + fps + ' · 约 ' + mb.toFixed(1) + ' MB'
+  }
   doExport = async (opts) => {
     const {exportVideo} = await import('./video/render.js')
     exporting = true
     showCases = false
     showProjects = false
+    showExport = false
     try {
       const engine = $refs.stage.$data.engine
       const blob = await exportVideo(engine, {
+        format: opts.format || 'mp4',
         width: opts.width || 0,
         height: opts.height || 0,
         fps: opts.fps || 0,
+        quality: opts.quality || 'medium',
+        bitrate: opts.bitrate,
         onProgress: (p) => {
           $refs.stage.$data.setExporting(true, p.pct, p.phase === 'audio' ? '混音与封装…' : '渲染帧 ' + p.frame + '/' + p.total)
         },
@@ -1615,18 +1718,24 @@
     }
   }
 
-  exportMp4 = async () => {
+  // 导出文件扩展名（与格式对应）
+  const exExt = (format) => format === 'wav' ? 'wav' : format === 'mp4' ? 'mp4' : 'webm'
+  // 对话框「开始导出」：按当前配置导出 + 本地产物存档 + 触发下载
+  startExport = async () => {
     if (!doc || exporting) return
+    const {w, h} = exSize()
+    const format = exFormat
     try {
       showToast('开始导出…')
-      const blob = await doExport({})
-      downloadBlob(blob, safeTitle() + '.mp4')
+      const blob = await doExport({format, width: w, height: h, fps: exFpsOf(), quality: exQuality})
+      const fname = safeTitle() + '.' + exExt(format)
+      downloadBlob(blob, fname)
       if (storageReady()) {
         try {
-          await fsPut(projRoot() + '/exports/' + safeTitle() + '.mp4', blob)
-        } catch (e) {console.warn('export saved to cloud fs failed:', e)}
+          await fsPut(projRoot() + '/exports/' + fname, blob)
+        } catch (e) {console.warn('export saved to local fs failed:', e)}
       }
-      showToast('导出完成：' + safeTitle() + '.mp4')
+      showToast('导出完成：' + fname)
     } catch (e) {
       console.error(e)
       showToast('导出失败：' + (e && e.message ? e.message : e))

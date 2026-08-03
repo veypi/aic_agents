@@ -12,14 +12,71 @@
  */
 
 import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.js";
+import { Muxer as WebmMuxer, ArrayBufferTarget as WebmArrayBufferTarget } from "./vendor/webm-muxer.js";
 import { prepareMedia, waitMediaSeek } from "./engine.js";
 
 const SR = 48000;
 
-function codecFor(width, height, fps) {
+/* -------------------------------------------------------- 导出格式与质量 */
+
+/** 支持的导出格式（浏览器 WebCodecs 能力内） */
+export const EXPORT_FORMATS = {
+  mp4: { label: "MP4 · H.264 + AAC", ext: "mp4", mime: "video/mp4" },
+  webm: { label: "WebM · VP9 + Opus", ext: "webm", mime: "video/webm" },
+  "webm-vp8": { label: "WebM · VP8 + Opus", ext: "webm", mime: "video/webm" },
+  wav: { label: "WAV · 仅音频", ext: "wav", mime: "audio/wav" },
+};
+
+/** 质量预设 → 视频码率（bits/pixel/frame 经验值 × 总像素 × fps） */
+const QUALITY_BPP = { low: 0.06, medium: 0.12, high: 0.22 };
+export function estimateBitrate(width, height, fps, quality = "medium") {
+  if (typeof quality === "number" && isFinite(quality) && quality > 0) {
+    // 数字：<=200 视为 Mbps，否则视为 bps
+    return Math.round(quality <= 200 ? quality * 1_000_000 : quality);
+  }
+  const bpp = QUALITY_BPP[quality] || QUALITY_BPP.medium;
+  return Math.max(500_000, Math.min(40_000_000, Math.round(width * height * fps * bpp)));
+}
+
+function videoCodecFor(format, width, height) {
   const px = width * height;
-  if (px > 1280 * 720) return { codec: "avc1.4d0028", bitrate: 8_000_000 }; // 1080p main 4.0
-  return { codec: "avc1.42001f", bitrate: 4_000_000 }; // 720p baseline 3.1
+  if (format === "webm") return px > 1280 * 720 ? "vp09.00.40.08" : "vp09.00.10.08";
+  if (format === "webm-vp8") return "vp8";
+  // mp4 H.264
+  if (px > 1280 * 720) return "avc1.4d0028"; // 1080p main 4.0
+  return "avc1.42001f"; // 720p baseline 3.1
+}
+
+/** AudioBuffer(48k stereo) → 16-bit PCM WAV Blob */
+function audioBufferToWav(buf) {
+  const ch = buf.numberOfChannels,
+    n = buf.length,
+    sr = buf.sampleRate;
+  const dv = new DataView(new ArrayBuffer(44 + n * ch * 2));
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, "RIFF");
+  dv.setUint32(4, 36 + n * ch * 2, true);
+  ws(8, "WAVE");
+  ws(12, "fmt ");
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, ch, true);
+  dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr * ch * 2, true);
+  dv.setUint16(32, ch * 2, true);
+  dv.setUint16(34, 16, true);
+  ws(36, "data");
+  dv.setUint32(40, n * ch * 2, true);
+  const chans = [];
+  for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < n; i++)
+    for (let c = 0; c < ch; c++) {
+      const v = Math.max(-1, Math.min(1, chans[c][i]));
+      dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+      o += 2;
+    }
+  return new Blob([dv.buffer], { type: "audio/wav" });
 }
 
 function sleep(ms) {
@@ -200,27 +257,91 @@ function checkAbort(signal) {
   }
 }
 
+/** 编码混音进 muxer：AAC 一次性喂入；Opus 有帧长限制按 20ms(960 帧) 分块。
+ *  返回 false = 当前浏览器不支持该音频编码（静默跳过音轨） */
+async function encodeAudioToMuxer(mix, muxer, codec) {
+  let ok = false;
+  try {
+    if (typeof AudioEncoder !== "undefined" && AudioEncoder.isConfigSupported) {
+      const sup = await AudioEncoder.isConfigSupported({ codec, sampleRate: SR, numberOfChannels: 2, bitrate: 128_000 });
+      ok = !!sup.supported;
+    } else {
+      ok = true;
+    }
+  } catch (e) {
+    ok = false;
+  }
+  if (!ok) return false;
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error: (e) => { throw e; },
+  });
+  enc.configure({ codec, sampleRate: SR, numberOfChannels: 2, bitrate: 128_000 });
+  const total = mix.length;
+  const L = mix.getChannelData(0),
+    R = mix.getChannelData(1);
+  if (codec === "opus") {
+    const CHUNK = 960; // 20ms @48k
+    for (let off = 0; off < total; off += CHUNK) {
+      const n = Math.min(CHUNK, total - off);
+      const planar = new Float32Array(n * 2);
+      planar.set(L.subarray(off, off + n), 0);
+      planar.set(R.subarray(off, off + n), n);
+      const ad = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((off / SR) * 1e6), data: planar });
+      enc.encode(ad);
+      ad.close();
+    }
+  } else {
+    const planar = new Float32Array(total * 2);
+    planar.set(L, 0);
+    planar.set(R, total);
+    const ad = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: total, numberOfChannels: 2, timestamp: 0, data: planar });
+    enc.encode(ad);
+    ad.close();
+  }
+  await enc.flush();
+  enc.close();
+  return true;
+}
+
 /**
- * Export the engine's document to an MP4 Blob.
- * opts: { fps, width, height, totalFrames, onProgress({phase,pct,frame,total}), signal }
+ * Export the engine's document to a video/audio Blob.
+ * opts: { format: 'mp4'|'webm'|'webm-vp8'|'wav' (默认 mp4),
+ *         width, height, fps, totalFrames,
+ *         quality: 'low'|'medium'|'high' 或 bitrate Mbps/bps 数字,
+ *         onProgress({phase,pct,frame,total}), signal }
  */
 export async function exportVideo(engine, opts = {}) {
   const { onProgress = () => {}, signal } = opts;
+  const format = EXPORT_FORMATS[opts.format] ? opts.format : "mp4";
   const width = opts.width || engine.doc.size.width;
   const height = opts.height || engine.doc.size.height;
   const fps = opts.fps || engine.doc.fps;
   const totalFrames = opts.totalFrames || engine.doc.totalFrames;
+  const fmt = EXPORT_FORMATS[format];
+
+  onProgress({ phase: "setup", pct: 0, frame: 0, total: totalFrames });
+
+  // ---- 纯音频路径：WAV ----
+  if (format === "wav") {
+    onProgress({ phase: "audio", pct: 30, frame: 0, total: totalFrames });
+    const mix = await engine.renderAudioMix(totalFrames / fps);
+    if (!mix) throw new Error("文档没有可导出的音轨（音乐 / 配音 / 未静音媒体）");
+    checkAbort(signal);
+    onProgress({ phase: "done", pct: 100, frame: totalFrames, total: totalFrames });
+    return audioBufferToWav(mix);
+  }
 
   if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") {
     throw new Error("当前浏览器不支持 WebCodecs，请使用最新版 Chrome/Edge 导出视频");
   }
 
-  onProgress({ phase: "setup", pct: 0, frame: 0, total: totalFrames });
-
   await preloadAssets(engine.assets);
   if (engine.prepare) await engine.prepare(); // 懒加载 three 渲染器
 
-  const { codec, bitrate } = codecFor(width, height, fps);
+  const isWebm = format === "webm" || format === "webm-vp8";
+  const codec = videoCodecFor(format, width, height);
+  const bitrate = estimateBitrate(width, height, fps, opts.bitrate != null ? +opts.bitrate : (opts.quality || "medium"));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -228,12 +349,19 @@ export async function exportVideo(engine, opts = {}) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, width, height);
 
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: { codec: "avc", width, height },
-    ...(engine.audioTracks().length ? { audio: { codec: "aac", sampleRate: SR, numberOfChannels: 2 } } : {}),
-    fastStart: "in-memory",
-  });
+  const hasAudio = engine.audioTracks().length > 0;
+  const muxer = isWebm
+    ? new WebmMuxer({
+        target: new WebmArrayBufferTarget(),
+        video: { codec: format === "webm" ? "V_VP9" : "V_VP8", width, height },
+        ...(hasAudio ? { audio: { codec: "A_OPUS", sampleRate: SR, numberOfChannels: 2 } } : {}),
+      })
+    : new Muxer({
+        target: new ArrayBufferTarget(),
+        video: { codec: "avc", width, height },
+        ...(hasAudio ? { audio: { codec: "aac", sampleRate: SR, numberOfChannels: 2 } } : {}),
+        fastStart: "in-memory",
+      });
 
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -275,50 +403,14 @@ export async function exportVideo(engine, opts = {}) {
   }
   onProgress({ phase: "frames", pct: 100, frame: totalFrames, total: totalFrames });
 
-  // ---- audio track: OfflineAudioContext mix → AAC (skip if unsupported) ----
-  const mix = await engine.renderAudioMix(totalFrames / fps);
-  if (mix) {
-    checkAbort(signal);
-    onProgress({ phase: "audio", pct: 100, frame: totalFrames, total: totalFrames });
-    let aacOk = false;
-    try {
-      if (typeof AudioEncoder !== "undefined" && AudioEncoder.isConfigSupported) {
-        const sup = await AudioEncoder.isConfigSupported({
-          codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 128_000,
-        });
-        aacOk = !!sup.supported;
-      } else {
-        aacOk = true; // assume supported (older Chromium)
-      }
-    } catch (e) {
-      aacOk = false;
-    }
-    if (aacOk) {
-      const audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-        error: (e) => {
-          throw e;
-        },
-      });
-      audioEncoder.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 128_000 });
-      const frames = mix.length; // 2-channel planar float
-      const planar = new Float32Array(frames * 2);
-      planar.set(mix.getChannelData(0), 0);
-      planar.set(mix.getChannelData(1), frames);
-      const audioData = new AudioData({
-        format: "f32-planar",
-        sampleRate: SR,
-        numberOfFrames: frames,
-        numberOfChannels: 2,
-        timestamp: 0,
-        data: planar,
-      });
-      audioEncoder.encode(audioData);
-      audioData.close();
-      await audioEncoder.flush();
-      audioEncoder.close();
-    } else {
-      onProgress({ phase: "audio-skip", pct: 100, frame: totalFrames, total: totalFrames });
+  // ---- audio track: OfflineAudioContext mix → AAC/Opus (skip if unsupported) ----
+  if (hasAudio) {
+    const mix = await engine.renderAudioMix(totalFrames / fps);
+    if (mix) {
+      checkAbort(signal);
+      onProgress({ phase: "audio", pct: 100, frame: totalFrames, total: totalFrames });
+      const audioOk = await encodeAudioToMuxer(mix, muxer, isWebm ? "opus" : "mp4a.40.2");
+      if (!audioOk) onProgress({ phase: "audio-skip", pct: 100, frame: totalFrames, total: totalFrames });
     }
   }
 
@@ -327,5 +419,5 @@ export async function exportVideo(engine, opts = {}) {
   muxer.finalize();
   const buffer = muxer.target.buffer;
   onProgress({ phase: "done", pct: 100, frame: totalFrames, total: totalFrames });
-  return new Blob([buffer], { type: "video/mp4" });
+  return new Blob([buffer], { type: fmt.mime });
 }
