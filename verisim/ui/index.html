@@ -1082,7 +1082,7 @@ endmodule
     }
   }
   loadExample = (name) => {
-    const ex = window.VeriSimExamples && window.VeriSimExamples[name]
+    const ex = VeriSimExamples && VeriSimExamples[name]
     if (!ex) return
     setCodeFromAction(ex.code, $t('src.example') + ': ' + ($t('ex.' + name) || name))
     topModule = ex.top || ''
@@ -1138,7 +1138,7 @@ endmodule
     const path = '/sessions/' + aiSessionId + '/' + name
     const fileCode = await readUfsText(path)
     setCodeFromAction(fileCode, $t('src.sessionFile') + ': ' + name)
-    if (window.VeriSimSynth) topModule = window.VeriSimSynth.stripForSynth(fileCode).top || topModule
+    if (VeriSimSynth) topModule = VeriSimSynth.stripForSynth(fileCode).top || topModule
     showPane('code')
     log(() => $t('log.sessionFileLoaded', {name}), 'ok')
   }
@@ -1231,9 +1231,9 @@ endmodule
         // 2) 按镜像源列表加载（国内 → 海外 → 本地，配置见 js/sources.js）
         if (content === null) {
           const base = (($mod.scoped || '').replace(/\/$/, '')) || '.'
-          if (window.VeriSimSources) {
+          if (VeriSimSources) {
             try {
-              content = await window.VeriSimSources.loadText(b.key, base, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
+              content = await VeriSimSources.loadText(b.key, base, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
             } catch (e) {
               throw new Error($t('err.builtinMissing'))
             }
@@ -1325,7 +1325,7 @@ endmodule
 
   runSimCode = async (opts) => {
     const o = opts || {}
-    if (!window.VeriSimEngines) return {ok: false, text: '仿真引擎未加载', error: 'engine not loaded'}
+    if (!VeriSimEngines) return {ok: false, text: '仿真引擎未加载', error: 'engine not loaded'}
     const simLabel = o.source === 'sim_file'
       ? ($t('src.aiFile') + ': ' + (o.file || ''))
       : (o.source === 'sim_code' ? $t('src.aiCode') : $t('src.manual'))
@@ -1341,7 +1341,7 @@ endmodule
         log(tt('log.dumpInjected'), 'sys')
       }
       log(tt('log.simStart'), 'sys')
-      const r = await window.VeriSimEngines.simRun(src, '', s => log(() => '  · ' + $t('sim.stage.' + s), 'info'))
+      const r = await VeriSimEngines.simRun(src, '', s => log(() => '  · ' + $t('sim.stage.' + s), 'info'))
       if (r.warn && r.warn.trim()) log(() => $t('log.compileWarn') + '\n' + r.warn.trim(), 'wrn')
       const ms = performance.now() - t0
       log(() => $t('log.simDone', {ms: ms.toFixed(0)}), 'ok')
@@ -1421,7 +1421,7 @@ endmodule
 
   runSynthCode = async (opts) => {
     const o = opts || {}
-    if (!window.VeriSimEngines || !window.VeriSimSynth) return {ok: false, text: '综合引擎未加载', error: 'engine not loaded'}
+    if (!VeriSimEngines || !VeriSimSynth) return {ok: false, text: '综合引擎未加载', error: 'engine not loaded'}
     const synthLabel = o.source === 'synth_file'
       ? ($t('src.aiFile') + ': ' + (o.file || ''))
       : $t('src.manualSynth')
@@ -1438,11 +1438,11 @@ endmodule
     await new Promise(r => requestAnimationFrame(r))
     try {
       const design = sanitize(code)
-      const synthInput = window.VeriSimSynth.stripForSynth(design)
+      const synthInput = VeriSimSynth.stripForSynth(design)
       if (synthInput.dropped && synthInput.dropped.length) {
         log(() => $t('log.tbDropped', {list: synthInput.dropped.join(', ')}), 'sys')
       }
-      const top = (o.top || topModule || '').trim() || synthInput.top || window.VeriSimSynth.guessTop(design)
+      const top = (o.top || topModule || '').trim() || synthInput.top || VeriSimSynth.guessTop(design)
       if (!top) throw new Error($t('err.noTop'))
       const ti = await resolveTech(o.tech !== undefined ? o.tech : tech)
       log(() => $t('log.synthStart', {top, tech: ti.label}), 'sys')
@@ -1485,7 +1485,7 @@ endmodule
       overlayTitle = $t('synth.overlayComputing')
       overlaySub = $t('synth.overlayComputingHint')
       await new Promise(r => requestAnimationFrame(r))
-      const r = await window.VeriSimEngines.synthRun(script, files, p => {
+      const r = await VeriSimEngines.synthRun(script, files, p => {
         if (p && p.total) {
           // 引擎正在下载（首次或缓存失效）,切回下载提示
           overlayTitle = $t('synth.overlayTitle')
@@ -1498,7 +1498,7 @@ endmodule
       // 综合计算完成，进入结果解析与渲染阶段
       overlayTitle = $t('synth.overlayRendering')
       overlaySub = $t('synth.overlayRenderingHint')
-      const stat = window.VeriSimSynth.parseStat(r.out, top)
+      const stat = VeriSimSynth.parseStat(r.out, top)
       synthOverview = stat.overview
       synthCells = stat.cellRows
       netlistText = r.files && r.files['netlist.v'] ? r.files['netlist.v'] : $t('netlist.missing')
@@ -1567,7 +1567,7 @@ endmodule
 
   loadWave = (vcd) => {
     lastVCD = vcd
-    waveData = window.VeriSimVCD.parseVCD(vcd)
+    waveData = VeriSimVCD.parseVCD(vcd)
     signals = waveData.order.map(id => ({id, name: waveData.vars[id].name, short: waveData.vars[id].short, width: waveData.vars[id].width}))
     selIds = waveData.order.slice(0, 30)
     if (vcdUrl) URL.revokeObjectURL(vcdUrl)
@@ -1676,7 +1676,7 @@ endmodule
       if (curT !== null) {
         c.fillStyle = accent
         c.font = '11px ui-monospace, monospace'
-        c.fillText(window.VeriSimVCD.fmtBits(valAt(id, curT), v.width), NAME_W + 6, mid + 4)
+        c.fillText(VeriSimVCD.fmtBits(valAt(id, curT), v.width), NAME_W + 6, mid + 4)
       }
       const ch = waveData.changes[id]
       const bus = v.width > 1
@@ -1723,7 +1723,7 @@ endmodule
             c.font = '10px ui-monospace, monospace'
             const txt = badBits
               ? (/[zZ]/.test(bits) && !/[xX]/.test(bits) ? 'z' : 'x')
-              : '0x' + window.VeriSimVCD.bitsToVal(bits).toString(16).toUpperCase()
+              : '0x' + VeriSimVCD.bitsToVal(bits).toString(16).toUpperCase()
             c.fillText(txt, x0 + 10, mid + 3)
           }
         }
@@ -1857,7 +1857,7 @@ endmodule
   }
 
   bindUiRun = (sid) => {
-    pe?.stop()
+    pe?.()
     pe = null
     if (!sid) return
     if (!$mod.$page_exec) {
@@ -1891,14 +1891,13 @@ endmodule
         return {content: JSON.stringify({ok: false, text, error: e && e.message ? e.message : String(e)})}
       }
     }
-    pe = $mod.$page_exec(sid, [
+    pe = $mod.$page_exec.sub(sid, [
       {name: 'sim_code', description: '运行仿真代码（--code 代码，--top 顶层，--pane 结果页）', handler: wrap('sim_code', simCode)},
       {name: 'sim_file', description: '运行仿真文件（--file 文件，--tb testbench，--top，--pane）', handler: wrap('sim_file', simFile)},
       {name: 'synth_file', description: '综合文件（--file，--top，--pane）', handler: wrap('synth_file', synthFile)},
       {name: 'show_pane', description: '切换结果页（--pane wave/sch/synth）', handler: wrap('show_pane', (args) => showPane(args.pane || args['0'] || 'wave'))},
       {name: 'clear_console', description: '清空控制台', handler: wrap('clear_console', () => clearConsole())},
     ])
-    pe.start()
     log(tt('log.aiLinked'), 'sys')
   }
 </script>
@@ -1918,18 +1917,21 @@ endmodule
     ; (async () => {
       try {
         refreshLineNumbers()
-        window.VeriSimBase = (($mod.scoped || '').replace(/\/$/, '')) || ''
+        VeriSimBase = (($mod.scoped || '').replace(/\/$/, '')) || ''
         statusText = $t('status.init')
-        try {await loadScript(scopedUrl('js/sources.js'))} catch (e) {log(tt('log.srcFallback'), 'wrn')}
-        await loadScript(scopedUrl('js/vcd.js'))
-        await loadScript(scopedUrl('js/synth.js'))
-        await loadScript(scopedUrl('js/examples.js'))
-        await loadScript(scopedUrl('js/engines.js'))
+        // 一方 js 全部是 ES module，经动态 import 加载（不再挂 window）
+        const importLocal = (p) => import(new URL(scopedUrl(p), location.origin).href)
+        VeriSimSources = null
+        try {VeriSimSources = (await importLocal('js/sources.js')).default} catch (e) {log(tt('log.srcFallback'), 'wrn')}
+        VeriSimVCD = (await importLocal('js/vcd.js')).default
+        VeriSimSynth = (await importLocal('js/synth.js')).default
+        VeriSimExamples = (await importLocal('js/examples.js')).default
+        VeriSimEngines = (await importLocal('js/engines.js')).default
         // 原理图库按镜像源列表加载（国内 → 海外 → 本地 vendor/），配置见 js/sources.js
         try {
-          if (window.VeriSimSources) {
-            await window.VeriSimSources.loadScript('elk', window.VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
-            await window.VeriSimSources.loadScript('netlistsvg', window.VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
+          if (VeriSimSources) {
+            await VeriSimSources.loadScript('elk', VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
+            await VeriSimSources.loadScript('netlistsvg', VeriSimBase, ev => {if (ev && ev.phase === 'fail') log(tt('log.srcFallback'), 'wrn')})
           } else {
             await loadScript(scopedUrl('vendor/elk.bundled.js'))
             await loadScript(scopedUrl('vendor/netlistsvg.bundle.js'))

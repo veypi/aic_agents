@@ -1108,6 +1108,3 @@ export {
   parseParams, applyParamValue,
   fmtInt, fmtVol, fmtArea, fmtLen,
 } from './brep-kernel.js';
-if (typeof window !== 'undefined') {
-  window.BrepView = BrepView;
-}
