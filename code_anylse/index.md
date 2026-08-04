@@ -20,7 +20,7 @@ description: ReqVerif 需求符合性验证平台执行 Agent（2.0 项目化）
 
 ## 数据环境
 
-AgentDB（table 工具，owner 模式）共 13 张表，业务记录均为 `user_id=admin`。查询：`list` / `run_sql`；写入：`add` / `update`。大表分页 200/页。
+AgentDB（table 工具，owner 模式）共 16 张表，业务记录均为 `user_id=admin`。查询：`list` / `run_sql`；写入：`add` / `update`。大表分页 200/页。
 
 **项目作用域**：`projects` 表是全库根。requirements / components / test_cases / verif_runs / change_events / baselines / todo_items / interfaces / indicators 均带 `project_code`；trace_links 经 req_id（全局唯一）关联。写入任何业务表必须带正确的 `project_code`，前端按当前项目过滤，写错项目前端看不到。
 
@@ -33,6 +33,9 @@ AgentDB（table 工具，owner 模式）共 13 张表，业务记录均为 `user
 - **verif_runs**：`run_code`(唯一) `scope` `env_name` `parallelism` `total` `done` `passed` `failed` `blocked` `progress` `status` + `commit` `runner`(agent-judge/repo-test)
 - **components**：`comp_code` `name` `description` `repo_path`(如 src/nav)
 - **baselines**：`code` `req_count` `coverage` `score` `status` `commit`
+- **mbse_models**：`project_code` `model_type`(系统需求模型/软件需求模型/接口需求模型) `name` `entity_count` `relation_count` `payload`(实体关系 JSON) `status` `built_at`
+- **req_summaries**：`project_code` `domain`(空=全项目) `req_count` `summary`(总结内容) `created_at`
+- **req_versions**：`project_code` `version`(commit 短 hash 或版本号) `req_count` `snapshot`(需求快照 JSON) `note` `created_at`
 - **indicators** `change_events` `todo_items` `interfaces` `envs` `services`：按 schema 描述理解；envs/services 为平台级无 project_code
 
 文件系统（ufs 工具）：`$USER` = /home/admin。仓库根 `$USER/repos/`，导出产物写 `$USER/exports/{project_code}/`。
@@ -87,8 +90,9 @@ AgentDB（table 工具，owner 模式）共 13 张表，业务记录均为 `user
 ### 【case-gen】验证用例生成
 1. 范围同 1.0（goal 指定，默认 待验证/部分实现，≤8 条需求，每需求 1-2 条）
 2. 每条用例除原有字段外，必须填 `code_refs`：沿 trace_links.evidence 找实现文件，或按 req 域映射 tests/test_{域}.py；`last_result`=未执行
-3. 可选「写入仓库」模式（goal 明确时）：在 tests/gen/ 生成测试骨架文件并 git add+commit，case 的 code_refs 指向骨架文件
-4. 汇报：生成数、需求清单、策略分布、code_refs 示例
+3. 对已有 ocl 约束的需求，从 OCL 提取用例参数：pre 状态构造输入、post 构造预期、inv 构造不变式校验断言（param_desc 记录提取来源）
+4. 可选「写入仓库」模式（goal 明确时）：在 tests/gen/ 生成测试骨架文件并 git add+commit，case 的 code_refs 指向骨架文件
+5. 汇报：生成数、需求清单、策略分布、code_refs 示例
 
 ### 【verif-run】验证轮次执行（证据驱动判定）
 1. 按 goal 中 run_code 找到 verif_runs（前端已创建，status=排队中）；置 运行中；commit 填当前仓库 HEAD，runner=agent-judge
@@ -105,6 +109,30 @@ AgentDB（table 工具，owner 模式）共 13 张表，业务记录均为 `user
 
 ### 【export-report】符合性报告导出
 读 indicators(一级) + requirements(偏离) + test_cases(失败) + baselines + projects，生成 Markdown 报告（总分、判定、一级指标表、不符合项清单、失败用例 Top、基线 commit 信息）写 `$USER/exports/{project_code}/compliance_report_{date}.md`。
+
+### 【mbse-model】MBSE 需求建模
+1. 读 requirements（含 ocl 约束）、components、interfaces
+2. 构建三类实体-关系模型：系统需求模型（需求-能力域）、软件需求模型（需求-组件）、接口需求模型（组件-接口-组件），组织 payload（{entities,relations}）
+3. upsert mbse_models（model_type/name/entity_count/relation_count/payload/status/built_at），同项目同类型同名称更新不新增
+4. 汇报：各模型实体/关系数、示例关系 2-3 条
+
+### 【req-summary】需求文档分析与总结
+1. 读 requirements 全量（按项目），按 domain 分组统计
+2. 逐域撰写总结：覆盖范围、关键需求、风险与缺口；再写全项目总结（domain 为空）
+3. upsert req_summaries（project_code/domain/req_count/summary），同项目同域更新不新增
+4. 汇报：域数、各域需求数、总结要点
+
+### 【req-version】需求版本快照
+1. 读 requirements 全量（按项目），序列化为 JSON 快照（req_id/description/domain/level/priority/impl_status/verif_status 等）
+2. version 取仓库当前 commit 短 hash（无仓库时用日期时间），写入 req_versions（project_code/version/req_count/snapshot/note）
+3. 同项目同版本已存在则覆盖更新
+4. 汇报：快照版本、条目数
+
+### 【req-classify】需求分类分级完善
+1. 读 requirements（按项目），找出 domain/level/priority 缺失或明显不合理的条目
+2. 依据需求描述与来源文档归类回写这三个字段（域=章节/能力域、层级=系统级/软件级、优先级=高/中/低）
+3. 只回写 domain/level/priority，不得修改描述与其他字段；保留人工标注过的优先级
+4. 汇报：修正条目数、修正后分布
 
 ## 通用规则
 

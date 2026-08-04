@@ -1,0 +1,45 @@
+{
+  "title": "需求总结",
+  "description": "按域/模块生成的需求文档分析与总结",
+  "fields": [
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码",
+      "required": true
+    },
+    {
+      "name": "domain",
+      "type": "string",
+      "title": "所属域",
+      "description": "需求域/模块，空=全项目总结"
+    },
+    {
+      "name": "req_count",
+      "type": "int",
+      "title": "需求条目数",
+      "description": "该域需求数量"
+    },
+    {
+      "name": "summary",
+      "type": "text",
+      "title": "总结内容",
+      "description": "需求文档分析总结：覆盖范围、关键需求、风险与缺口",
+      "required": true
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "project_code"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>MBSE 模型与需求总结</title>
+</head>
+<style>
+  .rv-sec { margin-bottom: 18px }
+  .rv-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap }
+  .rv-sec-head h2 { font-size: 14px; font-weight: 700; color: var(--text-color) }
+  .rv-sec-head .desc { font-size: 11px; color: var(--text-color-tertiary); flex: 1; min-width: 200px }
+  .rv-tbl { width: 100%; border-collapse: collapse; font-size: 12px }
+  .rv-tbl th { text-align: left; padding: 8px 10px; font-size: 10.5px; font-weight: 600; color: var(--text-color-tertiary); border-bottom: 1px solid var(--border-color); background: var(--bg-color-tertiary); white-space: nowrap }
+  .rv-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-color); vertical-align: top }
+  .rv-tbl tr:last-child td { border-bottom: none }
+  .rv-tbl .dim { color: var(--text-color-tertiary); font-size: 11px }
+  .rv-empty { padding: 26px 0; text-align: center; color: var(--text-color-disabled); font-size: 12px }
+  .preview { max-width: 320px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal }
+  .mono { font-family: 'Chakra Petch', var(--font-mono); font-size: 11.5px }
+</style>
+<body>
+  <local-app-menu page="mbse">
+    <div class="rv-crumb">需求与模型 / MBSE 模型与需求总结</div>
+    <div class="rv-titlebar">
+      <h1>MBSE 模型与需求总结</h1>
+      <p>系统/软件/接口需求模型构建 · 需求文档总结 · 需求版本快照 · 需求分类分级</p>
+      <span class="tb-actions">
+        <button class="rv-btn ghost" @click="runMbse">MBSE 建模</button>
+        <button class="rv-btn ghost" @click="runSummary">需求总结</button>
+        <button class="rv-btn ghost" @click="runVersion">版本快照</button>
+        <button class="rv-btn" @click="runClassify">分类分级</button>
+      </span>
+    </div>
+
+    <!-- 1. MBSE 模型 -->
+    <div class="rv-panel rv-sec">
+      <div class="rv-sec-head">
+        <h2>MBSE 需求模型</h2>
+        <span class="desc">基于模型的需求建模：系统需求模型 / 软件需求模型 / 接口需求模型（实体-关系）</span>
+      </div>
+      <div v-if="models.length" class="rv-tblwrap">
+        <table class="rv-tbl">
+          <thead><tr><th>模型名称</th><th>模型类型</th><th>实体/关系</th><th>状态</th><th>构建时间</th></tr></thead>
+          <tbody>
+            <tr v-for="m in models" :key="m.id">
+              <td><b>{{ m.name }}</b></td>
+              <td><span class="rv-tag t-info">{{ m.model_type }}</span></td>
+              <td class="mono">{{ m.entity_count || 0 }} / {{ m.relation_count || 0 }}</td>
+              <td><span class="rv-tag" :class="m.status === '已校验' ? 't-ok' : 't-gray'">{{ m.status }}</span></td>
+              <td class="dim">{{ fmt(m.built_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="rv-empty">暂无 MBSE 模型 · 点击「MBSE 建模」触发 Agent 从需求库构建（mbse_models）</div>
+    </div>
+
+    <!-- 2. 需求总结 -->
+    <div class="rv-panel rv-sec">
+      <div class="rv-sec-head">
+        <h2>需求文档分析与总结</h2>
+        <span class="desc">按域/模块生成需求总结：覆盖范围、关键需求、风险与缺口</span>
+      </div>
+      <div v-if="summaries.length" class="rv-tblwrap">
+        <table class="rv-tbl">
+          <thead><tr><th>所属域</th><th>需求数</th><th>总结内容</th><th>时间</th></tr></thead>
+          <tbody>
+            <tr v-for="s in summaries" :key="s.id">
+              <td><span class="rv-tag t-info">{{ s.domain || '全项目' }}</span></td>
+              <td class="mono">{{ s.req_count || 0 }}</td>
+              <td><div class="preview">{{ s.summary }}</div></td>
+              <td class="dim">{{ fmt(s.created_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="rv-empty">暂无需求总结 · 点击「需求总结」触发 Agent 生成（req_summaries）</div>
+    </div>
+
+    <!-- 3. 需求版本快照 -->
+    <div class="rv-panel rv-sec">
+      <div class="rv-sec-head">
+        <h2>需求版本快照</h2>
+        <span class="desc">按 commit/版本对需求库打快照，支持版本回溯与对比</span>
+      </div>
+      <div v-if="versions.length" class="rv-tblwrap">
+        <table class="rv-tbl">
+          <thead><tr><th>版本标识</th><th>需求数</th><th>备注</th><th>快照时间</th></tr></thead>
+          <tbody>
+            <tr v-for="v in versions" :key="v.id">
+              <td class="mono">{{ v.version }}</td>
+              <td class="mono">{{ v.req_count || 0 }}</td>
+              <td class="dim">{{ v.note || '-' }}</td>
+              <td class="dim">{{ fmt(v.created_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="rv-empty">暂无版本快照 · 点击「版本快照」触发 Agent 对当前需求库打快照（req_versions）</div>
+    </div>
+
+  </local-app-menu>
+</body>
+<script setup>
+  models = []
+  summaries = []
+  versions = []
+  running = false
+
+  CUR_PRJ = (() => { try { return localStorage.rv_project || 'UAV-NAV' } catch (e) { return 'UAV-NAV' } })()
+  q = (t, p) => {
+    const f = p.filters ? JSON.parse(p.filters) : {}
+    if (!f.project_code) { f.project_code = CUR_PRJ; p = Object.assign({}, p, { filters: JSON.stringify(f) }) }
+    return $mod.$fetch('/tables/' + t, { params: p })
+  }
+  fmt = (t) => {
+    if (!t) return '-'
+    const d = new Date(t)
+    if (isNaN(d.getTime())) return t
+    const p = n => ('' + n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+
+  /* Agent 任务 */
+  runTask = async (title, goal, steps, constraints) => {
+    if (running) return
+    running = true
+    try {
+      const td = await $mod.$fetch('/api/tasks', { method: 'POST', body: { title, goal, steps, constraints } })
+      $message.success(title + '任务已创建（' + ((td.task && td.task.id) || '') + '），完成后刷新查看')
+    } catch (e) { $message.error('任务创建失败：' + e.message) }
+    running = false
+  }
+
+  runMbse = () => runTask(
+    'MBSE 需求建模',
+    '【mbse-model】为当前项目 ' + CUR_PRJ + ' 构建 MBSE 需求模型：读取 requirements（含 ocl 约束）、components、interfaces，构建系统需求模型/软件需求模型/接口需求模型三类实体-关系模型，写入 mbse_models（model_type/name/entity_count/relation_count/payload JSON/status/built_at）。按核心 prompt 中【mbse-model】规范执行。',
+    '1. 读取 requirements/components/interfaces → 2. 提取实体与关系（需求-组件、组件-接口、接口-组件）→ 3. 按模型类型组织 payload 写入 → 4. 汇报实体/关系数',
+    '只写 mbse_models 表；同项目同类型同名称已存在时更新不新增；payload 需包含实体与关系数组'
+  )
+  runSummary = () => runTask(
+    '需求文档总结',
+    '【req-summary】对当前项目 ' + CUR_PRJ + ' 执行需求文档分析与总结：按域（domain）分组统计需求，生成各域及全项目总结（覆盖范围、关键需求、风险与缺口），写入 req_summaries（project_code/domain/req_count/summary）。按核心 prompt 中【req-summary】规范执行。',
+    '1. 读取 requirements 全量 → 2. 按 domain 分组统计 → 3. 逐域撰写总结 → 4. 写全项目总结（domain 为空）→ 5. 汇报域数与总结要点',
+    '只写 req_summaries 表；同项目同域已存在时更新不新增'
+  )
+  runVersion = () => runTask(
+    '需求版本快照',
+    '【req-version】对当前项目 ' + CUR_PRJ + ' 打需求版本快照：读取 requirements 全量，将需求条目（req_id/description/domain/level/priority/impl_status/verif_status 等）序列化为 JSON 快照，version 取仓库当前 commit 短 hash（无仓库时用日期时间），写入 req_versions（project_code/version/req_count/snapshot/note）。按核心 prompt 中【req-version】规范执行。',
+    '1. 读 requirements 全量 → 2. 序列化快照 → 3. 确定版本标识 → 4. 写入 → 5. 汇报条目数与版本',
+    '只写 req_versions 表；同项目同版本已存在时更新不新增（覆盖快照）'
+  )
+  runClassify = () => runTask(
+    '需求分类分级',
+    '【req-classify】对当前项目 ' + CUR_PRJ + ' 执行需求分类分级完善：检查 requirements 的 domain/level/priority 字段，对缺失或不合理的条目按需求内容补全与修正（域=章节/能力域、层级=系统级/软件级、优先级=高/中/低），回写 requirements 对应字段。按核心 prompt 中【req-classify】规范执行。',
+    '1. 读取 requirements 全量 → 2. 找出 domain/level/priority 缺失或明显不合理的条目 → 3. 依据描述与来源文档归类回写 → 4. 汇报修正条目数与分布',
+    '只回写 requirements 的 domain/level/priority 三个字段；不得修改需求描述与其他字段；保留人工标注过的优先级'
+  )
+
+  loadAll = async () => {
+    try {
+      const [mr, sr, vr] = await Promise.all([
+        q('mbse_models', { size: 50 }),
+        q('req_summaries', { size: 50 }),
+        q('req_versions', { size: 50 })
+      ])
+      models = mr.items || []
+      summaries = sr.items || []
+      versions = vr.items || []
+    } catch (e) { $message.error('数据加载失败：' + e.message) }
+  }
+</script>
+<script>
+  loadAll()
+</script>
+
+</html>

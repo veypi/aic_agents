@@ -1,0 +1,56 @@
+{
+  "title": "需求版本快照",
+  "description": "按 commit/版本对需求库打快照，支持版本回溯与对比",
+  "fields": [
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码",
+      "required": true
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "title": "版本标识",
+      "description": "commit 短 hash 或版本号",
+      "required": true
+    },
+    {
+      "name": "req_count",
+      "type": "int",
+      "title": "需求条目数"
+    },
+    {
+      "name": "snapshot",
+      "type": "text",
+      "title": "快照数据",
+      "description": "该版本全部需求条目的 JSON 快照（req_id/description/domain/level/priority/impl_status 等）",
+      "required": true
+    },
+    {
+      "name": "note",
+      "type": "string",
+      "title": "备注",
+      "description": "快照说明"
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "project_code"
+      ]
+    },
+    {
+      "fields": [
+        "version"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}

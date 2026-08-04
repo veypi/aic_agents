@@ -1,0 +1,67 @@
+{
+  "title": "MBSE 需求模型",
+  "description": "基于 MBSE 的系统需求模型/软件需求模型/接口需求模型：实体与关系",
+  "fields": [
+    {
+      "name": "project_code",
+      "type": "string",
+      "title": "项目码",
+      "description": "所属项目码",
+      "required": true
+    },
+    {
+      "name": "model_type",
+      "type": "string",
+      "title": "模型类型",
+      "required": true,
+      "enum": [
+        "系统需求模型",
+        "软件需求模型",
+        "接口需求模型"
+      ]
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "模型名称",
+      "required": true
+    },
+    {
+      "name": "entity_count",
+      "type": "int",
+      "title": "实体数",
+      "description": "需求/组件/接口实体数量"
+    },
+    {
+      "name": "relation_count",
+      "type": "int",
+      "title": "关系数",
+      "description": "实体间关系数量"
+    },
+    {
+      "name": "payload",
+      "type": "text",
+      "title": "模型数据",
+      "description": "实体与关系（JSON）：{entities:[...], relations:[...]}"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"已构建\""
+    },
+    {
+      "name": "built_at",
+      "type": "time",
+      "title": "构建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "project_code"
+      ]
+    }
+  ],
+  "max_records_per_user": 0
+}
