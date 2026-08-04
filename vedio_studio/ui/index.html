@@ -1181,6 +1181,10 @@
   }
 
   deleteProject = async (name) => {
+    // 删除前确认：项目目录（含素材/导出/截图）整删不可恢复
+    let ok = false
+    try { ok = await $message.confirm('确定删除项目「' + name + '」？项目文件与素材将一并删除，不可恢复。') } catch (e) { }
+    if (!ok) return
     await rmDir(projDir(name))
     if (curName === name) {doc = null; curName = ''; curTitle = ''; saveState = ''}
     showToast('已删除：' + name)
