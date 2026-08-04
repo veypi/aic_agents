@@ -1,0 +1,71 @@
+{
+  "title": "架构网络模型",
+  "description": "基于多层复杂网络理论构建的软件架构可靠性模型：组件/服务节点与依赖/调用边，含网络结构指标",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "模型名称",
+      "required": true
+    },
+    {
+      "name": "network_type",
+      "type": "string",
+      "title": "网络类型",
+      "enum": [
+        "依赖网络",
+        "调用网络",
+        "多层混合网络"
+      ],
+      "default": "\"依赖网络\""
+    },
+    {
+      "name": "node_count",
+      "type": "int",
+      "title": "节点数",
+      "description": "组件/服务数量"
+    },
+    {
+      "name": "edge_count",
+      "type": "int",
+      "title": "边数",
+      "description": "依赖/调用关系数量"
+    },
+    {
+      "name": "metric",
+      "type": "text",
+      "title": "结构指标",
+      "description": "度中心性/介数中心性/渗流阈值等关键网络指标（JSON 或文本摘要）"
+    },
+    {
+      "name": "payload",
+      "type": "text",
+      "title": "模型数据",
+      "description": "节点与边数据（JSON）"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"已构建\""
+    },
+    {
+      "name": "built_at",
+      "type": "time",
+      "title": "构建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

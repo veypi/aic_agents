@@ -1,0 +1,75 @@
+{
+  "title": "多模态故障场景",
+  "description": "混沌验证故障注入的多模态故障场景定义与执行记录（执行依赖注入环境）",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "场景名称",
+      "description": "如：网关进程终止、数据库连接池耗尽、服务调用 3s 延迟",
+      "required": true
+    },
+    {
+      "name": "fault_type",
+      "type": "string",
+      "title": "故障类型",
+      "required": true,
+      "enum": [
+        "进程终止",
+        "网络延迟",
+        "网络丢包",
+        "资源耗尽",
+        "数据注入",
+        "接口超时",
+        "依赖故障"
+      ]
+    },
+    {
+      "name": "target",
+      "type": "string",
+      "title": "注入目标",
+      "description": "服务/组件/接口标识"
+    },
+    {
+      "name": "params",
+      "type": "text",
+      "title": "注入参数",
+      "description": "JSON：如 {\"delay_ms\":3000}"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"待执行\"",
+      "enum": [
+        "待执行",
+        "已执行",
+        "失败"
+      ]
+    },
+    {
+      "name": "result",
+      "type": "text",
+      "title": "执行结果",
+      "description": "故障注入后观察：降级行为、错误码、恢复时间"
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

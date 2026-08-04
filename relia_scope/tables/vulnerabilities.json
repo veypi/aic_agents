@@ -1,0 +1,66 @@
+{
+  "title": "脆弱点清单",
+  "description": "故障仿真与交叉分析得出的集成软件脆弱点：数据交互、服务调用、业务逻辑实现",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "target",
+      "type": "string",
+      "title": "脆弱对象",
+      "description": "组件/接口/数据交互/资源标识",
+      "required": true
+    },
+    {
+      "name": "vuln_type",
+      "type": "string",
+      "title": "脆弱类型",
+      "required": true,
+      "enum": [
+        "数据交互",
+        "服务调用",
+        "业务逻辑",
+        "资源依赖",
+        "通信链路"
+      ]
+    },
+    {
+      "name": "risk",
+      "type": "string",
+      "title": "风险等级",
+      "enum": [
+        "高",
+        "中",
+        "低"
+      ]
+    },
+    {
+      "name": "evidence",
+      "type": "text",
+      "title": "证据",
+      "description": "关联 failures/events 样本、故障仿真结果、架构分析结果"
+    },
+    {
+      "name": "analysis",
+      "type": "text",
+      "title": "分析说明",
+      "description": "脆弱机理与影响分析"
+    },
+    {
+      "name": "found_at",
+      "type": "time",
+      "title": "发现时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

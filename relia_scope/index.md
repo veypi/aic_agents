@@ -48,6 +48,30 @@
 ### integrations 外部接入（只读）
 `id, system(CICD/APM/Chaos/Alert/Probe), name, status(已连接/运行中/异常/未接入), detail, link_count`
 
+### arch_models 架构网络模型（T7 可写）
+`id, software_id, name, network_type(依赖网络/调用网络/多层混合网络), node_count, edge_count, metric(结构指标), payload(JSON 节点边), status, built_at`
+
+### arch_insights 架构可靠性洞察（T7 可写）
+`id, software_id, arch_model_id, kind(可靠性需求/关注点/关键节点/脆弱环节), content, evidence, risk_level(高/中/低), created_at`
+
+### taskflow_models 任务流仿真模型（T8 可写）
+`id, software_id, name, description, node_count, edge_count, payload(JSON 任务/依赖/时序), status, created_at`
+
+### sim_runs 仿真运行记录（T8 可写，追加式）
+`id, software_id, model_id, scenario, result(瓶颈/风险/时序), duration_ms, status(待运行/运行中/已完成/失败), ran_at`
+
+### vulnerabilities 脆弱点清单（T9 可写）
+`id, software_id, target(脆弱对象), vuln_type(数据交互/服务调用/业务逻辑/资源依赖/通信链路), risk(高/中/低), evidence(关联 failures/events), analysis, found_at`
+
+### key_factors 可靠性关键要素（T10 可写）
+`id, software_id, factor, category(可靠性需求/关注点/脆弱点/指标), metric(度量方式), quant_value(定量值), source(交叉来源), created_at`
+
+### failure_scenarios 多模态故障场景（T11 可写）
+`id, software_id, name, fault_type(进程终止/网络延迟/网络丢包/资源耗尽/数据注入/接口超时/依赖故障), target, params(JSON), status(待执行/已执行/失败), result, created_at`
+
+### integrated_assessments 集成评估（T12 可写）
+`id, software_ids(逗号分隔), framework(评估框架), score(0-100), conclusion, payload(各软件指标汇总 JSON), assessed_at`
+
 ## 指标公式与方法
 
 **点估计**：λ̂ = n / T · MTBF = T / n · R(t) = e^(−λ̂·t) · A = MTBF/(MTBF+3.6)
@@ -110,6 +134,49 @@
 2. 逐通道刷新：last_sync=当前时间，throughput 按近事件合理估算（无事件源时保持原值），online_rate/latency 保持不劣化的小幅波动内。
 3. PATCH 写回各通道；不改 probe_count。
 4. 完成摘要：同步通道数、总吞吐。
+
+### T7 架构可靠性需求分析（触发：advanced 页「架构分析」）
+1. 读 softwares 全表；对每个软件（或 goal 指定）读取可获取的架构信息（仓库/文档/描述）。
+2. 构建组件依赖网络写 arch_models（name/network_type/node_count/edge_count/metric/payload JSON）；metric 记录度中心性/介数/渗流阈值等关键指标。
+3. 结合复杂网络渗流理论分析，将可靠性需求与关注点写 arch_insights（kind=可靠性需求/关注点/关键节点/脆弱环节，content/evidence/risk_level）。
+4. 幂等：同软件同名称模型更新不新增；同洞察内容不重复。
+5. 完成摘要：模型数、节点/边规模、洞察数、高风险关注点清单。
+
+### T8 任务流动态时序仿真（触发：advanced 页「任务流仿真」）
+1. 读 softwares 与已有 taskflow_models；无模型时按业务流程构建任务流模型（任务节点/依赖/时序参数）写 taskflow_models。
+2. 对模型执行动态时序仿真（可编写运行脚本；场景：峰值并发/单节点故障/资源受限）。
+3. 运行结果写 sim_runs（scenario/result/duration_ms/status/ran_at），result 含瓶颈任务、时序风险、最长链路。
+4. 无脚本执行环境时：模型入库，sim_runs 置待运行并说明环境依赖，不伪造结果。
+5. 幂等：同模型同场景追加新记录。
+6. 完成摘要：模型数、仿真运行数、主要瓶颈与风险。
+
+### T9 故障仿真与脆弱点分析（触发：advanced 页「脆弱点分析」）
+1. 读 failures（原始故障样本）、events（告警/事件流）、arch_models/arch_insights。
+2. 结合故障模式与架构结构，分析数据交互、服务调用、业务逻辑实现的脆弱点。
+3. 脆弱点写 vulnerabilities（target/vuln_type/risk/evidence/analysis/found_at），evidence 关联具体 failures/events 样本。
+4. 幂等：同软件同目标同类型更新不新增。
+5. 完成摘要：脆弱点数、高风险清单、关联样本数。
+
+### T10 关键要素交叉分析（触发：advanced 页「要素分析」）
+1. 读 arch_insights（可靠性需求/关注点）、vulnerabilities（脆弱点）、failures 统计口径。
+2. 建立交叉分析表，提取可靠性分析评估关键要素，写 key_factors（factor/category/metric/quant_value/source）。
+3. 度量从定性到定量：能定量的给出 quant_value（如脆弱点关联故障数、关键节点介数）。
+4. 幂等：同软件同要素更新不新增。
+5. 完成摘要：关键要素数、定量要素清单。
+
+### T11 多模态故障场景构建（触发：advanced 页「场景构建」）
+1. 结合 vulnerabilities 与 failures 故障模式，定义 3-8 个多模态故障场景写 failure_scenarios（name/fault_type/target/params/status=待执行）。
+2. 有注入环境时：申请环境按 params 注入（进程终止/网络延迟/资源耗尽/数据注入等），观察降级行为/错误码/恢复时间，写回 status=已执行 与 result。
+3. 无注入环境时：保持待执行，说明环境依赖，不伪造结果。
+4. 幂等：同软件同名称场景更新不新增。
+5. 完成摘要：场景数、已执行数、关键发现。
+
+### T12 多源异构集成评估（触发：advanced 页「集成评估」）
+1. 读 softwares 全表与各软件可靠性产物（model_metrics/predictions/reports/failures 统计）。
+2. 设计多源异构集成评估框架（含权重与判定规则）写 integrated_assessments（software_ids/framework/score/conclusion/payload/assessed_at）。
+3. payload 记录各软件指标汇总与权重；score 0-100；conclusion 给评估结论。
+4. 幂等：同软件组合更新不新增。
+5. 完成摘要：覆盖软件数、集成得分、结论。
 
 ## 输出规范
 

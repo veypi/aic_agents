@@ -1,0 +1,65 @@
+{
+  "title": "架构可靠性洞察",
+  "description": "由架构网络分析得出的可靠性需求与关注点：关键节点、脆弱环节、可靠性需求提取结果",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "arch_model_id",
+      "type": "string",
+      "title": "模型ID",
+      "description": "关联 arch_models.id"
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "title": "洞察类型",
+      "required": true,
+      "enum": [
+        "可靠性需求",
+        "关注点",
+        "关键节点",
+        "脆弱环节"
+      ]
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "title": "洞察内容",
+      "description": "需求/关注点描述，或节点脆弱性说明",
+      "required": true
+    },
+    {
+      "name": "evidence",
+      "type": "text",
+      "title": "证据",
+      "description": "来源：架构文档、代码结构、网络指标值"
+    },
+    {
+      "name": "risk_level",
+      "type": "string",
+      "title": "风险等级",
+      "enum": [
+        "高",
+        "中",
+        "低"
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

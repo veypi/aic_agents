@@ -1,0 +1,57 @@
+{
+  "title": "任务流仿真模型",
+  "description": "基于多智能体的软件任务流动态时序仿真模型：任务节点、依赖关系与时序参数",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "title": "模型名称",
+      "required": true
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "title": "模型描述"
+    },
+    {
+      "name": "node_count",
+      "type": "int",
+      "title": "任务节点数"
+    },
+    {
+      "name": "edge_count",
+      "type": "int",
+      "title": "依赖边数"
+    },
+    {
+      "name": "payload",
+      "type": "text",
+      "title": "模型数据",
+      "description": "任务节点/依赖/时序参数（JSON）"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "title": "状态",
+      "default": "\"已构建\""
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}

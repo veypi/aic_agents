@@ -1,0 +1,40 @@
+{
+  "title": "集成评估",
+  "description": "面向多源异构软件集成的可靠性分析评估模型框架与评估结果：多软件指标汇总",
+  "fields": [
+    {
+      "name": "software_ids",
+      "type": "string",
+      "title": "覆盖软件",
+      "description": "逗号分隔的 softwares.id 列表"
+    },
+    {
+      "name": "framework",
+      "type": "text",
+      "title": "评估框架",
+      "description": "多源异构集成评估模型框架描述"
+    },
+    {
+      "name": "score",
+      "type": "number",
+      "title": "集成得分",
+      "description": "0-100"
+    },
+    {
+      "name": "conclusion",
+      "type": "text",
+      "title": "评估结论"
+    },
+    {
+      "name": "payload",
+      "type": "text",
+      "title": "明细数据",
+      "description": "各软件指标汇总、权重、判定（JSON）"
+    },
+    {
+      "name": "assessed_at",
+      "type": "time",
+      "title": "评估时间"
+    }
+  ]
+}

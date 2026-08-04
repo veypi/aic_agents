@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="description" content="ReliaScope 高级分析：架构可靠性、任务流仿真、脆弱点、关键要素、故障场景、集成评估" />
+  <title>高级分析 · ReliaScope</title>
+</head>
+<style>
+  .sec { margin-top: 26px }
+  .sec:first-child { margin-top: 0 }
+  .sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap }
+  .sec-head h2 { font-size: 15px; font-weight: 800; color: var(--ink, #101c3d) }
+  .sec-head .desc { font-size: 11.5px; color: var(--text-color-tertiary); flex: 1; min-width: 220px; line-height: 1.7 }
+  .sec-head .btn { padding: 6px 14px; border-radius: 8px; border: none; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 10px rgba(67,97,238,.28) }
+  .sec-head .btn:hover { background: var(--color-primary-hover) }
+  .sec-head .btn:disabled { opacity: .55; cursor: wait }
+  .tbl { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm) }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px }
+  .tbl th { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; color: var(--text-color-tertiary); text-align: left; padding: 8px 12px; border-bottom: 1.5px solid var(--border-color); text-transform: uppercase; white-space: nowrap; background: rgba(240,245,252,.6) }
+  .tbl td { padding: 9px 12px; border-bottom: 1px solid rgba(209,213,219,.5); color: var(--text-color); vertical-align: middle }
+  .tbl tbody tr:hover { background: rgba(67,97,238,.035) }
+  .tbl tbody tr:last-child td { border-bottom: none }
+  .tbl .empty { padding: 30px 0; text-align: center; color: var(--text-color-disabled); font-size: 12px }
+  .mono { font-family: var(--num, ui-monospace, monospace); font-variant-numeric: tabular-nums }
+  .tl { font-size: 11px; color: var(--text-color-tertiary); white-space: nowrap }
+</style>
+
+<body>
+  <app-menu>
+    <header class="pagehead">
+      <div>
+        <div class="crumb">Reliability · Advanced Analytics</div>
+        <h1>高级分析</h1>
+      </div>
+      <div class="right">
+        <button class="btn ghost" @click="loadAll()">刷新数据</button>
+      </div>
+    </header>
+
+    <!-- 1. 架构可靠性分析 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>架构可靠性需求分析</h2>
+        <span class="desc">基于多层复杂网络理论构建组件依赖网络，结合渗流理论提取可靠性分析评估需求与关注点</span>
+        <button class="btn" :disabled="running.arch" @click="runArch()">{{ running.arch ? '任务执行中…' : '架构分析' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>模型</th><th>网络类型</th><th>节点/边</th><th>结构指标</th><th>洞察</th><th>风险</th></tr></thead>
+          <tbody>
+            <tr v-for="m in archModels" :key="m.id">
+              <td><b>{{ m.name }}</b><div class="tl">{{ fmt(m.built_at) }}</div></td>
+              <td>{{ m.network_type || '-' }}</td>
+              <td class="mono">{{ m.node_count || 0 }} / {{ m.edge_count || 0 }}</td>
+              <td><div class="tl" style="max-width:220px">{{ short(m.metric) }}</div></td>
+              <td>
+                <div v-for="ins in insightsOf(m.id)" :key="ins.id">
+                  <span class="pill" :class="riskCls(ins.risk_level)">{{ ins.kind }}</span>
+                  <span class="tl"> {{ short(ins.content, 46) }}</span>
+                </div>
+                <span v-if="!insightsOf(m.id).length" class="tl">—</span>
+              </td>
+              <td><span class="pill" :class="riskCls(m.status === '已构建' ? '低' : '中')">{{ m.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!archModels.length">暂无架构模型 · 点击「架构分析」触发 Agent 构建（arch_models / arch_insights）</div>
+      </div>
+    </div>
+
+    <!-- 2. 任务流仿真 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>任务流动态时序仿真</h2>
+        <span class="desc">基于多智能体的任务流模型，仿真运行分析时序瓶颈与风险（仿真执行依赖脚本环境）</span>
+        <button class="btn" :disabled="running.sim" @click="runSim()">{{ running.sim ? '任务执行中…' : '任务流仿真' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>模型</th><th>节点/依赖</th><th>仿真场景</th><th>仿真结果</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr v-for="s in sims" :key="s.id">
+              <td><b>{{ modelName(s.model_id) }}</b><div class="tl">{{ fmt(s.ran_at) }}</div></td>
+              <td class="mono">{{ modelNode(s.model_id) }}</td>
+              <td>{{ s.scenario || '-' }}</td>
+              <td><div class="tl" style="max-width:300px">{{ short(s.result) }}</div></td>
+              <td><span class="pill" :class="runCls(s.status)">{{ s.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!sims.length">暂无仿真记录 · 点击「任务流仿真」触发 Agent 构建模型并仿真（taskflow_models / sim_runs）</div>
+      </div>
+    </div>
+
+    <!-- 3. 脆弱点分析 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>脆弱点分析</h2>
+        <span class="desc">结合告警与历史故障信息开展故障仿真，分析数据交互、服务调用、业务逻辑实现的脆弱点</span>
+        <button class="btn" :disabled="running.vuln" @click="runVuln()">{{ running.vuln ? '任务执行中…' : '脆弱点分析' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>脆弱对象</th><th>类型</th><th>风险</th><th>证据</th><th>分析说明</th></tr></thead>
+          <tbody>
+            <tr v-for="v in vulns" :key="v.id">
+              <td><b>{{ v.target }}</b><div class="tl">{{ fmt(v.found_at) }}</div></td>
+              <td><span class="pill p-cyan">{{ v.vuln_type }}</span></td>
+              <td><span class="pill" :class="riskCls(v.risk)">{{ v.risk }}</span></td>
+              <td><div class="tl" style="max-width:220px">{{ short(v.evidence) }}</div></td>
+              <td><div class="tl" style="max-width:260px">{{ short(v.analysis) }}</div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!vulns.length">暂无脆弱点 · 点击「脆弱点分析」触发 Agent 分析（vulnerabilities）</div>
+      </div>
+    </div>
+
+    <!-- 4. 关键要素交叉分析 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>关键要素交叉分析</h2>
+        <span class="desc">对可靠性需求、关注点、脆弱点建立交叉分析表，提取关键要素并给出定量度量</span>
+        <button class="btn" :disabled="running.factor" @click="runFactor()">{{ running.factor ? '任务执行中…' : '要素分析' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>关键要素</th><th>类别</th><th>度量方式</th><th>定量值</th><th>交叉来源</th></tr></thead>
+          <tbody>
+            <tr v-for="f in factors" :key="f.id">
+              <td><b>{{ f.factor }}</b><div class="tl">{{ fmt(f.created_at) }}</div></td>
+              <td><span class="pill p-purple">{{ f.category }}</span></td>
+              <td class="tl">{{ f.metric || '-' }}</td>
+              <td class="mono">{{ f.quant_value != null ? f.quant_value : '-' }}</td>
+              <td><div class="tl" style="max-width:200px">{{ short(f.source) }}</div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!factors.length">暂无关键要素 · 点击「要素分析」触发 Agent 交叉分析（key_factors）</div>
+      </div>
+    </div>
+
+    <!-- 5. 多模态故障场景 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>多模态故障场景</h2>
+        <span class="desc">混沌验证故障注入的多模态场景定义与执行记录（实际注入依赖注入环境，环境就绪后执行）</span>
+        <button class="btn" :disabled="running.scenario" @click="runScenario()">{{ running.scenario ? '任务执行中…' : '场景构建' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>场景名称</th><th>故障类型</th><th>注入目标</th><th>参数</th><th>状态</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr v-for="s in scenarios" :key="s.id">
+              <td><b>{{ s.name }}</b><div class="tl">{{ fmt(s.created_at) }}</div></td>
+              <td><span class="pill p-yellow">{{ s.fault_type }}</span></td>
+              <td class="tl">{{ s.target || '-' }}</td>
+              <td class="mono">{{ s.params || '-' }}</td>
+              <td><span class="pill" :class="scCls(s.status)">{{ s.status }}</span></td>
+              <td><div class="tl" style="max-width:240px">{{ short(s.result) }}</div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!scenarios.length">暂无故障场景 · 点击「场景构建」触发 Agent 定义（failure_scenarios）</div>
+      </div>
+    </div>
+
+    <!-- 6. 集成评估 -->
+    <div class="sec">
+      <div class="sec-head">
+        <h2>多源异构集成评估</h2>
+        <span class="desc">面向多源异构软件集成的可靠性分析评估模型框架，汇总多软件指标输出集成评估结论</span>
+        <button class="btn" :disabled="running.integ" @click="runInteg()">{{ running.integ ? '任务执行中…' : '集成评估' }}</button>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>覆盖软件</th><th>评估框架</th><th>集成得分</th><th>结论</th><th>评估时间</th></tr></thead>
+          <tbody>
+            <tr v-for="a in integs" :key="a.id">
+              <td class="mono">{{ a.software_ids || '-' }}</td>
+              <td><div class="tl" style="max-width:240px">{{ short(a.framework) }}</div></td>
+              <td class="mono" :style="{color: a.score >= 85 ? '#047857' : a.score >= 60 ? '#b45309' : '#b91c1c'}">{{ a.score != null ? a.score : '-' }}</td>
+              <td><div class="tl" style="max-width:260px">{{ short(a.conclusion) }}</div></td>
+              <td class="tl">{{ fmt(a.assessed_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty" v-if="!integs.length">暂无集成评估 · 点击「集成评估」触发 Agent 汇总（integrated_assessments）</div>
+      </div>
+    </div>
+
+    <div class="footer-note">ReliaScope 高级分析 · 结果由 Agent 后台任务写入 AgentDB，前端实时呈现</div>
+  </app-menu>
+</body>
+<script setup>
+  archModels = []
+  archInsights = []
+  taskflows = []
+  sims = []
+  vulns = []
+  factors = []
+  scenarios = []
+  integs = []
+  running = {arch: false, sim: false, vuln: false, factor: false, scenario: false, integ: false}
+
+  riskCls = (r) => ({'高': 'p-red', '中': 'p-yellow', '低': 'p-green'}[r] || 'p-gray')
+  runCls = (s) => ({'已完成': 'p-green', '运行中': 'p-blue', '待运行': 'p-gray', '失败': 'p-red'}[s] || 'p-gray')
+  scCls = (s) => ({'待执行': 'p-gray', '已执行': 'p-green', '失败': 'p-red'}[s] || 'p-gray')
+  fmt = (t) => {
+    if (!t) return '—'
+    const d = new Date(t)
+    if (isNaN(d)) return t
+    const p = n => ('' + n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+  short = (s, n = 80) => {
+    if (!s) return '-'
+    s = String(s)
+    return s.length > n ? s.slice(0, n) + '…' : s
+  }
+  insightsOf = (modelId) => archInsights.filter(x => x.arch_model_id === modelId)
+  modelName = (id) => {
+    const m = taskflows.find(x => x.id === id)
+    return m ? m.name : (id || '-')
+  }
+  modelNode = (id) => {
+    const m = taskflows.find(x => x.id === id)
+    return m ? (m.node_count || 0) + ' / ' + (m.edge_count || 0) : '-'
+  }
+
+  /* ---------- Agent 任务执行器 ---------- */
+  const runTask = async (key, title, goal) => {
+    if (running[key]) return
+    running[key] = true
+    try {
+      await $fetch('/api/tasks', { method: 'POST', body: { title, goal, schedule_type: 'once' } })
+      $message.success('任务已创建，任务中心可查看进度')
+    } catch (e) { $message.error('创建任务失败：' + (e.message || e)) }
+    running[key] = false
+  }
+
+  runArch = () => runTask('arch', '架构可靠性需求分析', [
+    '【T7 arch-analysis】执行架构可靠性需求分析。',
+    '1. 读取 softwares 全表；对每个软件（或 goal 指定）读取可获取的架构信息（仓库/文档/描述）',
+    '2. 构建组件依赖网络写入 arch_models（name/network_type/node_count/edge_count/metric/payload JSON），metric 记录度中心性/介数/渗流阈值等关键指标',
+    '3. 结合复杂网络渗流理论分析，将可靠性需求与关注点写入 arch_insights（kind=可靠性需求/关注点/关键节点/脆弱环节，content/evidence/risk_level）',
+    '4. 幂等：同软件同名称模型已存在时更新不新增；同洞察内容不重复',
+    '5. 汇报：模型数、节点/边规模、洞察数、高风险关注点清单'
+  ].join('\n'))
+  runSim = () => runTask('sim', '任务流动态时序仿真', [
+    '【T8 taskflow-sim】执行任务流动态时序仿真。',
+    '1. 读取 softwares 与已有 taskflow_models；无模型时按软件业务流程构建任务流模型（任务节点/依赖/时序参数）写入 taskflow_models',
+    '2. 对模型执行动态时序仿真（可编写并运行脚本；仿真场景：峰值并发/单节点故障/资源受限）',
+    '3. 将运行结果写入 sim_runs（scenario/result/duration_ms/status/ran_at），result 含瓶颈任务、时序风险、最长链路',
+    '4. 无脚本执行环境时：构建模型入库，sim_runs 状态置待运行并在汇报中说明环境依赖',
+    '5. 幂等：同模型同场景重复运行追加新记录',
+    '6. 汇报：模型数、仿真运行数、主要瓶颈与风险'
+  ].join('\n'))
+  runVuln = () => runTask('vuln', '故障仿真与脆弱点分析', [
+    '【T9 vuln-analysis】执行故障仿真与脆弱点分析。',
+    '1. 读取 failures（原始故障样本）、events（告警/事件流）、arch_models/arch_insights（架构洞察）',
+    '2. 结合故障模式与架构结构，分析数据交互、服务调用、业务逻辑实现的脆弱点',
+    '3. 将脆弱点写入 vulnerabilities（target/vuln_type/risk/evidence/analysis/found_at），evidence 关联具体 failures/events 样本',
+    '4. 幂等：同软件同目标同类型已存在时更新不新增',
+    '5. 汇报：脆弱点数、高风险清单、关联样本数'
+  ].join('\n'))
+  runFactor = () => runTask('factor', '关键要素交叉分析', [
+    '【T10 factor-analysis】执行关键要素交叉分析。',
+    '1. 读取 arch_insights（可靠性需求/关注点）、vulnerabilities（脆弱点）、failures 统计口径',
+    '2. 建立交叉分析表，提取可靠性分析评估关键要素，写入 key_factors（factor/category/metric/quant_value/source）',
+    '3. 度量方式从定性评价到定量计算：能定量的给出 quant_value（如脆弱点关联故障数、关键节点介数）',
+    '4. 幂等：同软件同要素已存在时更新不新增',
+    '5. 汇报：关键要素数、定量要素清单'
+  ].join('\n'))
+  runScenario = () => runTask('scenario', '多模态故障场景构建', [
+    '【T11 scenario-build】构建并执行多模态故障场景。',
+    '1. 结合 vulnerabilities 与 failures 故障模式，定义 3-8 个多模态故障场景写入 failure_scenarios（name/fault_type/target/params/status=待执行）',
+    '2. 有注入环境时：申请环境对目标按 params 执行注入（进程终止/网络延迟/资源耗尽/数据注入等），观察降级行为/错误码/恢复时间，写回 status=已执行 与 result',
+    '3. 无注入环境时：保持待执行，汇报中说明环境依赖，不伪造结果',
+    '4. 幂等：同软件同名称场景已存在时更新不新增',
+    '5. 汇报：场景数、已执行数、关键发现'
+  ].join('\n'))
+  runInteg = () => runTask('integ', '多源异构集成评估', [
+    '【T12 integrated-assessment】执行多源异构软件集成评估。',
+    '1. 读取 softwares 全表与各软件可靠性产物（model_metrics/predictions/reports/failures 统计）',
+    '2. 设计多源异构集成评估框架（含权重与判定规则）写入 integrated_assessments（software_ids/framework/score/conclusion/payload/assessed_at）',
+    '3. payload 记录各软件指标汇总与权重；score 0-100；conclusion 给评估结论',
+    '4. 幂等：同软件组合已存在时更新不新增',
+    '5. 汇报：覆盖软件数、集成得分、结论'
+  ].join('\n'))
+
+  loadAll = async () => {
+    try {
+      const [am, ai, tf, sr, vu, kf, fs, ia] = await Promise.all([
+        $fetch('/tables/arch_models', { params: { size: 100 } }),
+        $fetch('/tables/arch_insights', { params: { size: 200 } }),
+        $fetch('/tables/taskflow_models', { params: { size: 100 } }),
+        $fetch('/tables/sim_runs', { params: { size: 100 } }),
+        $fetch('/tables/vulnerabilities', { params: { size: 100 } }),
+        $fetch('/tables/key_factors', { params: { size: 100 } }),
+        $fetch('/tables/failure_scenarios', { params: { size: 100 } }),
+        $fetch('/tables/integrated_assessments', { params: { size: 100 } })
+      ])
+      archModels = am.items || []
+      archInsights = ai.items || []
+      taskflows = tf.items || []
+      sims = sr.items || []
+      vulns = vu.items || []
+      factors = kf.items || []
+      scenarios = fs.items || []
+      integs = ia.items || []
+    } catch (e) {
+      $message.error('数据加载失败：' + (e.message || e))
+    }
+  }
+</script>
+<script>
+  loadAll()
+</script>
+<script dispose>
+  /* 无定时器 */
+</script>
+
+</html>

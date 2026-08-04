@@ -1,0 +1,60 @@
+{
+  "title": "可靠性关键要素",
+  "description": "交叉分析表提取的可靠性分析评估关键要素：需求/关注点/脆弱点交叉，含度量方式与定量值",
+  "fields": [
+    {
+      "name": "software_id",
+      "type": "string",
+      "title": "软件ID",
+      "description": "关联 softwares.id"
+    },
+    {
+      "name": "factor",
+      "type": "string",
+      "title": "关键要素",
+      "required": true
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "title": "要素类别",
+      "required": true,
+      "enum": [
+        "可靠性需求",
+        "关注点",
+        "脆弱点",
+        "指标"
+      ]
+    },
+    {
+      "name": "metric",
+      "type": "string",
+      "title": "度量方式",
+      "description": "从定性评价到定量计算的度量方法"
+    },
+    {
+      "name": "quant_value",
+      "type": "number",
+      "title": "定量值",
+      "description": "当前实测值"
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "title": "交叉来源",
+      "description": "交叉分析表来源：arch_insights / vulnerabilities / failures 等"
+    },
+    {
+      "name": "created_at",
+      "type": "time",
+      "title": "创建时间"
+    }
+  ],
+  "indexes": [
+    {
+      "fields": [
+        "software_id"
+      ]
+    }
+  ]
+}
