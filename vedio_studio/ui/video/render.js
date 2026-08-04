@@ -467,7 +467,12 @@ export async function exportVideo(engine, opts = {}) {
   const width = opts.width || engine.doc.size.width;
   const height = opts.height || engine.doc.size.height;
   const fps = opts.fps || engine.doc.fps;
-  const totalFrames = opts.totalFrames || engine.doc.totalFrames;
+  // 总帧数按导出 fps 重算：文档帧数是 doc.fps 语义（buildFrame 参数），
+  // 而视频时间戳/音频时长都按导出 fps 走——直接用文档帧数会导致 60fps 导出
+  // 时长减半、音频只混前半段（用户实测：60hz 导出短一半、声音只有前一半）。
+  const docFps = engine.doc.fps || fps;
+  const durationSec = engine.doc.totalFrames / docFps;
+  const totalFrames = opts.totalFrames || Math.max(1, Math.round(durationSec * fps));
   const fmt = EXPORT_FORMATS[format];
 
   onProgress({ phase: "setup", pct: 0, frame: 0, total: totalFrames });
@@ -536,7 +541,12 @@ export async function exportVideo(engine, opts = {}) {
   await waitMediaReady();
   for (let f = 0; f < totalFrames; f++) {
     checkAbort(signal);
-    const node = engine.buildFrame(f, { forExport: true });
+    // 导出帧号 → 文档帧号（doc.fps 语义）：60fps 导出 200 帧映射到 30fps 文档的 0..99
+    const docFrame = Math.min(
+      engine.doc.totalFrames - 1,
+      Math.floor((f * docFps) / fps),
+    );
+    const node = engine.buildFrame(docFrame, { forExport: true });
     await waitMediaSeek(node);
     await drawFrameToCanvas(node, canvas, ctx, width, height);
     const frame = new VideoFrame(canvas, { timestamp: Math.round((f / fps) * 1e6) });

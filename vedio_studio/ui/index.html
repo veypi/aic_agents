@@ -1814,9 +1814,12 @@
     const total = st && st.totalFrames ? st.totalFrames : 0
     const fps = exFpsOf()
     const {w, h} = exSize()
-    const dur = total / (st && st.engine ? st.engine.doc.fps : fps)
+    // 时长按文档 fps 恒定；帧数按导出 fps 重算（60fps 导出 = 文档时长 × 60）
+    const docFps = st && st.engine ? st.engine.doc.fps : fps
+    const dur = total / docFps
+    const outF = Math.max(1, Math.round(dur * fps))
     const mb = (exBitrateEst(w, h, fps, exQuality) * dur + 128000 * dur) / 8 / 1048576
-    return '时长 ' + dur.toFixed(1) + 's · ' + total + 'f · ' + w + '×' + h + '@' + fps + ' · 约 ' + mb.toFixed(1) + ' MB'
+    return '时长 ' + dur.toFixed(1) + 's · ' + outF + 'f · ' + w + '×' + h + '@' + fps + ' · 约 ' + mb.toFixed(1) + ' MB'
   }
   doExport = async (opts) => {
     const {exportVideo} = await import('./video/render.js')
