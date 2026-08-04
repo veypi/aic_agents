@@ -495,7 +495,7 @@
 </body>
 
 <script setup>
-  import {starterDoc, defaultTheme, uid, waitMediaSeek, easing, easingOf, springPhysics, bezierEasing, interpolate} from './video/engine.js'
+  import {starterDoc, defaultTheme, uid, waitMediaSeek, waitMediaReady, prepareMedia, easing, easingOf, springPhysics, bezierEasing, interpolate} from './video/engine.js'
   document.body.setAttribute('theme', 'dark')
 
   // ---- 状态 ----
@@ -812,6 +812,9 @@
             const f = isNaN(fr) ? engine.frame : Math.max(0, Math.min(fr, total - 1))
             // 复用导出管线：确定性 DOM → SVG foreignObject → canvas（不动播放头）
             if (engine.prepare) await engine.prepare()   // three 元素懒加载就绪
+            // 预热并等待媒体就绪：窗口外 video 首次出现在截图帧时可能未加载（黑帧）
+            prepareMedia(engine.doc, engine.assets)
+            await waitMediaReady()
             const {drawFrameToCanvas} = await import('./video/render.js')
             // forExport：与导出画面一致（audio 元素不画 chip；media 合成真帧）
             const node = engine.buildFrame(f, {forExport: true})

@@ -477,11 +477,17 @@ export function elDurOf(el, containerDur) {
   return el.dur > 0 ? Math.min(+el.dur, rest) : rest;
 }
 
-/** media 元素窗口内时间 lt（秒）对应的源时间：超 trimEnd 冻结在末帧 */
+/** media 元素窗口内时间 lt（秒）对应的源时间：超 trimEnd 冻结在末帧；
+ *  loop 时在 [trimStart, trimEnd) 区间内取模循环（trimEnd=-1 需运行时按源时长修正）。 */
 export function mediaTimeLt(el, lt) {
   const ts = +el.trimStart || 0;
   const te = el.trimEnd >= 0 ? +el.trimEnd : Infinity;
-  return Math.min(te, ts + Math.max(0, lt));
+  const t = Math.max(0, lt);
+  if (el.loop && te !== Infinity) {
+    const len = te - ts;
+    if (len > 0) return ts + (((t % len) + len) % len);
+  }
+  return Math.min(te, ts + t);
 }
 
 /** media 元素在场景时间 t（秒）对应的源时间：start 后进入播放窗口，超窗冻结在 trimEnd */
@@ -542,6 +548,15 @@ function mediaVideoFor(el, assetMap) {
     v.playsInline = true;
     v.style.cssText = "width:100%;height:100%;display:block;";
     v.addEventListener("seeked", () => { v._vdDirty = false; });
+    // 持久 loadedmetadata 监听：加载完成时 seek 到最新目标 _vdT。
+    // （不能用每次 buildFrame 注册 once 监听——多次注册在加载完成时全部触发，
+    //   各 seek 各的目标，最终帧错乱/竞态）
+    v.addEventListener("loadedmetadata", () => {
+      if (v._vdT != null && Math.abs((v.currentTime || 0) - v._vdT) > 0.001) {
+        v._vdDirty = true;
+        v.currentTime = v._vdT;
+      }
+    });
     o = { video: v, url };
     mediaPool.set(el.id, o);
   }
@@ -560,28 +575,57 @@ export function prepareMedia(doc, assetMap) {
 
 /** 等待节点内 video 元素完成帧定位（_vdDirty 在 seeked 时清除）。
  *  注意不能用 currentTime≈_vdT 判断：Chrome 设置 currentTime 后属性立即反映目标值，
- *  但画面要等 seeked 才更新——提前 drawImage 会抓到上一帧。 */
+ *  但画面要等 seeked 才更新——提前 drawImage 会抓到上一帧。
+ *  就绪条件 = readyState>=2（有帧数据）且无未完成 seek。首次创建且目标时间=0 时
+ *  不触发 seek（currentTime 已在 0），seeked 永远不会来——必须等 loadeddata 而非死等 seeked。 */
 export function waitMediaSeek(node, timeout = 800) {
   const vs = node ? Array.from(node.querySelectorAll("video")) : [];
   if (!vs.length) return Promise.resolve();
   return Promise.all(
     vs.map((v) => {
       if (v._vdT == null) return Promise.resolve();
-      if (!v._vdDirty && v.readyState >= 2) return Promise.resolve();
+      if (v.readyState >= 2 && !v._vdDirty) return Promise.resolve();
       return new Promise((res) => {
         let done = false;
         const finish = () => {
           if (done) return;
           done = true;
           v.removeEventListener("seeked", finish);
+          v.removeEventListener("loadeddata", finish);
           v.removeEventListener("error", finish);
           res();
         };
         v.addEventListener("seeked", finish);
+        v.addEventListener("loadeddata", finish);
         v.addEventListener("error", finish);
         setTimeout(finish, timeout);
       });
     }),
+  );
+}
+
+/** 等待所有池化 media video 就绪（有首帧可画）。导出/截图前调用：
+ *  窗口外元素从不渲染 → 池 video 首次在切换帧才创建，data URL 加载未完成时
+ *  drawImage 黑帧（导出视频里表现为「切换帧闪烁」）。 */
+export function waitMediaReady(timeout = 8000) {
+  const vs = [...mediaPool.values()]
+    .map((o) => o.video)
+    .filter((v) => v && v.readyState < 2);
+  if (!vs.length) return Promise.resolve();
+  return Promise.all(
+    vs.map(
+      (v) =>
+        new Promise((res) => {
+          const finish = () => {
+            v.removeEventListener("loadeddata", finish);
+            v.removeEventListener("error", finish);
+            res();
+          };
+          v.addEventListener("loadeddata", finish);
+          v.addEventListener("error", finish);
+          setTimeout(finish, timeout);
+        }),
+    ),
   );
 }
 
@@ -1250,7 +1294,13 @@ export function renderElement(el, doc, ctx) {
       // 不用原生 controls/loop/autoplay——确定性帧渲染只负责「显示该时刻的画面」。
       const m = mediaVideoFor(el, ctx.assetMap);
       if (m) {
-        const mt = mediaTimeLt(el, ctx.t); // ctx.t = 窗口相对时间
+        let mt = mediaTimeLt(el, ctx.t); // ctx.t = 窗口相对时间
+        // loop + trimEnd=-1（源全长）：mediaTimeLt 无法取模，用实际源时长循环
+        if (el.loop && (el.trimEnd == null || el.trimEnd < 0) && m.duration > 0) {
+          const ts = +el.trimStart || 0;
+          const len = m.duration - ts;
+          if (len > 0) mt = ts + (((ctx.t % len) + len) % len);
+        }
         m._vdT = mt;
         if (m.readyState >= 1) {
           if (Math.abs((m.currentTime || 0) - mt) > 0.001) {
@@ -1258,8 +1308,8 @@ export function renderElement(el, doc, ctx) {
             m.currentTime = mt;
           }
         } else {
+          // 未加载：加载完成由池 video 的持久 loadedmetadata 监听 seek 到最新 _vdT
           m._vdDirty = true;
-          m.addEventListener("loadedmetadata", () => { m.currentTime = mt; }, { once: true });
         }
         m.style.objectFit = el.fit || "contain";
         node.appendChild(m);

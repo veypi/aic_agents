@@ -13,7 +13,7 @@
 
 import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.js";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmArrayBufferTarget } from "./vendor/webm-muxer.js";
-import { prepareMedia, waitMediaSeek } from "./engine.js";
+import { prepareMedia, waitMediaSeek, waitMediaReady } from "./engine.js";
 
 const SR = 48000;
 
@@ -530,9 +530,10 @@ export async function exportVideo(engine, opts = {}) {
 
   // ---- video track: deterministic frames ----
   const BATCH = 24;
-  // 预热 media 池元素（解码缓存共享，逐帧 seek 快），循环中等待 seeked 保证画面帧正确；
-  // forExport：audio 元素不产生视觉（声音走混音）
+  // 预热 media 池元素（解码缓存共享，逐帧 seek 快），并等待全部就绪：
+  // 窗口外元素首次出现在切换帧，data URL 加载未完成时该帧黑屏（导出闪烁）
   prepareMedia(engine.doc, engine.assets);
+  await waitMediaReady();
   for (let f = 0; f < totalFrames; f++) {
     checkAbort(signal);
     const node = engine.buildFrame(f, { forExport: true });
