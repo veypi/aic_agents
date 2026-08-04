@@ -9,7 +9,7 @@
 - 每个项目一个目录：`index.json`（video/1 文档，含全部场景，默认单一文件；场景多时可拆分，见下文「场景子 json」）
 - 素材（图片/音频）放 `assets/` 子目录，文档中 `src` 写**相对路径**（如 `assets/bg.mp3`、`assets/logo.png`）；左侧「素材」tab 可查看/上传/删除素材——**拖拽素材到中间舞台（落点插入）或底部时间轴（插入当前场景中心），或双击素材**即可直接生成元素（图片→image、视频→media video、音频→media audio）；单击素材项复制相对引用路径
 - 导出由**用户点击顶部「导出」按钮**完成（弹层可选：格式 MP4(H.264+AAC) / WebM(VP9+Opus) / WebM(VP8+Opus) / WAV(仅音频)，分辨率 原始/1080p/720p/480p/自定义，帧率 原始/24/25/30/60，质量 低/中/高；产物自动存 `/vedio/exports/{标题}.{扩展名}` 并触发浏览器下载；AI 不触发导出）
-- 注意：项目在浏览器本地，AI 用 fs 工具（1host=page）以 `$SESSION/vedio/...` 路径读写（自动映射到本地 `/vedio/...`）；外部素材可尝试 `exec curl -o $SESSION/vedio/{项目}/assets/...` 下载，但**受浏览器 CORS 限制经常失败**（页面 fetch 非白名单域会被浏览器拦截）——失败时不要反复重试，改为**把下载链接发给用户，让用户自行下载后通过左侧「素材」tab 上传**（页面会保留文件名存入 `assets/`）
+- 注意：项目在浏览器本地，AI 用 fs 工具（1host=page）以 `/vedio/...` 路径读写（文件就在浏览器本地 IndexedDB）；外部素材可尝试 `exec curl -o /vedio/{项目}/assets/...` 下载，但**受浏览器 CORS 限制经常失败**（页面 fetch 非白名单域会被浏览器拦截）——失败时不要反复重试，改为**把下载链接发给用户，让用户自行下载后通过左侧「素材」tab 上传**（页面会保留文件名存入 `assets/`）
 
 ## 典型工作流
 
@@ -17,9 +17,9 @@
 
 1. 构思：脚本 → 场景划分（每个场景 3~6 秒）→ 每场景元素（文字/形状/图片/图表）+ 动画（入场 fx / 关键帧 keyframes）
 2. `new_video --name x-主题 --title "标题"` 创建项目
-3. 读写项目文件用**标准 fs 工具**（1host=page，start_fs 已开启）：`fs.read {"1host":"page","path":"$SESSION/vedio/x-主题/index.json"}` 读骨架 → `fs.write` 写完整文档（JSON 用 2 空格缩进展开）——`$SESSION/vedio/...` 自动映射到本地 `/vedio/...`
+3. 读写项目文件用**标准 fs 工具**（1host=page，start_fs 已开启）：`fs.read {"1host":"page","path":"/vedio/x-主题/index.json"}` 读骨架 → `fs.write` 写完整文档（JSON 用 2 空格缩进展开）——`/vedio/...` 自动映射到本地 `/vedio/...`
 4. 改完 `index.json` 或素材后调 `reload_video` 让页面刷新画面（保持当前帧）
-5. 需要配图/配乐：先尝试 `exec {"1host":"page","action":"curl","argv":["-o","$SESSION/vedio/x-主题/assets/cover.png","<http链接>"]}` 下载（**受浏览器 CORS 限制经常失败**）；失败则把素材链接发给用户：「请下载这个文件（<链接>）后，在页面左侧「素材」tab 点「+ 上传」导入」——上传完成后 AI 写相对路径引用（`assets/封面.png`），再 `reload_video` 刷新画面
+5. 需要配图/配乐：先尝试 `exec {"1host":"page","action":"curl","argv":["-o","/vedio/x-主题/assets/cover.png","<http链接>"]}` 下载（**受浏览器 CORS 限制经常失败**）；失败则把素材链接发给用户：「请下载这个文件（<链接>）后，在页面左侧「素材」tab 点「+ 上传」导入」——上传完成后 AI 写相对路径引用（`assets/封面.png`），再 `reload_video` 刷新画面
 6. `open_video --name x-主题` 让页面加载 → `run_video --name x-主题` 预览播放
 7. 删除文件/项目：`fs.rm` / `exec rm`（本地文件操作）；清理项目用 `fs.rm` 删 `/vedio/{name}` 目录
 8. 完成：提醒用户点击页面顶部「导出」按钮自行导出（导出由用户操作，AI 不触发）
@@ -28,7 +28,7 @@
 
 ## 可用 page_exec 指令（exec 1host=page）
 
-事件仅在用户打开 Vedio Studio 页面时响应（页面已开启 `start_fs`：AI 可直接用 fs 工具读写本地 `/vedio/` 项目文件，路径写 `$SESSION/vedio/...` 自动映射）。成功返回 `{ok:true,...}`，失败 `{ok:false,error}`。
+事件仅在用户打开 Vedio Studio 页面时响应（页面已开启 `start_fs`：AI 可直接用 fs 工具读写本地 `/vedio/` 项目文件，路径写 `/vedio/...` 自动映射）。成功返回 `{ok:true,...}`，失败 `{ok:false,error}`。
 
 ### list_video — 项目列表
 
@@ -76,7 +76,7 @@
 | `--name <文件名>` | 可选，输出文件名（默认 `{标题}-f{帧号}.png`） |
 | `--scale <倍率>` | 可选，分辨率倍率 0.25~2（默认 1 = 文档分辨率） |
 
-复用导出管线（确定性 DOM → canvas）截取指定帧为 PNG，保存到 `/vedio/screenshots/`（不移动播放头）。返回 `{ ok, path, frame, width, height, size }`；用 `fs.read`（1host=page，路径 `$SESSION/vedio/screenshots/...`）查看画面。注意：动画入场起点（如 frame 0）元素可能未显现，截关键帧建议指定 `--frame`。
+复用导出管线（确定性 DOM → canvas）截取指定帧为 PNG，保存到 `/vedio/screenshots/`（不移动播放头）。返回 `{ ok, path, frame, width, height, size }`；用 `fs.read`（1host=page，路径 `/vedio/screenshots/...`）查看画面。注意：动画入场起点（如 frame 0）元素可能未显现，截关键帧建议指定 `--frame`。
 
 ### run_js — 纯数值计算（动画曲线 / 3D 建模参数）
 
@@ -218,11 +218,11 @@ material `kind: standard|basic`，支持 `color/metalness/roughness/wireframe/op
 ## 制作规范
 
 1. **场景时长**：每场景 3~6 秒为宜；全片一般 8~60 秒（导出性能与时长线性相关）
-2. **先读后改**：修改前先 `fs.read`（1host=page，路径 `$SESSION/vedio/{项目名}/index.json`）了解现状；不确定项目名先 `list_video`
+2. **先读后改**：修改前先 `fs.read`（1host=page，路径 `/vedio/{项目名}/index.json`）了解现状；不确定项目名先 `list_video`
 3. **坐标合理**：基于 `size` 布局，避免元素越界；文字框给足高度（fontSize 64 标题至少 h=100）；`align/valign` 配合居中
 4. **动画克制的**：同屏 2~4 个入场动画即可，`delay` 错峰（0.3~0.5s 间隔）；关键帧运动轨迹明确、有终点
 5. **字幕**：口语化短句，与画面内容对应；不要整屏字幕
-6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材优先尝试 `exec curl -o $SESSION/vedio/{项目名}/assets/xxx.png <url>` 下载，但**浏览器 CORS 限制下经常失败**——失败即停止重试，直接把链接给用户让其下载后上传到左侧「素材」tab（上传保留原始文件名，重名自动 -1/-2），AI 写引用时用真实文件名；不要引用外链 URL（离线失效）
+6. **素材**：图片/音频放 `assets/` 并写相对路径；禁止 base64 大体积进 JSON；外部素材优先尝试 `exec curl -o /vedio/{项目名}/assets/xxx.png <url>` 下载，但**浏览器 CORS 限制下经常失败**——失败即停止重试，直接把链接给用户让其下载后上传到左侧「素材」tab（上传保留原始文件名，重名自动 -1/-2），AI 写引用时用真实文件名；不要引用外链 URL（离线失效）
 7. **写完即所见**：`fs.write` 写 index.json 后调 `reload_video` 刷新画面（保持当前帧）；用 `run_video` 播放确认效果，播放后提醒用户可再次点击播放/暂停
 8. **结果反馈**：操作完成后一两句话向用户总结（时长、场景数、效果亮点）；完成后提醒用户可点顶部「导出」自行导出（可选 MP4/WebM/WAV 与分辨率/帧率/质量）
 

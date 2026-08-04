@@ -615,25 +615,24 @@
   let sessionLoadedFor = ''
   let hadSelection = false   // 上一次 statechange 的选中态：识别「无选中 → 选中」跃迁以自动切 tab
 
-  // UFS 文件 HTTP 服务前缀（$mod.$cloud_fs.fsPrefix），用于把文件路径转成可渲染 URL（图片等）
-  const fsPrefix = String($mod.$cloud_fs?.fsPrefix || '').replace(/\/+$/, '')
-  const sessRoot = () => '/sessions/' + sid + '/'
-  const globalPath = (rel) => 'sessions/' + sid + '/' + rel
+  // 会话文件本地化（page_fs / IndexedDB）：本地根 /ppt/，AI 侧路径 $SESSION/ppt/...
+  const sessRoot = () => '/ppt/'
+  const globalPath = (rel) => '/ppt/' + rel
   const lastKey = () => 'ppt_open_' + sid
   const caseJsonUrl = (id) => 'cases/' + id + '/index.json'        // 新约定：index.json + slides/ 拆分
   const caseJsonUrlLegacy = (id) => 'cases/' + id + '/' + id + '.json'  // 兼容旧的单文件样例
   // 样例资源（图片等）的绝对 URL 基座：组件内 fetch 会被运行时自动加 $mod.scoped 前缀，
   // 但引擎运行时动态创建的 <img> 不走该前缀，必须给绝对路径（/aic/agents/{id}/cases/...）
   const caseBaseUrl = (id) => String($mod.scoped || '').replace(/\/+$/, '') + '/cases/' + id + '/'
-  // 写文件：统一走 $mod.$cloud_fs.put（绝对路径 + Blob/File）
+  // 写文件：统一走 $mod.$page_fs.put（本地绝对路径 + Blob/File）
   const fsPut = async (path, blob) => {
-    if (!$mod.$cloud_fs) throw new Error($t('err.noFsPut'))
-    return await $mod.$cloud_fs.put(path, blob)
+    if (!$mod.$page_fs) throw new Error($t('err.noFsPut'))
+    return await $mod.$page_fs.put(path, blob)
   }
-  // 删除文件/目录：统一走 $mod.$cloud_fs.rm（绝对路径；失败 throw）
+  // 删除文件/目录：统一走 $mod.$page_fs.rm（本地绝对路径；失败 throw）
   const fsRm = async (path) => {
-    if (!$mod.$cloud_fs) throw new Error($t('err.noFsRm'))
-    return await $mod.$cloud_fs.rm(path)
+    if (!$mod.$page_fs) throw new Error($t('err.noFsRm'))
+    return await $mod.$page_fs.rm(path)
   }
 
   // ---- 显示辅助 ----
@@ -680,25 +679,52 @@
   }
 
   // ---- 相对资源引用：加载时解析为 HTTP URL，保存时还原为相对路径（相对 xxx.json） ----
-  const deckBaseUrl = (rel) => {
-    const i = rel.lastIndexOf('/')
-    const dir = i >= 0 ? rel.slice(0, i + 1) : ''
-    return fsPrefix + sessRoot() + dir
+  // 本地图片 → objectURL 双向映射（内存：相对路径 ↔ blob URL；页面刷新后重建）
+  const imgUrls = new Map()   // rel -> objectURL
+  const urlToRel = new Map()  // objectURL -> rel
+  const fsUrl = async (rel) => {
+    if (imgUrls.has(rel)) return imgUrls.get(rel)
+    try {
+      const r = await $mod.$page_fs.get(sessRoot() + rel)
+      const blob = r.content instanceof Blob ? r.content : new Blob([r.content], {type: r.mime || 'image/png'})
+      const url = URL.createObjectURL(blob)
+      imgUrls.set(rel, url)
+      urlToRel.set(url, rel)
+      return url
+    } catch (e) { return '' }
   }
 
   const isRelRef = (u) => typeof u === 'string' && !!u && !/^(https?:|data:|blob:|asset:|\/|#)/i.test(u)
-  const resolveDocAssets = (doc, base) => {
-    ; (doc.slides || []).forEach((s) => (s.elements || []).forEach((el) => {
-      if (isRelRef(el.src)) el.src = base + el.src
-      if (isRelRef(el.poster)) el.poster = base + el.poster
+  // 加载：相对资源引用 → objectURL（会话文档，本地 IndexedDB 无 HTTP URL）；
+  // 样例（base 为绝对 URL 前缀）保持原行为：前缀拼接（scoped 静态资源可直连）
+  const resolveDocAssets = async (doc, base) => {
+    const prefixMode = typeof base === 'string' && /^(https?:|\/)/i.test(base)
+    if (prefixMode) {
+      ; (doc.slides || []).forEach((s) => (s.elements || []).forEach((el) => {
+        if (isRelRef(el.src)) el.src = base + el.src
+        if (isRelRef(el.poster)) el.poster = base + el.poster
+      }))
+      return doc
+    }
+    const dir = base.slice(0, base.lastIndexOf('/') + 1)
+    await Promise.all((doc.slides || []).map(async (s) => {
+      for (const el of (s.elements || [])) {
+        if (isRelRef(el.src)) el.src = await fsUrl(dir + el.src)
+        if (isRelRef(el.poster)) el.poster = await fsUrl(dir + el.poster)
+      }
     }))
     return doc
   }
-  const unresolveDocAssets = (doc, base) => {
+  // 保存：objectURL → 相对路径（相对文档所在目录）
+  const unresolveDocAssets = (doc, rel) => {
     const d = JSON.parse(JSON.stringify(doc))
+    const dir = rel.slice(0, rel.lastIndexOf('/') + 1)
       ; (d.slides || []).forEach((s) => (s.elements || []).forEach((el) => {
-        if (typeof el.src === 'string' && el.src.indexOf(base) === 0) el.src = el.src.slice(base.length)
-        if (typeof el.poster === 'string' && el.poster.indexOf(base) === 0) el.poster = el.poster.slice(base.length)
+        for (const key of ['src', 'poster']) {
+          const u = el[key]
+          const r = urlToRel.get(u)
+          if (typeof u === 'string' && r && r.startsWith(dir)) el[key] = r.slice(dir.length)
+        }
       }))
     return d
   }
@@ -724,7 +750,7 @@
 
   // ---- 分页拆分加载：slides 元素为字符串时，按相对 index.json 的路径逐个拉取分页 json；对象则原样使用 ----
   // 返回 { refs, split }：refs 为 slideId → 引用路径；split 表示文档是否含引用页。doc.slides 原地解析为对象数组
-  const resolveSlideRefs = async (doc, base) => {
+  const resolveSlideRefs = async (doc, base, kind = 'case') => {
     const refs = {}
     let split = false
     if (doc && Array.isArray(doc.slides)) {
@@ -732,9 +758,11 @@
         if (typeof s !== 'string') return s
         split = true
         try {
-          const r = await fetch(base + s)
-          if (!r.ok) throw new Error($t('err.slideLoad', {file: s, status: r.status}))
-          const sl = parseJson(await r.text(), $t('err.slideJson', {file: s}))
+          // 会话文档：本地 page_fs 读分页；样例：scoped fetch（agent 静态资源）
+          const text = kind === 'session'
+            ? await readSessionText(base + s)
+            : await (async () => { const r = await fetch(base + s); if (!r.ok) throw new Error($t('err.slideLoad', {file: s, status: r.status})); return await r.text() })()
+          const sl = parseJson(text, $t('err.slideJson', {file: s}))
           if (!sl || !Array.isArray(sl.elements)) throw new Error($t('err.slideBad', {file: s}))
           if (sl.id) refs[sl.id] = s
           return sl
@@ -771,10 +799,7 @@
     return ext || 'png'
   }
   const imgName = (ext) => 'img-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext
-  const urlToFsPath = (url) => {
-    if (typeof url !== 'string' || !url || !fsPrefix) return ''
-    return url.indexOf(fsPrefix) === 0 ? url.slice(fsPrefix.length) : ''
-  }
+  const urlToFsPath = (url) => urlToRel.get(url) || '' 
   // 传给 ppt.js 的图片存储钩子（引擎与文件系统解耦，仅通过此对象读写）
   const imageStore = {
     put: async (file) => {
@@ -782,27 +807,31 @@
       if (cur_kind !== 'session' || !cur_path) throw new Error($t('img.caseReadonly'))
       const rel = deckDir() + 'image/' + imgName(extOf(file))
       await fsPut(sessRoot() + rel, file)
-      return fsPrefix + sessRoot() + rel   // 返回内存中使用的完整 URL
+      const url = URL.createObjectURL(file)
+      imgUrls.set(rel, url)
+      urlToRel.set(url, rel)
+      return url   // 返回内存中使用的 objectURL
     },
     remove: async (url) => {
-      const p = urlToFsPath(url)
-      if (!p) return                        // base64 / 外链 / 样例：无对应文件，忽略
-      if (p.indexOf('/sessions/' + sid + '/') !== 0) return
-      if (p.indexOf('/image/') < 0) return  // 安全：仅删除 image 目录内的文件
-      try {await fsRm(p)} catch (e) {console.warn('[PPT] 删除图片文件失败:', p, (e && e.message) || e)}
+      const rel = urlToFsPath(url)
+      if (!rel) return                       // base64 / 外链 / 样例：无对应文件，忽略
+      if (rel.indexOf('/image/') < 0) return // 安全：仅删除 image 目录内的文件
+      imgUrls.delete(rel)
+      urlToRel.delete(url)
+      try {await fsRm(sessRoot() + rel)} catch (e) {console.warn('[PPT] 删除图片文件失败:', rel, (e && e.message) || e)}
     }
   }
 
-  // ---- 会话文件读写（$mod.$cloud_fs） ----
+  // ---- 会话文件读写（$mod.$page_fs，本地 IndexedDB） ----
   const readDir = async (dir) => {
     try {
-      return await $mod.$cloud_fs.get(dir)   // 目录 → {ok, dir, items}；404 → throw → null
+      return await $mod.$page_fs.get(dir)    // 目录 → {ok, dir, items}；不存在 → throw → null
     } catch (_) { return null }
   }
   // 递归列出会话中的 .json 文件（跳过无权限目录，按修改时间倒序）
   const walkJson = async () => {
     const out = []
-    if (!$mod.$cloud_fs) return out
+    if (!$mod.$page_fs) return out
     const walk = async (dir, prefix, depth) => {
       if (depth > 3) return
       let node
@@ -821,15 +850,15 @@
     out.sort((a, b) => b.mod_time - a.mod_time)
     return out
   }
-  // $cloud_fs.get 读取会话文件文本（404 等直接 throw）
+  // $page_fs.get 读取会话文件文本（不存在直接 throw）
   const readSessionText = async (rel) => {
-    const r = await $mod.$cloud_fs.get(sessRoot() + rel)
+    const r = await $mod.$page_fs.get(sessRoot() + rel)
     return typeof r.content === 'string' ? r.content : await r.content.text()
   }
   // 保存：还原相对引用后写 JSON。拆分结构（slides 含字符串引用）按引用逐页写回，
   // index.json 保持引用数组；编辑器新增/复制的页自动分配 slides/slide_N.json；不再被引用的旧分页文件同步清理
   const writeDeckFile = async (rel, doc) => {
-    const out = unresolveDocAssets(doc, deckBaseUrl(rel))
+    const out = unresolveDocAssets(doc, rel)
     delete out.collab
     if (!cur_split) {
       const text = JSON.stringify(out, null, 2)
@@ -900,12 +929,11 @@
     saved_index_snap = {}
     if (cur_kind !== 'session' || !cur_path || !cur_split) return
     try {
-      const base = deckBaseUrl(cur_path)
       const dir = cur_path.slice(0, cur_path.lastIndexOf('/') + 1)
       const doc = stageApi().getDoc()
         ; ((doc && doc.slides) || []).forEach((s) => {
           const ref = s && s.id ? cur_refs[s.id] : null
-          if (ref) saved_snap[dir + ref] = JSON.stringify(unresolveDocAssets({slides: [s]}, base).slides[0], null, 2)
+          if (ref) saved_snap[dir + ref] = JSON.stringify(unresolveDocAssets({slides: [s]}, cur_path).slides[0], null, 2)
         })
     } catch (e) { }
   }
@@ -958,8 +986,8 @@
     const text = await readSessionText(rel)
     const doc = parseJson(text, $t('err.deckJson', {file: rel}))
     if (!doc || !Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('err.deckBad', {file: rel}))
-    const base = deckBaseUrl(rel)
-    const sr = await resolveSlideRefs(doc, base)
+    const deckDirOf = (p) => p.slice(0, p.lastIndexOf('/') + 1)
+    const sr = await resolveSlideRefs(doc, deckDirOf(rel), 'session')
     cur_kind = 'session'
     cur_case = ''
     cur_path = rel
@@ -967,7 +995,7 @@
     cur_split = sr.split
     suppressSave = true
     try {
-      stageApi().setDoc(resolveDocAssets(doc, base))
+      stageApi().setDoc(await resolveDocAssets(doc, rel))
     } finally {
       suppressSave = false
     }
@@ -1016,7 +1044,7 @@
     if (!Array.isArray(doc.slides) || !doc.slides.length) throw new Error($t('err.caseBad', {id: c.id}))
     const base = caseBaseUrl(c.id)
     // 分页引用用相对基座（组件内 fetch 会被自动加 scoped 前缀）；图片另用绝对基座（引擎 img 不加前缀）
-    const sr = await resolveSlideRefs(doc, 'cases/' + c.id + '/')
+    const sr = await resolveSlideRefs(doc, 'cases/' + c.id + '/', 'case')
     cur_kind = 'case'
     cur_case = c.id
     cur_path = c.id + '/index.json'
@@ -1024,7 +1052,7 @@
     cur_split = sr.split
     suppressSave = true
     try {
-      stageApi().setDoc(resolveDocAssets(doc, base))
+      stageApi().setDoc(await resolveDocAssets(doc, base))
     } finally {
       suppressSave = false
     }
@@ -1367,23 +1395,23 @@
     const pos = argv.find((a, j) => typeof a === 'string' && !String(a).startsWith('--') && !used.has(j))
     return pos !== undefined ? pos : dft
   }
-  // 规范化为会话内相对路径；仅允许当前会话目录
+  // 规范化为会话内相对路径；仅允许本地 /ppt/ 根下
   const normPath = (p) => {
     p = String(p || '').trim().replace(/^\/+/, '')
     if (!p || p.indexOf('..') >= 0) throw new Error($t('err.badPath'))
-    const prefix = 'sessions/' + sid + '/'
-    if (p.indexOf(prefix) !== 0) throw new Error($t('err.pathScope', {prefix: prefix}))
+    const prefix = 'ppt/'
+    if (p.indexOf(prefix) !== 0) throw new Error($t('err.pathScope', {prefix: '/' + prefix}))
     return p.slice(prefix.length)
   }
   const errReply = (e) => ({ok: false, error: String((e && e.message) || e)})
   const reply = (obj) => ({content: JSON.stringify(obj)})
-  const curGlobalPath = () => cur_kind === 'case' ? 'cases/' + cur_path : (cur_path ? globalPath(cur_path) : '')
+  const curGlobalPath = () => cur_kind === 'case' ? 'cases/' + cur_path : (cur_path ? '/ppt/' + cur_path : '')
 
   bindSession = (id) => {
-    pe?.stop()
-    pe = null
+    unsubPageExec?.()
+    unsubPageExec = null
     if (!id || !$mod.$page_exec) return
-    pe = $mod.$page_exec(id, [
+    unsubPageExec = $mod.$page_exec.sub(id, [
       // 列出当前会话中的 PPT 文件 + 内置样例
       {name: 'list_ppt', description: '列出当前会话中的 PPT 文件与内置样例',
         handler: async () => {
@@ -1513,7 +1541,7 @@
             } else {
               refreshFiles()
             }
-            return reply({ok: true, deleted: 'sessions/' + sid + '/' + dir + '/'})
+            return reply({ok: true, deleted: '/ppt/' + dir + '/'})
           } catch (e) {return reply(errReply(e))}
         }},
 
@@ -1561,12 +1589,11 @@
             return reply({ok: true, mode: m})
           } catch (e) {return reply(errReply(e))}
         }},
-    ])
-    pe.start()
+    ], {enable_fs: true})
   }
 
   cleanup = () => {
-    pe?.stop()
+    unsubPageExec?.()
     if (saveTimer) {clearTimeout(saveTimer); saveTimer = null}
   }
 

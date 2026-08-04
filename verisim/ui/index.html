@@ -937,7 +937,7 @@ endmodule
   aiSessionId = $router.current.query.session_id || ''
   aiOpen = window.innerWidth >= 860
   sessionFiles = []
-  pe = null   // page_exec instance
+  unsubPageExec = null   // 上一会话注销函数（sub 返回）
   lsDel('last_run_meta')
   lsDel('last_vcd')
 
@@ -1095,23 +1095,19 @@ endmodule
     if (e && e.target) e.target.value = ''
   }
 
+  // 本地文件解析（page_fs / IndexedDB，本地根 /verisim/）：
+  // AI 路径 `/verisim/xxx.v` 原样；$SESSION/$AGENT 前缀兼容映射到本地根
   resolvePath = (p) => {
     if (!p) return p
-    let s = String(p)
-    // $SESSION → /sessions/{当前 AI 会话 ID}
-    if (s.startsWith('$SESSION') && aiSessionId) {
-      s = '/sessions/' + aiSessionId + s.slice(8)
+    let s = String(p).trim()
+    if (s.startsWith('$SESSION') || s.startsWith('$AGENT')) {
+      s = s.slice(s.indexOf('/'))   // 去掉 $XXX 前缀
     }
-    // $AGENT → /agents/{当前 agent ID}（从 $mod.scoped 提取）
-    if (s.startsWith('$AGENT')) {
-      const m = ($mod.scoped || '').match(/\/a\/([a-f0-9]+)/i)
-      if (m) s = '/agents/' + m[1] + s.slice(6)
-    }
-    // $USER → /home/{user_id}：暂不支持（前端无直接 user_id 来源），保持原样交给后端
-    return s
+    if (s.startsWith('/verisim/')) return s
+    return '/verisim/' + s.replace(/^\/+/, '')
   }
-  readUfsText = async (ufsPath) => {
-    const r = await $mod.$cloud_fs.get(resolvePath(ufsPath));
+  readLocalText = async (path) => {
+    const r = await $mod.$page_fs.get(resolvePath(path));
     return typeof r.content === 'string' ? r.content : await r.content.text();
   }
   loadSessionFiles = async () => {
@@ -1120,23 +1116,23 @@ endmodule
       return {ok: false, text: 'no ai session'}
     }
     try {
-      const r = await $mod.$cloud_fs.get('/sessions/' + aiSessionId)
-      const items = r && r.dir && r.items ? r.items : []
+      const r = await $mod.$page_fs.ls('/verisim')
+      const items = r && r.items ? r.items : []
       sessionFiles = items.filter(x => x && !x.dir && /\.(v|sv|txt)$/i.test(x.name || ''))
       return {ok: true, total: sessionFiles.length}
     } catch (e) {
-      // 目录不存在（404）视为空会话，不报错
-      const msg = e && e.message ? e.message : String(e)
-      if (/404|not found/i.test(msg)) {sessionFiles = []; return {ok: true, total: 0}}
+      // 本地根不存在视为空，不报错
       sessionFiles = []
+      const msg = e && e.message ? e.message : String(e)
+      if (/not found|404/i.test(msg)) return {ok: true, total: 0}
       log(() => $t('log.sessionFilesFail', {msg: msg}), 'wrn')
       return {ok: false, error: msg}
     }
   }
   loadSessionFile = async (name) => {
     if (!aiSessionId || !name) return
-    const path = '/sessions/' + aiSessionId + '/' + name
-    const fileCode = await readUfsText(path)
+    const path = '/verisim/' + name
+    const fileCode = await readLocalText(path)
     setCodeFromAction(fileCode, $t('src.sessionFile') + ': ' + name)
     if (VeriSimSynth) topModule = VeriSimSynth.stripForSynth(fileCode).top || topModule
     showPane('code')
@@ -1404,8 +1400,8 @@ endmodule
 
   simFile = async (args) => {
     if (!args || !args.file) return {ok: false, text: 'sim_file 缺少 --file', error: 'missing --file'}
-    const fileCode = await readUfsText(args.file)
-    const tbCode = args.tb ? await readUfsText(args.tb) : ''
+    const fileCode = await readLocalText(args.file)
+    const tbCode = args.tb ? await readLocalText(args.tb) : ''
     const finalCode = tbCode
       ? fileCode + '\n\n// ---- appended testbench: ' + args.tb + ' ----\n' + tbCode
       : fileCode
@@ -1547,7 +1543,7 @@ endmodule
 
   synthFile = async (args) => {
     if (!args || !args.file) return {ok: false, text: 'synth_file 缺少 --file', error: 'missing --file'}
-    const fileCode = await readUfsText(args.file)
+    const fileCode = await readLocalText(args.file)
     return await runSynthCode({
       code: fileCode,
       top: args.top,
@@ -1857,8 +1853,8 @@ endmodule
   }
 
   bindUiRun = (sid) => {
-    pe?.()
-    pe = null
+    unsubPageExec?.()
+    unsubPageExec = null
     if (!sid) return
     if (!$mod.$page_exec) {
       log(tt('log.aiNoChannel'), 'wrn')
@@ -1891,13 +1887,13 @@ endmodule
         return {content: JSON.stringify({ok: false, text, error: e && e.message ? e.message : String(e)})}
       }
     }
-    pe = $mod.$page_exec.sub(sid, [
+    unsubPageExec = $mod.$page_exec.sub(sid, [
       {name: 'sim_code', description: '运行仿真代码（--code 代码，--top 顶层，--pane 结果页）', handler: wrap('sim_code', simCode)},
       {name: 'sim_file', description: '运行仿真文件（--file 文件，--tb testbench，--top，--pane）', handler: wrap('sim_file', simFile)},
       {name: 'synth_file', description: '综合文件（--file，--top，--pane）', handler: wrap('synth_file', synthFile)},
       {name: 'show_pane', description: '切换结果页（--pane wave/sch/synth）', handler: wrap('show_pane', (args) => showPane(args.pane || args['0'] || 'wave'))},
       {name: 'clear_console', description: '清空控制台', handler: wrap('clear_console', () => clearConsole())},
-    ])
+    ], {enable_fs: true})
     log(tt('log.aiLinked'), 'sys')
   }
 </script>

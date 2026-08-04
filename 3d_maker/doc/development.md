@@ -157,8 +157,9 @@ run(code, opts)
 
 ```js
 let sid = $router.query.sid || 'default';   // 从 URL 查询参数获取订阅 ID
-// page_exec 工厂：注册 run_code/run_file 两个页面指令并启动监听
-let pe = $mod.$page_exec(sid, [
+// page_exec 订阅：sub(sid, commands) 注册 run_code/run_file 两个页面指令（连接级，
+// 会话白名单；不再使用旧工厂 $mod.$page_exec(sid, [...])）
+let pe = $mod.$page_exec.sub(sid, [
   {
     name: 'run_code',
     description: '执行一段 3D 建模代码，返回模型统计 JSON',

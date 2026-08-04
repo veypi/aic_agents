@@ -791,13 +791,14 @@
     scanInfo = '';
     refreshSessFiles = async () => {
       if (!sid) {sessFiles = []; scanInfo = '会话尚未连接'; return;}
-      if (!$mod.$cloud_fs) {sessFiles = []; scanInfo = '环境缺少 $mod.$cloud_fs，无法列出文件'; return;}
+      if (!$mod.$page_fs) {sessFiles = []; scanInfo = '环境缺少 $mod.$page_fs，无法列出文件'; return;}
       sessLoading = true;
       const out = [];
       let dirs = 0, errs = 0;
       const readDir = async (dir) => {
-        // $cloud_fs.get 目录 → {ok:true, dir:true, items:[{name,path,dir,size,mod_time}]}
-        return await $mod.$cloud_fs.get(dir);
+        // $page_fs.ls 目录 → {ok, items:[{name,dir,size,mod_time}]}
+        const r = await $mod.$page_fs.ls(dir);
+        return {ok: true, dir: true, items: r.items || []};
       };
       const walk = async (dir, prefix) => {
         dirs++;
@@ -820,7 +821,7 @@
           else if (/\.js$/i.test(it.name)) out.push({path: rel, size: it.size || 0, mod_time: it.mod_time || 0});
         }
       };
-      await walk(`/sessions/${sid}/`, '');
+      await walk('/3d/', '');
       out.sort((a, b) => b.mod_time - a.mod_time);
       sessFiles = out;
       scanInfo = `已扫 ${dirs} 个目录 · ${out.length} 个 js 文件` + (errs ? ` · ${errs} 处异常` : '');
@@ -831,7 +832,7 @@
     loadSessFile = async (path) => {
       showFiles = false;
       try {
-        const r = await $mod.$cloud_fs.get(`/sessions/${sid}/${path}`);
+        const r = await $mod.$page_fs.get('/3d/' + path);
         const code = typeof r.content === 'string' ? r.content : await r.content.text();
         await bv?.run(code);
       } catch (e) {
@@ -847,17 +848,26 @@
       _paramTimer = setTimeout(() => bv?.setParam(p.name, p.value), 350);
     };
 
-    // ---------- 内置案例：加载 $AGENT/examples 示例模型 ----------
+    // ---------- 内置案例：首次把 $AGENT/examples 拷贝到本地 /3d/examples/，之后读本地 ----------
     const agentId = String($mod.scoped || '').split('/')[3]; // /aic/agents/{id} → {id}
     loadExample = async (name) => {
       try {
-        const r = await $mod.$cloud_fs.get(`/agents/${agentId}/examples/${name}.js`);
+        const r = await $mod.$page_fs.get('/3d/examples/' + name + '.js');
         const code = typeof r.content === 'string' ? r.content : await r.content.text();
         return await bv?.run(code);
       } catch (e) {
-        console.warn('[案例] 加载失败:', e.message);
-        $message.error('案例加载失败：' + (e?.message || e));
-        return {success: false, message: String((e && e.message) || e)};
+        // 本地没有：尝试从 agent 资源拉取并落本地（一次性初始化）
+        try {
+          const resp = await fetch(String($mod.scoped || '').replace(/\/+$/, '') + '/examples/' + name + '.js');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const code = await resp.text();
+          await $mod.$page_fs.put('/3d/examples/' + name + '.js', code);
+          return await bv?.run(code);
+        } catch (e2) {
+          console.warn('[案例] 加载失败:', e2.message);
+          $message.error('案例加载失败：' + (e2?.message || e2));
+          return {success: false, message: String((e2 && e2.message) || e2)};
+        }
       }
     };
     pickExample = () => {
@@ -905,13 +915,13 @@
     };
 
     // ---------- page_exec：按 sid 动态绑定 / 解绑 ----------
-    pe = null;
+    unsubPageExec = null;
     // handler 统一返回 {content: JSON.stringify(result)}：Agent 收到后 JSON.parse 看 success/stats
     bindSession = (id) => {
-      pe?.stop();
-      pe = null;
+      unsubPageExec?.();
+      unsubPageExec = null;
       if (!id || !$mod.$page_exec) return;
-      pe = $mod.$page_exec(id, [
+      unsubPageExec = $mod.$page_exec.sub(id, [
         {
           // run_code：直接执行代码字符串
           name: 'run_code',
@@ -930,16 +940,20 @@
           // run_file：执行 UFS 代码文件（全局路径，支持 sessions/ home/ agents/ 三个根目录）
           // 用法：exec {"1host":"page","action":"run_file","argv":["--path","sessions/{sid}/models/x.js"]}
           name: 'run_file',
-          description: '执行 UFS 中的建模代码文件（--path 为全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）',
+          description: '运行本地 /3d/ 下的建模代码文件（--path 为 /3d/ 根下的路径，如 /3d/models/x.js、/3d/examples/x.js）',
           handler: async (argv) => {
             try {
               const i = argv.indexOf('--path');
               const raw = i >= 0 ? argv[i + 1] : argv[0];
               const path = String(raw || '').replace(/^\/+/, '');
               if (!path || path.includes('..')) {
-                return {content: JSON.stringify({success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（全局路径，如 sessions/{sid}/x.js、agents/{id}/examples/x.js、home/{uid}/x.js）'})};
+                return {content: JSON.stringify({success: false, code: 'INVALID_PATH', message: 'run_file 需要合法的 path（本地 /3d/ 根下，如 /3d/models/x.js、/3d/examples/x.js）'})};
               }
-              const r = await $mod.$cloud_fs.get('/' + path);
+              // AI 路径三种形态：/3d/xxx、3d/xxx、agents/{id}/examples/xxx（→ /3d/examples/xxx）
+              const local = path.startsWith('agents/')
+                ? path.replace(/^agents\/[^/]+\/examples\//, 'examples/')
+                : path.replace(/^\/?3d\//, '')
+              const r = await $mod.$page_fs.get('/3d/' + local.replace(/^\/+/, ''));
               const code = typeof r.content === 'string' ? r.content : await r.content.text();
               const res = await bv?.run(code);
               return {content: JSON.stringify(res || {success: false, message: '页面引擎未就绪'})};
@@ -948,8 +962,7 @@
             }
           },
         },
-      ]);
-      pe.start();
+      ], {enable_fs: true});
       console.log(`[BrepView] page_exec 已绑定会话: ${id}`);
     };
     // ai-box 的 ID 变化 → 解绑旧会话 nc 事件，绑定新会话
@@ -1043,7 +1056,7 @@
   <script dispose>
     ($data.bvCleanups || []).forEach((f) => {try {f();} catch (_) { } });
     $data.bvCleanups = [];
-    pe?.stop();
+    unsubPageExec?.();
     bv?.dispose();
     bv = null;
   </script>

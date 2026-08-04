@@ -4,23 +4,23 @@
 
 ## 核心工作方式（文件驱动）
 
-PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`，即 `/sessions/{会话id}/`）。页面只会加载当前会话下的 PPT 文件。
+PPT 文档以 JSON 文件形式存放在**浏览器本地**（IndexedDB，`$mod.$page_fs`，本地根 `/ppt/`），AI 用 fs 工具（1host=page）读写 `/ppt/...` 路径。页面只会加载 `/ppt/` 根下的 PPT 文件。
 
-- **内容创建与修改由你直接读写文件完成**：用 fs 工具在 `$SESSION` 下创建/编辑 ppt/1 文档 JSON（见下文格式），不经过页面指令传递大段内容。
-- **目录约定**：每套 PPT 一个目录，核心描述文件固定为 `index.json`，如 `$SESSION/产品发布会/index.json`；页数多时用分页拆分（见下文），每页一个 `slides/slide_N.json`。
-- **图片等资源**：放在该 json 同级的 `image/` 子目录（如 `$SESSION/产品发布会/image/cover.png`），文档中元素 `src` 写**相对路径**（相对该 json 文件，如 `image/cover.png`）。页面渲染时自动解析为可访问 URL，保存时自动还原为相对路径。页面编辑器本地上传的图片也会自动存入该 `image/` 目录，删除图片元素会同步删除对应文件。禁止写 base64 大体积图片到 json 里。
+- **内容创建与修改由你直接读写文件完成**：用 fs 工具（1host=page）在 `/ppt/` 下创建/编辑文档 JSON（见下文格式），不经过页面指令传递大段内容。
+- **目录约定**：每套 PPT 一个目录，核心描述文件固定为 `index.json`，如 `/ppt/产品发布会/index.json`；页数多时用分页拆分（见下文），每页一个 `slides/slide_N.json`。
+- **图片等资源**：放在该 json 同级的 `image/` 子目录（如 `/ppt/产品发布会/image/cover.png`），文档中元素 `src` 写**相对路径**（相对该 json 文件，如 `image/cover.png`）。页面渲染时自动解析为可访问 URL，保存时自动还原为相对路径。页面编辑器本地上传的图片也会自动存入该 `image/` 目录，删除图片元素会同步删除对应文件。禁止写 base64 大体积图片到 json 里。
 - **外部图片下载**：需要网络配图时，用 `exec` 的 curl 虚拟指令下载到 `image/` 目录（仅 http/https，`-o` 必填，可加 `-L` 跟随重定向、`--max-size` 限体积）：
-  `exec {"1host":"cloud","action":"curl","argv":["-o","$SESSION/产品发布会/image/cover.png","--max-size","2","https://example.com/cover.png"]}`
+  `exec {"1host":"cloud","action":"curl","argv":["-o","/ppt/产品发布会/image/cover.png","--max-size","2","https://example.com/cover.png"]}`
   下载完成后在 json 中写相对路径 `image/cover.png` 引用即可；不要直接引用外链 URL（离线演示/分享会失效）。
-- **页面操作**（打开、播放、新建、查询当前状态）通过页面 exec 指令完成（`exec 1host=page`），路径参数一律使用**全局 UFS 路径**（`sessions/{会话id}/...`，不要带 `$SESSION` 变量，可带或不带前导 `/`）。
+- **页面操作**（打开、播放、新建、查询当前状态）通过页面 exec 指令完成（`exec 1host=page`），路径参数一律使用**本地路径**（`/ppt/...`，可带或不带前导 `/`）。
 
 - **数据与内容来源**：不确定的内容（行业数据、产品参数、新闻事实、市场行情等）先用 `web` 工具搜索核实，引用真实数据，不要编造数字；复杂图表数据可搜到后整理进 json（引擎支持表格/图表元素，见下文）。
 
 典型流程（用户说「做一个关于 X 的 PPT」）：
 
 0. （可选）内容准备：先 `web` 搜索核实关键数据与事实；需要配图时用 curl 下载图片到 `image/` 目录（见上文）
-1. 直接 fs 写入 `$SESSION/x-主题/index.json`（ppt/1 文档，≤12 页，JSON 用 2 空格缩进的展开格式，方便后续按行阅读与 edit 编辑；推荐分页拆分写法，见下文）
-2. `exec {"1host":"page","action":"run_ppt","argv":["sessions/{会话id}/x-主题/x-主题.json"]}` 播放，或 `open_ppt` 仅在页面打开
+1. 直接 fs 写入 `/ppt/x-主题/index.json`（1host=page）（ppt/1 文档，≤12 页，JSON 用 2 空格缩进的展开格式，方便后续按行阅读与 edit 编辑；推荐分页拆分写法，见下文）
+2. `exec {"1host":"page","action":"run_ppt","argv":["/ppt/x-主题/x-主题.json"]}` 播放，或 `open_ppt` 仅在页面打开
 3. 一两句话向用户总结
 
 修改现有 PPT：fs 读取对应 json → 修改 → fs 写回 → `open_ppt`（若它正是当前打开的文档，调用后页面即刷新）。
@@ -31,8 +31,8 @@ PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`�
 
 静态样例位于 agent UI 目录 `$AGENT/ui/cases/<id>/<id>.json`（清单 `$AGENT/ui/cases/cases.json`）。页面首次打开自动加载默认样例；若用户此前打开过会话文件，优先恢复最近打开的那个。
 
-- 样例是**只读模板**：页面**不会自动保存**对样例的编辑。要持久化：用户在页面点「存入会话」按钮（复制为会话文件，以样例标题命名），或你直接 fs 读样例 json → 修改 → 写入 `$SESSION` → `open_ppt`。
-- **不要用 fs 写 `ui/cases/` 修改样例**——要基于样例改内容时，先 fs 读样例 json，修改后写入 `$SESSION`，再 `open_ppt`。
+- 样例是**只读模板**：页面**不会自动保存**对样例的编辑。要持久化：用户在页面点「存入会话」按钮（复制为会话文件，以样例标题命名），或你直接 fs 读样例 json → 修改 → 写入 `/ppt/` → `open_ppt`。
+- **不要用 fs 写 `ui/cases/` 修改样例**——要基于样例改内容时，先 fs 读样例 json，修改后写入 `/ppt/`，再 `open_ppt`。
 
 ## 可用 page_exec 指令
 
@@ -46,13 +46,13 @@ PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`�
 
 | argv | 说明 |
 |---|---|
-| `--path <全局路径>` | 如 `sessions/{sid}/产品发布会/产品发布会.json`，必填 |
+| `--path <全局路径>` | 如 `/ppt/产品发布会/产品发布会.json`，必填 |
 
 ### delete_ppt — 删除会话文件所在的整个目录
 
 | argv | 说明 |
 |---|---|
-| `--path <全局路径>` | 如 `sessions/{sid}/产品发布会/产品发布会.json`，必填。删除该文件所在目录（`产品发布会/`，含其中 json 与所有 `image/` 图片），**不可恢复** |
+| `--path <全局路径>` | 如 `/ppt/产品发布会/产品发布会.json`，必填。删除该文件所在目录（`产品发布会/`，含其中 json 与所有 `image/` 图片），**不可恢复** |
 
 返回 `{ ok, deleted }`。若删除的正是当前打开的文档，页面会自动改打开另一个会话文件，或回落到默认样例。
 
@@ -81,7 +81,7 @@ PPT 文档以 JSON 文件形式存放在**当前会话目录**下（`$SESSION`�
 `--script` 是逐页演示的核心：数组顺序即演示顺序，支持错序跳页（如 1→3→2，非线性页面无需拆分）。每项可以穿插使用 `voice`：带 voice = 语音讲解（跳页 + 播音，播完自然进下一项）；不带 voice = 纯展示（只跳页，停留 `stay` 毫秒（默认 2000））。一个脚本内自由穿插，重点页讲解、其余展示：
 
 ```
-run_ppt --path sessions/{sid}/产品发布会/产品发布会.json --script '
+run_ppt --path /ppt/产品发布会/产品发布会.json --script '
 [{"id":"slide-1","voice":"欢迎观看，首先看背景"},
  {"id":"slide-2"},                                     # 纯展示，停留 2s（可 stay 自定义毫秒）
  {"id":"slide-3","voice":"这里是重点数据，增长显著"},

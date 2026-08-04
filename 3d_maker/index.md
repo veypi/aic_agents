@@ -18,25 +18,24 @@
 exec {"1host":"page", "action":"run_code", "argv":["--code", "return box(20, 15, 10);"]}
 ```
 
-### 0.2 run_file —— 执行 UFS 中的代码文件
+### 0.2 run_file —— 执行本地代码文件
 
 适合完整模型文件：先用 `fs write` 把代码写入文件，再让页面加载执行：
 
 ```
-# 1. 写代码文件（可写入任意 UFS 目录）
-fs {"1host":"cloud", "action":"write", "path":"$SESSION/models/bracket.js", "content":"..."}
+# 1. 写代码文件（浏览器本地 IndexedDB，1host=page）
+fs {"1host":"page", "action":"write", "path":"/3d/models/bracket.js", "content":"..."}
 
-# 2. 通知页面加载执行（--path 为全局路径，不带开头的 /）
-exec {"1host":"page", "action":"run_file", "argv":["--path", "sessions/{session_id}/models/bracket.js"]}
+# 2. 通知页面加载执行（--path 为 /3d/ 根下路径，可带或不带前导 /）
+exec {"1host":"page", "action":"run_file", "argv":["--path", "/3d/models/bracket.js"]}
 ```
 
-`--path` 是**全局 UFS 路径**（不带开头的 `/`），三个根目录都可用：
+`--path` 是**本地路径**（浏览器 IndexedDB，页面根 `/3d/`）：
 
-| path 前缀 | 对应位置 | 用途 |
+| path | 对应位置 | 用途 |
 |---|---|---|
-| `sessions/{session_id}/...` | `$SESSION` | AI 生成的临时代码 |
-| `agents/{agent_id}/examples/...` | `$AGENT/examples` | 内置案例库（见 §12） |
-| `home/{user_id}/...` | `$USER` | 用户自己的文件 |
+| `/3d/xxx.js` | AI 写入的代码文件 | AI 生成的临时代码/模型 |
+| `/3d/examples/xxx.js` | 内置案例库（首次加载自动从 agent 资源拷贝，见 §12） | 内置案例 |
 
 run_file 特有错误码（在返回 JSON 的 `code` 字段）：`INVALID_PATH`（路径非法/含 `..`）、`FILE_NOT_FOUND`（文件不存在）、`RUN_FILE_ERROR`。
 
@@ -214,7 +213,7 @@ return filletR > 0 ? shape.fillet(filletR) : shape;
 
 ## 12. 完整示例
 
-> 以下示例均已收录在内置案例库 `$AGENT/examples/`，可直接用 run_file 加载：
+> 以下示例均已收录在内置案例库 `/3d/examples/`（首次自动拷贝），可直接用 run_file 加载：
 > `exec {"1host":"page", "action":"run_file", "argv":["--path", "agents/{agent_id}/examples/lego-brick.js"]}`
 
 ### 乐高积木 2×4
@@ -363,7 +362,7 @@ sphere(11, 40, 28).scale(1, 0.7, 0.9)   // 扁椭球大灯透镜
 
 ## 15. 高级完整样例：保时捷 911（115 部件）
 
-> 完整源码：`$AGENT/examples/porsche-911.js`，可直接加载：
+> 完整源码：`/3d/examples/porsche-911.js`，可直接加载：
 > `exec {"1host":"page", "action":"run_file", "argv":["--path", "agents/{agent_id}/examples/porsche-911.js"]}`
 > 页面工具栏「📦 案例… → 保时捷 911」亦可一键载入。
 
@@ -462,7 +461,7 @@ return parts;
 ## 16. 大模型协作工作流
 
 1. **你无法直接看到渲染结果**——调优依赖用户截图反馈。每轮只做小改动（`fs edit` 改几处 → `run_file` 重跑 → 请用户截图确认），不要一次重写整个模型后盲猜效果。
-2. **复杂模型必须走文件流**：`fs write $SESSION/models/xxx.js` → `run_file` 执行；迭代用 `fs edit` 增量修改。代码落盘可复用、可追溯，用户也能从页面「📂 文件」面板自行重载。
+2. **复杂模型必须走文件流**：`fs write /3d/models/xxx.js`（1host=page）→ `run_file` 执行；迭代用 `fs edit` 增量修改。代码落盘可复用、可追溯，用户也能从页面「📂 文件」面板自行重载。
 3. **部件命名规范**：中文名 + 左右标注（如 `前左轮胎`、`后视镜壳(右)`），用户在属性面板可按部件隔离/隐藏，命名清晰是可用性的一部分。
 4. **run_code/run_file 结果可疑时**（如返回的统计与修改不符）：可能是页面断连后回放了上一帧缓存——先请用户刷新页面再重跑。
 5. **规模参考**：精致展示模型 60~120 个部件为宜；布尔运算集中的部件（如 10 辐条 fuse）建议封进函数复用；整体三角面超过 100 万会触发警告，切 OCCT 内核通常可降 96%。

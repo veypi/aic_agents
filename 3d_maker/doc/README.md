@@ -56,7 +56,7 @@ viewer.options.kernel = await createOCCTKernel();
 ## Agent 通信
 
 - 页面入口：`/a/{agent_id}/i?sid={session_id}`（sid 绑定会话，默认 default）
-- 页面指令：`run_code` / `run_file`（经 `$mod.$page_exec(sid, [...])` 注册，Agent 用 `exec 1host=page` 调用）
+- 页面指令：`run_code` / `run_file`（经 `$mod.$page_exec.sub(sid, [...])` 订阅，Agent 用 `exec 1host=page` 调用）
 - 同步执行：`exec {"1host":"page", "action":"run_code", "argv":["--code", "..."]}`
 - 文件管理：`$AGENT/ui/` 目录，UFS 路径 `/aic/fs/agents/{id}/ui/`（前端读写用 `$mod.$cloud_fs`）
 
