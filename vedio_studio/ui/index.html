@@ -1721,6 +1721,10 @@
     } catch (e) {showToast('上传失败：' + ((e && e.message) || e))}
   }
   onDelAsset = async (ref) => {
+    // 删除前确认：素材文件从项目目录移除，不可恢复
+    let ok = false
+    try { ok = await $message.confirm('确定删除素材「' + String(ref).replace(/^assets\//, '') + '」？素材文件将被移除，不可恢复。') } catch (e) { }
+    if (!ok) return
     try {
       await fsRm(projDir(curName) + '/' + ref)
       delete assets[ref]
