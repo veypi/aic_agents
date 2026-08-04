@@ -30,11 +30,11 @@
     /* ai-box 双向绑定的会话 ID：从浏览器缓存恢复，实现刷新后会话保持 */
     sessionId = $router.current.query.session_id || ''
 
-    pe = null   // page_exec 实例（私有，避免被响应式代理）
+    unsubPageExec = null   // 上一会话注销函数（sub 返回，私有）
     /* 取消全部页面指令 */
     clearUiSubs = () => {
-      pe?.stop()
-      pe = null
+      unsubPageExec?.()
+      unsubPageExec = null
     }
   </script>
 
@@ -314,11 +314,12 @@
     window._w3Ai = handlers
 
     /* =====================================================================
-     * page_exec 指令注册：$mod.$page_exec(sid, commands)
+     * page_exec 指令注册：$mod.$page_exec.sub(sid, commands, {enable_fs?})
      * session_id 由 ai-box 双向绑定产生，变化时整体重注册
      * ===================================================================== */
     const subscribeAll = (sid) => {
       clearUiSubs()
+      if (unsubPageExec) { try { unsubPageExec() } catch (e) {} }
       if (!sid || !$mod.$page_exec) return
       // exec argv 原样透传（数组）→ 旧 args 对象（--key val / 位置参数）
       const argvToArgs = (argv) => {
@@ -350,8 +351,7 @@
           return {content: JSON.stringify(out)}
         },
       }))
-      pe = $mod.$page_exec(sid, cmds)
-      pe.start()
+      unsubPageExec = $mod.$page_exec.sub(sid, cmds)
       console.log(`[ai-panel] 已注册 ${cmds.length} 个页面指令，session=${sid}`)
     }
 

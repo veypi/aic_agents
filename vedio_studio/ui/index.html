@@ -566,7 +566,7 @@
   }
 
   // ---- page_exec（AI 指令通道；存储走 $page_fs 本地单根，不依赖它）----
-  pe = null
+  unsubPageExec = null
 
   let toastTimer = 0
   let saveTimer = 0
@@ -667,9 +667,9 @@
       console.warn('vedio_studio: no session / page_exec')
       return
     }
-    if (pe) {try {pe.stop()} catch (e) { } }
-    pe = null
-    pe = $mod.$page_exec(id, [
+    if (unsubPageExec) {try {unsubPageExec()} catch (e) { } }
+    unsubPageExec = null
+    unsubPageExec = $mod.$page_exec.sub(id, [
       {
         name: 'list_video', description: '列出本地存储的视频项目与内置样例',
         handler: async () => {
@@ -864,11 +864,11 @@
           } catch (e) {return reply(errReply(e))}
         }
       },
-    ])
-    // 开启 AI 通道：start() 注册自定义指令；start_fs() 开启文件读写响应
-    // （fs.read/write/edit + ls/rg/tree/rm/curl 虚拟指令；AI 路径 $SESSION/vedio/x → 本地 /vedio/x）
-    pe.start()
-    pe.start_fs()
+    ], {enable_fs: true})
+    // v3：$page_exec 全局单实例构造即订阅（连接级 h.page.exec|fs + queue group），
+    // sub() 注册会话白名单（enable_fs 开启文件响应：fs.read/write/edit +
+    // ls/rg/tree/rm/curl 虚拟指令；AI 路径 $SESSION/vedio/x → 本地 /vedio/x），
+    // 返回取消函数；会话切换时直接调用旧取消函数即可
   }
 
   const errReply = (e) => ({ok: false, error: String((e && e.message) || e)})

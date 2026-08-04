@@ -65,7 +65,7 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
 
   let S = null; // 当前城市状态
   let dlgTarget = null,
-    pe = null;   // page_exec instance
+    unsubPageExec = null;   // 上一会话注销函数（sub 返回）
   let propTarget = null,
     propIdx = 0;
   const clock = new THREE.Clock();
@@ -768,7 +768,7 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
         if (i >= 0 && argv[i + 1] !== undefined) return String(argv[i + 1]);
         return dft;
       };
-      pe = $mod.$page_exec(sid, [
+      unsubPageExec = $mod.$page_exec.sub(sid, [
         {
           name: "jump",
           description: "make the character jump (--count 1-10)",
@@ -794,7 +794,6 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
           },
         },
       ]);
-      pe.start();
     }
     if (window.__openDlg__) window.__openDlg__(sid, t.ref.name, t.ref.user_id);
     requestAnimationFrame(() => {
@@ -807,9 +806,9 @@ export function initGame(canvasEl, root, $mod, $auth, $router) {
   }
 
   function closeDialog() {
-    if (pe) {
-      pe.stop();
-      pe = null;
+    if (unsubPageExec) {
+      unsubPageExec();
+      unsubPageExec = null;
     }
     if (dlgTarget && dlgTarget.kind === "npc") dlgTarget.ref.talking = false;
     dlgTarget = null;

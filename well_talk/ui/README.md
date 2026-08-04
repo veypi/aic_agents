@@ -11,7 +11,7 @@
 > - 原版纯 HTML 备份于 `../backup/index-pure.html`（独立 HTTP 服务下仍可用，需自行恢复 importmap 的引用方式）。
 
 > **AI 原生化**（2026-07-24）：右侧新增 AI 分析助手面板（`local/ai-panel.html`，内置 `<ai-box>` 对话组件）。
-> 面板将 16 个数据查询/视图联动函数注册为页面指令（`$mod.$page_exec(sid, commands)`，`$watch` 会话 ID 自动重注册），
+> 面板将 16 个数据查询/视图联动函数注册为页面指令（`$mod.$page_exec.sub(sid, commands)`，`$watch` 会话 ID 自动重订阅），
 > AI 通过 exec 1host=page 调用实现"问答即落图"：数据查询（`well_list/info/trajectory_stats/casings/completion/perforations/formations/at_depth/formation_at/distance/closest_approach/surface_list/qc`）
 > + 视图联动（`well_select/locate/selected`）。设计纪律：AI 只消费聚合摘要，原始大数组（position-logs/surface-values）在前端函数内消化成统计值；
 > 数值判定在代码里，语言解读在模型里。事件声明见 `../index.md`（agent 系统提示词）。
