@@ -48,13 +48,13 @@
         <table>
           <thead><tr><th>模型</th><th>网络类型</th><th>节点/边</th><th>结构指标</th><th>洞察</th><th>风险</th></tr></thead>
           <tbody>
-            <tr v-for="m in archModels" :key="m.id">
+            <tr v-for="m in archModels">
               <td><b>{{ m.name }}</b><div class="tl">{{ fmt(m.built_at) }}</div></td>
               <td>{{ m.network_type || '-' }}</td>
               <td class="mono">{{ m.node_count || 0 }} / {{ m.edge_count || 0 }}</td>
               <td><div class="tl" style="max-width:220px">{{ short(m.metric) }}</div></td>
               <td>
-                <div v-for="ins in insightsOf(m.id)" :key="ins.id">
+                <div v-for="ins in insightsOf(m.id)">
                   <span class="pill" :class="riskCls(ins.risk_level)">{{ ins.kind }}</span>
                   <span class="tl"> {{ short(ins.content, 46) }}</span>
                 </div>
@@ -79,7 +79,7 @@
         <table>
           <thead><tr><th>模型</th><th>节点/依赖</th><th>仿真场景</th><th>仿真结果</th><th>状态</th></tr></thead>
           <tbody>
-            <tr v-for="s in sims" :key="s.id">
+            <tr v-for="s in sims">
               <td><b>{{ modelName(s.model_id) }}</b><div class="tl">{{ fmt(s.ran_at) }}</div></td>
               <td class="mono">{{ modelNode(s.model_id) }}</td>
               <td>{{ s.scenario || '-' }}</td>
@@ -103,7 +103,7 @@
         <table>
           <thead><tr><th>脆弱对象</th><th>类型</th><th>风险</th><th>证据</th><th>分析说明</th></tr></thead>
           <tbody>
-            <tr v-for="v in vulns" :key="v.id">
+            <tr v-for="v in vulns">
               <td><b>{{ v.target }}</b><div class="tl">{{ fmt(v.found_at) }}</div></td>
               <td><span class="pill p-cyan">{{ v.vuln_type }}</span></td>
               <td><span class="pill" :class="riskCls(v.risk)">{{ v.risk }}</span></td>
@@ -127,7 +127,7 @@
         <table>
           <thead><tr><th>关键要素</th><th>类别</th><th>度量方式</th><th>定量值</th><th>交叉来源</th></tr></thead>
           <tbody>
-            <tr v-for="f in factors" :key="f.id">
+            <tr v-for="f in factors">
               <td><b>{{ f.factor }}</b><div class="tl">{{ fmt(f.created_at) }}</div></td>
               <td><span class="pill p-purple">{{ f.category }}</span></td>
               <td class="tl">{{ f.metric || '-' }}</td>
@@ -151,7 +151,7 @@
         <table>
           <thead><tr><th>场景名称</th><th>故障类型</th><th>注入目标</th><th>参数</th><th>状态</th><th>结果</th></tr></thead>
           <tbody>
-            <tr v-for="s in scenarios" :key="s.id">
+            <tr v-for="s in scenarios">
               <td><b>{{ s.name }}</b><div class="tl">{{ fmt(s.created_at) }}</div></td>
               <td><span class="pill p-yellow">{{ s.fault_type }}</span></td>
               <td class="tl">{{ s.target || '-' }}</td>
@@ -176,7 +176,7 @@
         <table>
           <thead><tr><th>覆盖软件</th><th>评估框架</th><th>集成得分</th><th>结论</th><th>评估时间</th></tr></thead>
           <tbody>
-            <tr v-for="a in integs" :key="a.id">
+            <tr v-for="a in integs">
               <td class="mono">{{ a.software_ids || '-' }}</td>
               <td><div class="tl" style="max-width:240px">{{ short(a.framework) }}</div></td>
               <td class="mono" :style="{color: a.score >= 85 ? '#047857' : a.score >= 60 ? '#b45309' : '#b91c1c'}">{{ a.score != null ? a.score : '-' }}</td>

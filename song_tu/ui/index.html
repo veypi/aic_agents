@@ -945,7 +945,7 @@
         <div class="st">州 郡 志</div>
         <div class="ss">择 一 城 而 入</div>
         <div class="map-list">
-          <div class="map-item" :class="{ focus: c.name === focusCity }" :key="c.name" v-for="c in cities"
+          <div class="map-item" :class="{ focus: c.name === focusCity }" v-for="c in cities"
             @click="pickCity(c)">
             <div class="map-item-t">{{ c.title }}</div>
             <div class="map-item-s">{{ c.subtitle }}</div>

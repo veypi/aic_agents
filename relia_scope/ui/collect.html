@@ -67,7 +67,7 @@
     </header>
 
     <div class="g g4">
-      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+      <div class="card kpi" v-for="(k, i) in kpis">
         <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
         <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
         </div>
@@ -84,7 +84,7 @@
       <div class="card">
         <h3>采集通道状态</h3>
         <div style="max-height:330px;overflow-y:auto">
-          <div class="probe" v-for="c in channels" :key="c.id">
+          <div class="probe" v-for="c in channels">
             <span class="dot" :style="{background: c.online_rate > 97 ? '#059669' : '#d97706'}"></span>
             <div>
               <div class="nm">{{ c.name }}</div>
@@ -123,7 +123,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="s in samples" :key="s.id" style="cursor:pointer" @click="goTarget(s.software_id)">
+            <tr v-for="s in samples" style="cursor:pointer" @click="goTarget(s.software_id)">
               <td><b>{{ s.swname }}</b></td>
               <td>{{ s.mode }}</td>
               <td><span class="pill" :class="sevClass(s.severity)">{{ s.severity }}</span></td>

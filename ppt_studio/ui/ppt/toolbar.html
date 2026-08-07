@@ -273,7 +273,7 @@
     <div class="grp">
       <input class="cin" type="color" :title="$t('tb.background')" :value="stBg()" @input="onBg">
       <select class="tsel" :title="$t('tb.transition')" :value="stTransition()" @change="onTransition">
-        <option :key="t" v-for="t in transitions" :value="t" :selected="stTransition() === t">{{ $t('tb.trans.' + t) }}</option>
+        <option v-for="t in transitions" :value="t" :selected="stTransition() === t">{{ $t('tb.trans.' + t) }}</option>
       </select>
     </div>
     <span class="sep"></span>

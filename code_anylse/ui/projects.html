@@ -30,7 +30,7 @@
 
     <div v-if="loading" class="rv-panel"><div class="rv-empty">正在加载项目…</div></div>
     <div v-else class="prj-grid">
-      <div class="prj-card" v-for="p in rows" :key="p.id">
+      <div class="prj-card" v-for="p in rows">
         <div class="prj-head">
           <span class="prj-code">{{ p.code }}</span>
           <span class="prj-name">{{ p.name }}</span>

@@ -19,24 +19,24 @@
         <span class="pill" :class="ccClass(detail.conclusion)">{{ detail.conclusion }}</span>
         <button class="btn ghost sm" @click="closeDetail()">← 返回列表</button></div>
       <div v-if="!secs.length" class="card" style="text-align:center;padding:44px;color:var(--text-color-disabled);font-size:12.5px;line-height:2">该报告暂无内容块数据（report_sections 为空）</br>由「签发报告」Agent 任务生成图文内容后在此渲染</div>
-      <div v-for="s in secs" :key="s.id" class="card" style="margin-bottom:15px">
+      <div v-for="s in secs" class="card" style="margin-bottom:15px">
         <h3>{{ s.title }}</h3>
         <div v-if="s.kind === 'text'" style="font-size:13px;line-height:2.1;color:var(--text-color-secondary);white-space:pre-wrap">{{ s.content }}</div>
         <div v-else-if="s.kind === 'metrics' && s.data" class="g g4" style="margin-top:10px">
-          <div v-for="m in s.data" :key="m.lb" class="card kpi" style="box-shadow:none">
+          <div v-for="m in s.data" class="card kpi" style="box-shadow:none">
             <div class="lb">{{ m.lb }}</div>
             <div class="vl" :style="{color: m.c || '#101c3d'}">{{ m.v }}<span class="un">{{ m.un }}</span></div>
           </div>
         </div>
         <table v-else-if="s.kind === 'table' && s.data">
-          <thead><tr><th v-for="c in s.data.cols" :key="c">{{ c }}</th></tr></thead>
-          <tbody><tr v-for="(row, ri) in s.data.rows" :key="ri"><td v-for="(cell, ci) in row" :key="ci">{{ cell }}</td></tr></tbody>
+          <thead><tr><th v-for="c in s.data.cols">{{ c }}</th></tr></thead>
+          <tbody><tr v-for="(row, ri) in s.data.rows"><td v-for="(cell, ci) in row">{{ cell }}</td></tr></tbody>
         </table>
         <div v-else-if="s.kind === 'chart' && s.data" :id="'rsec-' + s.id" class="chart" style="height:280px"></div>
         <div v-else-if="s.kind === 'verdict' && s.data" style="text-align:center;padding:8px 0">
           <div style="font-size:20px;font-weight:800;letter-spacing:.14em" :style="{color: s.data.pass ? '#047857' : '#b91c1c'}">{{ s.data.pass ? '验 证 通 过' : '验 证 未 通 过' }}</div>
           <table style="max-width:560px;margin:14px auto 0;text-align:left">
-            <tbody><tr v-for="it in (s.data.items || [])" :key="it.name"><td>{{ it.name }}><td class="mono">{{ it.actual }}</td><td><span class="pill" :class="it.ok ? 'p-green' : 'p-red'">{{ it.ok ? '满足' : '不满足' }}</span></td></tr></tbody>
+            <tbody><tr v-for="it in (s.data.items || [])"><td>{{ it.name }}><td class="mono">{{ it.actual }}</td><td><span class="pill" :class="it.ok ? 'p-green' : 'p-red'">{{ it.ok ? '满足' : '不满足' }}</span></td></tr></tbody>
           </table>
           <div style="margin-top:12px;font-size:12.5px;color:var(--text-color-secondary)">{{ s.data.advice }}</div>
         </div>
@@ -54,7 +54,7 @@
         <table>
           <thead><tr><th>报告编号</th><th>对象软件</th><th>验证类型</th><th>结论</th><th>签发日期</th><th>进度</th><th>操作</th></tr></thead>
           <tbody>
-            <tr v-for="r in reps" :key="r.id">
+            <tr v-for="r in reps">
               <td class="mono">{{ r.code }}</td>
               <td><b>{{ swName(r.software_id) }}</b></td>
               <td>{{ r.vtype }}</td>
@@ -86,7 +86,7 @@
         <div class="desc" style="margin:-8px 0 14px">由 Agent 后台任务计算指标、核对判据，并把图文报告数据写入 reports / report_sections 表</div>
         <div class="fld"><label>对象软件</label>
           <select class="fin" v:value="issue.sid">
-            <option v-for="s in softs" :key="s.id" :value="s.id">{{ s.name }}</option>
+            <option v-for="s in softs" :value="s.id">{{ s.name }}</option>
           </select></div>
         <div class="fld"><label>验证类型</label>
           <select class="fin" v:value="issue.vtype">

@@ -45,7 +45,7 @@
         <div class="rv-panel acc-secondary" style="padding:10px 8px">
           <div class="phead" style="padding:6px 12px 10px">量化指标树（3 层 · {{ inds.length }} 项）</div>
           <div class="tree">
-            <div v-for="l1 in l1Tree()" :key="l1.code" class="tn1">
+            <div v-for="l1 in l1Tree()" class="tn1">
               <div class="tn1h" @click="toggleExp(l1.code)">
                 <span class="caret">{{ expandCodes.includes(l1.code) ? '▾' : '▸' }}</span>
                 <span class="tcode">{{ l1.code }}</span>
@@ -55,9 +55,9 @@
               </div>
               <div v-if="expandCodes.includes(l1.code)" class="tn1b">
                 <div class="rv-bar tbar"><i :style="{ width: (l1.score || 0) + '%', background: barColor(l1.score || 0) }"></i></div>
-                <div v-for="l2 in l1.children" :key="l2.code">
+                <div v-for="l2 in l1.children">
                   <div class="tn2h"><span class="tcode">{{ l2.code }}</span><span class="tname">{{ l2.name }}</span></div>
-                  <div v-for="l3 in l2.children" :key="l3.code" class="tn3" :class="{ warn: isWarn(l3.code) }">
+                  <div v-for="l3 in l2.children" class="tn3" :class="{ warn: isWarn(l3.code) }">
                     <span class="tcode">{{ l3.code }}</span>
                     <span class="tname">{{ l3.name }}</span>
                     <span class="tval">当前 {{ l3.current_value || '—' }} / 阈值 {{ l3.threshold || '—' }}</span>
@@ -75,7 +75,7 @@
             <table class="rv-table">
               <thead><tr><th>指标</th><th>量化方法</th><th>权重</th><th>得分</th></tr></thead>
               <tbody>
-                <tr v-for="l1 in l1s()" :key="l1.id">
+                <tr v-for="l1 in l1s()">
                   <td><span class="tcode">{{ l1.code }}</span> <span class="tname">{{ l1.name }}</span></td>
                   <td class="dim">{{ l1.quant_method || '—' }}<div style="font-size:10px;color:var(--text-color-disabled)">{{ l1.normalize || '' }}</div></td>
                   <td style="min-width:110px"><span class="mono">{{ Math.round((l1.weight || 0) * 100) }}%</span><div class="rv-bar" style="width:70px;margin-top:4px"><i :style="{ width: weightPct(l1.weight) + '%' }"></i></div></td>
@@ -93,7 +93,7 @@
 
   <local-dialog-shell :show="weightShow" @close="weightShow = false" title="权重配置 · AHP">
     <div>
-      <div class="wrow" v-for="l1 in l1s()" :key="l1.code">
+      <div class="wrow" v-for="l1 in l1s()">
         <span class="wl">{{ l1.name }}（{{ l1.code }}）</span>
         <input type="range" min="3" max="30" step="1" :value="wEdit[l1.code] || 0" @input="setW(l1.code, $event.target.value)">
         <span class="wv">{{ wEdit[l1.code] || 0 }}%</span>
@@ -117,7 +117,7 @@
       </label>
       <label class="rv-form-item"><span>父指标</span>
         <select class="rv-input" v:value="addParent">
-          <option v-for="p in parentOptions()" :key="p.id" :value="p.code">{{ p.code }} · {{ p.name }}</option>
+          <option v-for="p in parentOptions()" :value="p.code">{{ p.code }} · {{ p.name }}</option>
         </select>
       </label>
       <label class="rv-form-item"><span>当前值</span><input class="rv-input" v:value="addCurrent" placeholder="如：92%"></label>

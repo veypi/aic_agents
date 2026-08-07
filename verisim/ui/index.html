@@ -652,7 +652,7 @@
         <select class="btn sm" @change="onSessionFilePick" @mousedown="loadSessionFiles" :disabled="!aiSessionId"
           :title="$t('tip.sessionFiles')">
           <option value="">{{ $t('opt.sessionFiles') }}</option>
-          <option :key="f.name" v-for="f in sessionFiles" :value="f.name">{{ f.name }}</option>
+          <option v-for="f in sessionFiles" :value="f.name">{{ f.name }}</option>
         </select>
         <select class="btn sm" @change="onExamplePick" :title="$t('tip.examples')">
           <option value="">{{ $t('opt.examples') }}</option>
@@ -679,7 +679,7 @@
           </optgroup>
           <optgroup :label="$t('grp.asic')">
             <option value="lib:builtin:nangate45">{{ $t('opt.techNangate') }}</option>
-            <option :key="u.name" v-for="u in userLibs" :value="'lib:user:' + u.name">{{ u.name + $t('opt.cached') }}
+            <option v-for="u in userLibs" :value="'lib:user:' + u.name">{{ u.name + $t('opt.cached') }}
             </option>
           </optgroup>
         </select>
@@ -716,7 +716,7 @@
               <button class="btn" :disabled="!waveData" @click="clearSignals">{{ $t('act.clearSel') }}</button>
             </div>
             <div class="sig-list">
-              <label :key="sig.id" v-for="sig in signals">
+              <label v-for="sig in signals">
                 <input type="checkbox" :checked="selIds.includes(sig.id)"
                   @change="toggleSignal(sig.id, $event.target.checked)" />
                 <span>{{ sig.name }}</span>
@@ -781,7 +781,7 @@
                   <th>{{ $t('th.cell') }}</th>
                   <th class="num">{{ $t('th.count') }}</th>
                 </tr>
-                <tr :key="row.name" v-for="row in synthCells">
+                <tr v-for="row in synthCells">
                   <td class="mono">{{ row.name }}</td>
                   <td class="num">{{ row.count }}</td>
                 </tr>
@@ -817,7 +817,7 @@
         <button class="btn sm" :disabled="busy" @click="clearConsole">{{ $t('act.clear') }}</button>
       </div>
       <div class="console" ref="consoleEl">
-        <div :key="line.id" v-for="line in consoleLines" :class="line.cls">{{ typeof line.text === 'function' ?
+        <div v-for="line in consoleLines" :class="line.cls">{{ typeof line.text === 'function' ?
           line.text() : line.text }}</div>
       </div>
     </section>

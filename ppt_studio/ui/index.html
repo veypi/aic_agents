@@ -507,7 +507,7 @@
         <div class="flist">
           <div class="fempty" v-if="cases_loading">{{ $t('scanning') }}</div>
           <div class="fempty" v-else-if="!cases.length">{{ $t('cases.empty') }}</div>
-          <div v-else v-for="c in cases" :key="c.id" class="citem"
+          <div v-else v-for="c in cases" class="citem"
             :class="{ cur: cur_kind === 'case' && cur_case === c.id }" @click="pickCase(c.id)">
             <span class="cdot"
               :style="{ background: c.accent || 'var(--color-primary)', color: c.accent || 'var(--color-primary)' }"></span>
@@ -532,7 +532,7 @@
         <div class="flist">
           <div class="fempty" v-if="files_loading">{{ $t('scanning') }}</div>
           <div class="fempty" v-else-if="!sess_files.length">{{ $t('files.empty') }}</div>
-          <div v-else v-for="f in sess_files" :key="f.path" class="fitem"
+          <div v-else v-for="f in sess_files" class="fitem"
             :class="{ cur: cur_kind === 'session' && f.path === cur_path }" @click="pickFile(f.path)">
             <span class="fname">{{ f.path }}</span>
             <span class="fmeta">{{ fmtSize(f.size) }} · {{ fmtAgo(f.mod_time) }}</span>

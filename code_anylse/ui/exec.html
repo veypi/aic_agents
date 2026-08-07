@@ -45,7 +45,7 @@
         <div class="rv-panel acc-cyan">
           <h3>执行日志（实时轮询）<i class="rv-dot live" style="margin-left:8px" v-if="polling"></i></h3>
           <div class="rv-log" style="height:236px" ref="elog">
-            <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>
+            <div v-for="(l, i) in logLines">{{ l }}</div>
             <div v-if="!logLines.length" class="dim">等待执行事件…</div>
           </div>
         </div>
@@ -57,7 +57,7 @@
           <table class="rv-table">
             <thead><tr><th>用例 ID</th><th>关联需求</th><th>验证方法</th><th>生成策略</th><th>检出缺陷</th><th style="width:110px">操作</th></tr></thead>
             <tbody>
-              <tr v-for="c in failRows" :key="c.id">
+              <tr v-for="c in failRows">
                 <td class="mono" style="color:var(--color-primary);font-weight:600">{{ c.case_id }}</td>
                 <td><a v-if="c.req_id" class="tlink" href="javascript:;" @click="goReq(c.req_id)">{{ c.req_id }}</a><span v-else class="dim">—</span></td>
                 <td>{{ c.method || '—' }}</td>
@@ -83,7 +83,7 @@
       </label>
       <label class="rv-form-item"><span>执行环境</span>
         <select class="rv-input" v:value="nEnv">
-          <option v-for="e in envs" :key="e.id" :value="e.env_code">{{ e.env_code }}（{{ e.nodes }} 节点）</option>
+          <option v-for="e in envs" :value="e.env_code">{{ e.env_code }}（{{ e.nodes }} 节点）</option>
         </select>
       </label>
       <label class="rv-form-item"><span>并行度</span><input class="rv-input" type="number" v:value="nPar"></label>

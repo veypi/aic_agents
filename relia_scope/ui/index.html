@@ -33,7 +33,7 @@
     </header>
 
     <div class="g g4">
-      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+      <div class="card kpi" v-for="(k, i) in kpis">
         <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
         <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
         </div>
@@ -73,7 +73,7 @@
         <h3>高可靠软件 TOP5</h3>
         <div class="desc">按当前 R(720h) 排序 · 点击进入单目标验证</div>
         <div>
-          <div class="sitem" v-for="(s, i) in top5" :key="s.id" @click="goTarget(s.id)">
+          <div class="sitem" v-for="(s, i) in top5" @click="goTarget(s.id)">
             <svg class="ring" viewBox="0 0 40 40">
               <circle cx="20" cy="20" r="16" fill="none" stroke="#e8edf5" stroke-width="4" />
               <circle cx="20" cy="20" r="16" fill="none" :stroke="ringColor(i)" stroke-width="4"

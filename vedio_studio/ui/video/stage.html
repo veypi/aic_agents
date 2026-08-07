@@ -132,12 +132,12 @@
           <div class="vd-clip" ref="clip" :style="clipStyle()"></div>
           <div class="vd-sel" v-if="selBox()" :style="selStyle()">
             <div class="nm">{{ selBox().id }}</div>
-            <div v-for="h in handles" :key="h" class="vd-handle" :class="'vh-' + h" :data-vd-handle="h"></div>
+            <div v-for="h in handles" class="vd-handle" :class="'vh-' + h" :data-vd-handle="h"></div>
             <div class="vd-rot" :style="rotStyle()" data-vd-handle="rot" title="拖拽旋转（Shift=15°吸附）"></div>
           </div>
-          <div v-for="b in multiBoxes()" :key="'so:' + b.id" class="vd-sel-one" :style="b"></div>
-          <div v-for="(g, gi) in guidesV" :key="'gv' + gi" class="vd-guide v" :style="{ left: (g * scale) + 'px' }"></div>
-          <div v-for="(g, gi) in guidesH" :key="'gh' + gi" class="vd-guide h" :style="{ top: (g * scale) + 'px' }"></div>
+          <div v-for="b in multiBoxes()" class="vd-sel-one" :style="b"></div>
+          <div v-for="(g, gi) in guidesV" class="vd-guide v" :style="{ left: (g * scale) + 'px' }"></div>
+          <div v-for="(g, gi) in guidesH" class="vd-guide h" :style="{ top: (g * scale) + 'px' }"></div>
           <div class="vd-rubber" v-if="rubber" :style="rubberStyle()"></div>
           <div class="vd-ctx" v-if="ctxMenu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
             <button @click="ctxAct('front')">置顶</button>

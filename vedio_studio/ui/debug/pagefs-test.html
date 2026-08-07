@@ -36,14 +36,14 @@
         assert('get 目录 {dir:true,items}', d.dir === true &&
           JSON.stringify(d.items.map((i) => i.name + (i.dir ? '/' : ''))) === JSON.stringify(['sub/']))
 
-        // ---- 云语义容器前缀剥离（AI 经 exec 发来）----
-        assert('$SESSION/foo → /foo', pfs.resolve('$SESSION/foo.txt') === '/foo.txt')
-        assert('$USER/foo → /foo', pfs.resolve('$USER/foo.txt') === '/foo.txt')
-        assert('$AGENT/foo → /foo', pfs.resolve('$AGENT/foo.txt') === '/foo.txt')
-        assert('/sessions/s1/x → /x', pfs.resolve('/sessions/s1/x.md') === '/x.md')
-        assert('/home/u1/x → /x', pfs.resolve('/home/u1/x.md') === '/x.md')
-        assert('workdir 缺省 /', pfs.resolve('rel/path') === '/rel/path')
-        assert('相对基于 workdir', pfs.resolve('rel/path', { workdir: '/base' }) === '/base/rel/path')
+        // ---- 云语义容器前缀剥离（AI 经 exec 发来；_path 内部路径解析）----
+        assert('$SESSION/foo → /foo', pfs._path('$SESSION/foo.txt') === '/foo.txt')
+        assert('$USER/foo → /foo', pfs._path('$USER/foo.txt') === '/foo.txt')
+        assert('$AGENT/foo → /foo', pfs._path('$AGENT/foo.txt') === '/foo.txt')
+        assert('/sessions/s1/x → /x', pfs._path('/sessions/s1/x.md') === '/x.md')
+        assert('/home/u1/x → /x', pfs._path('/home/u1/x.md') === '/x.md')
+        assert('workdir 缺省 /', pfs._path('rel/path') === '/rel/path')
+        assert('相对基于 workdir', pfs._path('rel/path', { workdir: '/base' }) === '/base/rel/path')
         // 翻译后实际读写同一文件
         await pfs.put('$SESSION/via-session.txt', 'via session')
         assert('$SESSION 写入实际落 /via-session.txt', (await pfs.get('/via-session.txt')).content === 'via session')
@@ -51,7 +51,7 @@
         // ---- 根与防护 ----
         const root = await pfs.get('/')
         assert('get(/) 恒存在', root.dir === true && root.items.length >= 2)
-        assert('exists(/) 恒存在', (await pfs.exists('/')).exists === true)
+        assert('has(/) 恒存在', (await pfs.has('/')) === true)
         assert('stat(/) 恒存在', (await pfs.stat('/')).dir === true)
         const rmRoot = await pfs.rm('/').then(() => 'ok', (e) => 'err:' + e.message)
         assert('rm(/) 拒绝', rmRoot.startsWith('err:') && rmRoot.includes('cannot remove root'), rmRoot)
@@ -59,11 +59,11 @@
         // ---- rm 递归 / exists / ls ----
         await pfs.put('/dir2/a.txt', 'a')
         await pfs.put('/dir2/sub/b.txt', 'b')
-        assert('exists 目录', (await pfs.exists('/dir2')).exists === true)
+        assert('has 目录', (await pfs.has('/dir2')) === true)
         const l = await pfs.ls('/')
         assert('ls(/) 顶层', l.ok && l.items.some((i) => i.name === 'dir2' && i.dir))
         assert('rm 递归', (await pfs.rm('/dir2')).removed === '/dir2')
-        assert('rm 后 exists false', (await pfs.exists('/dir2')).exists === false)
+        assert('rm 后 has false', (await pfs.has('/dir2')) === false)
         assert('get 已删抛错', await pfs.get('/dir2').then(() => 'no', (e) => e.message.includes('no such file')))
 
         // ---- 清理 ----

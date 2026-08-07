@@ -64,7 +64,7 @@
       @dragover.prevent="onDragFileOver" @dragleave="onDragFileLeave" @drop.prevent="onDropFiles">
       <div v-if="dropOver" class="as-drop-hint">松开导入素材文件</div>
       <div v-if="!files.length" class="as-empty">{{ readonly ? '打开项目后可上传/管理素材' : '暂无素材' }}<br v-if="!readonly" />{{ readonly ? '' : '点「+ 上传」或直接拖入文件添加图片/音频/视频' }}</div>
-      <div v-for="f in files" :key="f.name" class="as-card" draggable="true" :class="{ drag: dragRef === f.ref }"
+      <div v-for="f in files" class="as-card" draggable="true" :class="{ drag: dragRef === f.ref }"
         :title="'拖到舞台/时间轴插入，双击插入场景中心，单击复制引用：' + f.ref"
         @click="emitPick(f.ref)" @dblclick="emitInsert(f.ref)" @dragstart="onDragStart(f, $event)" @dragend="dragRef = ''">
         <div class="as-ico" :class="f.kind">{{ typeLabel(f.kind) }}</div>

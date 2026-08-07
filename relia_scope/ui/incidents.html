@@ -31,15 +31,15 @@
       <h3>故障工单 <span class="tag">{{ filtered().length }} 单</span></h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <span class="chip" :class="{on: fl === '全部'}" @click="fl = '全部'">全部级别</span>
-        <span class="chip" v-for="l in ['P1','P2','P3','P4']" :key="l" :class="{on: fl === l}" @click="fl = l">{{ l }}</span>
+        <span class="chip" v-for="l in ['P1','P2','P3','P4']" :class="{on: fl === l}" @click="fl = l">{{ l }}</span>
         <span style="width:12px"></span>
         <span class="chip" :class="{on: fs === '全部'}" @click="fs = '全部'">全部状态</span>
-        <span class="chip" v-for="s in ['已闭环','处理中','定位中','监控中']" :key="s" :class="{on: fs === s}" @click="fs = s">{{ s }}</span>
+        <span class="chip" v-for="s in ['已闭环','处理中','定位中','监控中']" :class="{on: fs === s}" @click="fs = s">{{ s }}</span>
       </div>
       <table>
         <thead><tr><th>工单号</th><th>软件</th><th>现象</th><th>级别</th><th>状态</th><th>MTTR(h)</th><th>根因分类</th><th>责任人</th></tr></thead>
         <tbody>
-          <tr v-for="r in filtered()" :key="r.id" style="cursor:pointer" @click="goTarget(r.software_id)">
+          <tr v-for="r in filtered()" style="cursor:pointer" @click="goTarget(r.software_id)">
             <td class="mono">{{ r.code }}</td>
             <td><b>{{ swName(r.software_id) }}</b></td>
             <td style="max-width:280px">{{ r.symptom }}</td>
@@ -59,7 +59,7 @@
       <div class="modal" @click.stop="noop()">
         <h3>新建故障工单</h3>
         <div class="fld"><label>关联软件</label>
-          <select class="fin" v:value="nf.sid"><option v-for="s in softs" :key="s.id" :value="s.id">{{ s.name }}</option></select></div>
+          <select class="fin" v:value="nf.sid"><option v-for="s in softs" :value="s.id">{{ s.name }}</option></select></div>
         <div class="fld"><label>级别</label>
           <select class="fin" v:value="nf.level"><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></div>
         <div class="fld"><label>现象描述</label><input class="fin" v:value="nf.symptom" placeholder="如：交易超时率突增至 8%"></div>

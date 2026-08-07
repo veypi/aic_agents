@@ -23,7 +23,7 @@
     </header>
 
     <div class="g g4">
-      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+      <div class="card kpi" v-for="(k, i) in kpis">
         <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
         <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span></div>
         <div class="tr" :class="k.up ? 'up' : 'down'">{{ k.up ? '▲' : '▼' }} {{ k.tr }} <em>{{ k.hint }}</em></div>
@@ -42,7 +42,7 @@
         <div class="desc">预测下一次故障前的剩余运行时长 · 点击进入单目标验证</div>
         <div v-if="!ruls.length" class="empty-box">暂无预测数据<br>点击右上角「重训预测模型」，由 Agent 拟合后生成</div>
         <div>
-          <div class="health" v-for="r in ruls" :key="r.id" @click="goTarget(r.id)">
+          <div class="health" v-for="r in ruls" @click="goTarget(r.id)">
             <div style="flex:1">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink)">{{ r.name }}</div>
               <div class="bar" style="margin-top:6px;width:100%"><i :style="{width: r.pct + '%', background: r.col}"></i></div>

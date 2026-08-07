@@ -227,7 +227,7 @@
     <div class="w3-left">
       <header class="w3-header">
         <div class="w3-toolbar">
-          <label v-for="l in layers" :key="l.key">
+          <label v-for="l in layers">
             <input type="checkbox" :checked="l.on" @change="toggleLayer(l, $event.target.checked)" />
             <span>{{ l.label }}</span>
           </label>
@@ -244,7 +244,7 @@
             <h3>Readout</h3>
             <div class="name">{{ readout.name }}</div>
             <table>
-              <tr v-for="(r, i) in readout.rows" :key="i">
+              <tr v-for="(r, i) in readout.rows">
                 <td>{{ r[0] }}</td>
                 <td>{{ r[1] }}</td>
               </tr>
@@ -254,7 +254,7 @@
             <h3>Selected</h3>
             <div class="name">{{ selected.name }}</div>
             <table>
-              <tr v-for="(r, i) in selected.rows" :key="i">
+              <tr v-for="(r, i) in selected.rows">
                 <td>{{ r[0] }}</td>
                 <td>{{ r[1] }}</td>
               </tr>

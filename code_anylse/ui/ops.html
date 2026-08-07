@@ -25,7 +25,7 @@
             <table class="rv-table">
               <thead><tr><th>环境</th><th>类型</th><th>节点</th><th>用途</th><th>状态</th><th style="width:84px">操作</th></tr></thead>
               <tbody>
-                <tr v-for="e in envs" :key="e.id">
+                <tr v-for="e in envs">
                   <td class="mono" style="color:var(--color-primary);font-weight:600">{{ e.env_code }}</td>
                   <td><span class="rv-tag" :class="envTone(e.env_type)">{{ e.env_type }}</span></td>
                   <td class="mono">{{ e.nodes }}</td>
@@ -45,7 +45,7 @@
           <table class="rv-table">
             <thead><tr><th>服务</th><th>职责</th><th>实例数</th><th style="min-width:150px">CPU 负载</th><th>P99</th><th>状态</th><th style="width:96px">操作</th></tr></thead>
             <tbody>
-              <tr v-for="s in services" :key="s.id">
+              <tr v-for="s in services">
                 <td class="mono" style="color:var(--color-primary);font-weight:600">{{ s.svc_name }}</td>
                 <td class="dim">{{ s.duty }}</td>
                 <td class="mono">{{ s.instances }}</td>

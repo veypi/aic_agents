@@ -193,15 +193,15 @@
           <thead>
             <tr>
               <th>系统需求 \ 软件组件</th>
-              <th v-for="c in comps" :key="c.id">{{ c.comp_code }}<div class="thsub">{{ c.name }}</div>
+              <th v-for="c in comps">{{ c.comp_code }}<div class="thsub">{{ c.name }}</div>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in pageRows()" :key="r.id" :class="{ hi: r.req_id === hiReq }">
+            <tr v-for="r in pageRows()" :class="{ hi: r.req_id === hiReq }">
               <td class="rowh"><span class="req-link" :title="r.req_id" @click="goReq(r.req_id)">{{ r.req_id
                   }}</span><span class="rh-desc">{{ short(r.description) }}</span></td>
-              <td v-for="c in comps" :key="c.id" class="cell" :class="'cell-' + cellOf(r.req_id, c.comp_code)"
+              <td v-for="c in comps" class="cell" :class="'cell-' + cellOf(r.req_id, c.comp_code)"
                 :title="r.req_id + ' × ' + c.comp_code + '：点击切换'" @click="toggle(r, c)">{{ symOf(r.req_id, c.comp_code)
                 }}<i class="rev" v-if="isRev(r.req_id, c.comp_code)"></i></td>
             </tr>

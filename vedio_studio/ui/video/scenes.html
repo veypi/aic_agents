@@ -50,7 +50,7 @@
     </div>
     <div class="sc-list">
       <div v-if="!scenes.length" class="sc-empty">暂无场景</div>
-      <div v-for="(s, i) in scenes" :key="ver + ':' + s.id" class="sc-card" :class="{ active: i === cur }" @click="emitPick(i)">
+      <div v-for="(s, i) in scenes" class="sc-card" :class="{ active: i === cur }" @click="emitPick(i)">
         <div class="sc-bg" :style="{ background: s.background || '#0f1420' }"></div>
         <div class="sc-info">
           <div class="sc-t">场景 {{ i + 1 }}<span class="sc-dur">{{ s.duration }}s</span></div>

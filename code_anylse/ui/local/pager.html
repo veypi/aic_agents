@@ -15,7 +15,7 @@
   <div class="rv-pager">
     <span class="rv-ptotal">共 {{ total }} 条</span>
     <button :disabled="page <= 1" @click="goto(page - 1)">‹</button>
-    <template :key="'p' + n" v-for="n in pageList()">
+    <template v-for="n in pageList()">
       <button :class="{ cur: n === page }" @click="goto(n)">{{ n }}</button>
     </template>
     <button :disabled="page >= pages()" @click="goto(page + 1)">›</button>

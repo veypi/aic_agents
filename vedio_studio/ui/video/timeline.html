@@ -156,7 +156,7 @@
       <div class="tl-gutter">
         <div class="tl-g-head"><span>{{ tracks().length }} 轨</span><span>·</span><span>{{ doc.scenes.length }} 场景</span></div>
         <div class="tl-g-rows"><div class="tl-g-rows-in" ref="grows">
-          <div v-for="tr in tracks()" :key="ver + ':' + kver + ':' + tr.key" class="tl-g-row"
+          <div v-for="tr in tracks()" class="tl-g-row"
                :class="[tr.kind, { active: isActive(tr), 'hidden-el': tr.hidden }]"
                @click="onRowClick(tr)">
             <template v-if="tr.kind === 'scene'">
@@ -182,10 +182,10 @@
       <div class="tl-scroll" ref="scroll" @dragover="onDragOverAsset" @drop="onDropAsset">
         <div class="tl-inner" ref="inner" :style="{ width: innerW() + 'px' }">
           <div class="tl-ruler" @mousedown="onRulerDown">
-            <div v-for="t in ticks()" :key="t.x" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
+            <div v-for="t in ticks()" class="tl-tick" :class="{ minor: !t.major }" :style="{ left: t.x + 'px' }">{{ t.label }}</div>
           </div>
           <div class="tl-rows">
-            <div v-for="tr in tracks()" :key="ver + ':' + kver + ':' + tr.key" class="tl-row" :class="{ active: isActive(tr) }">
+            <div v-for="tr in tracks()" class="tl-row" :class="{ active: isActive(tr) }">
               <template v-if="tr.kind === 'scene'">
                 <div class="tl-bar-scene" :class="{ active: curSceneIdx() === tr.i, 'hidden-el': tr.hidden }"
                      :style="{ left: x(tr.start) + 'px', width: Math.max(8, w(tr.dur)) + 'px' }"
@@ -204,7 +204,7 @@
                      :style="{ left: x(tr.start) + 'px', width: Math.max(6, w(tr.dur)) + 'px' }"
                      :title="elTitle(tr)" @mousedown="onElBarDown(tr, $event)">
                   <span class="tl-bar-lab">{{ tr.id }}</span>
-                  <div v-for="(k, ki) in (tr.el.keyframes || [])" :key="ki" class="tl-kf" :style="{ left: w(+k.t || 0) + 'px' }"
+                  <div v-for="(k, ki) in (tr.el.keyframes || [])" class="tl-kf" :style="{ left: w(+k.t || 0) + 'px' }"
                        :title="'t=' + k.t + 's（拖拽改时间，Alt+点击删除）'" @mousedown.stop="onKfDown(tr, k, ki, $event)"></div>
                   <div class="tl-edge l" @mousedown.stop="onElEdgeDown(tr, 'l', $event)"></div>
                   <div class="tl-edge r" @mousedown.stop="onElEdgeDown(tr, 'r', $event)"></div>

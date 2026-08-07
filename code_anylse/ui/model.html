@@ -44,14 +44,14 @@
     <div v-else class="rv-grid g3" style="align-items:start">
       <div class="rv-panel acc-primary" style="padding:12px">
         <div class="phead" style="padding:2px 4px 10px">系统需求模型（按能力域）</div>
-        <details v-for="(d, i) in domainList" :key="d" class="model-block" :open="i === 0">
+        <details v-for="(d, i) in domainList" class="model-block" :open="i === 0">
           <summary class="mb-h">
             <span class="mb-name">{{ d }}域</span>
             <span class="mb-sub">系统级需求</span>
             <span class="rv-tag mb-count" :class="domainTone(i)">{{ domainReqs(d).length }} 项</span>
           </summary>
           <div class="mb-b">
-            <div v-for="r in domainReqs(d).slice(0, 3)" :key="r.id" class="mb-req">
+            <div v-for="r in domainReqs(d).slice(0, 3)" class="mb-req">
               <span class="rid" @click="goReq(r.req_id)">{{ r.req_id }}</span>
               <span class="rdesc" :title="r.description">{{ short(r.description) }}</span>
               <span class="rv-tag" :class="verifTone(r.verif_status)">{{ r.verif_status }}</span>
@@ -63,7 +63,7 @@
 
       <div class="rv-panel acc-secondary" style="padding:12px">
         <div class="phead" style="padding:2px 4px 10px">软件需求模型（组件分解）</div>
-        <details v-for="c in comps" :key="c.id" class="model-block">
+        <details v-for="c in comps" class="model-block">
           <summary class="mb-h">
             <span class="mb-name">{{ c.comp_code }}</span>
             <span class="mb-sub">{{ c.name }}</span>
@@ -85,7 +85,7 @@
           <table class="rv-table">
             <thead><tr><th>接口</th><th>路径</th><th>约束</th><th>状态</th></tr></thead>
             <tbody>
-              <tr v-for="f in ifaces" :key="f.id">
+              <tr v-for="f in ifaces">
                 <td class="mono" style="color:var(--color-primary);font-weight:600">{{ f.if_id }}</td>
                 <td class="mono" style="font-size:11px">{{ f.provider }} <span class="if-arrow">→</span> {{ f.consumer }}</td>
                 <td class="dim" style="font-size:11px">{{ f.constraint_desc }}</td>

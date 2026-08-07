@@ -42,7 +42,7 @@
         <table class="rv-tbl">
           <thead><tr><th>模型名称</th><th>模型类型</th><th>实体/关系</th><th>状态</th><th>构建时间</th></tr></thead>
           <tbody>
-            <tr v-for="m in models" :key="m.id">
+            <tr v-for="m in models">
               <td><b>{{ m.name }}</b></td>
               <td><span class="rv-tag t-info">{{ m.model_type }}</span></td>
               <td class="mono">{{ m.entity_count || 0 }} / {{ m.relation_count || 0 }}</td>
@@ -65,7 +65,7 @@
         <table class="rv-tbl">
           <thead><tr><th>所属域</th><th>需求数</th><th>总结内容</th><th>时间</th></tr></thead>
           <tbody>
-            <tr v-for="s in summaries" :key="s.id">
+            <tr v-for="s in summaries">
               <td><span class="rv-tag t-info">{{ s.domain || '全项目' }}</span></td>
               <td class="mono">{{ s.req_count || 0 }}</td>
               <td><div class="preview">{{ s.summary }}</div></td>
@@ -87,7 +87,7 @@
         <table class="rv-tbl">
           <thead><tr><th>版本标识</th><th>需求数</th><th>备注</th><th>快照时间</th></tr></thead>
           <tbody>
-            <tr v-for="v in versions" :key="v.id">
+            <tr v-for="v in versions">
               <td class="mono">{{ v.version }}</td>
               <td class="mono">{{ v.req_count || 0 }}</td>
               <td class="dim">{{ v.note || '-' }}</td>

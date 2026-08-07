@@ -48,15 +48,15 @@
         placeholder="关键词 / 需求ID，回车检索" />
       <select class="rv-input" v:value="domain" @change="onFilter()">
         <option value="">全部域</option>
-        <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
+        <option v-for="d in domains" :value="d">{{ d }}</option>
       </select>
       <select class="rv-input" v:value="impl" @change="onFilter()">
         <option value="">实现状态</option>
-        <option v-for="s in impls" :key="s" :value="s">{{ s }}</option>
+        <option v-for="s in impls" :value="s">{{ s }}</option>
       </select>
       <select class="rv-input" v:value="verif" @change="onFilter()">
         <option value="">验证状态</option>
-        <option v-for="s in verifs" :key="s" :value="s">{{ s }}</option>
+        <option v-for="s in verifs" :value="s">{{ s }}</option>
       </select>
       <button class="rv-btn ghost sm" @click="onFilter()">⌕ 检索</button>
       <span class="spacer"></span>
@@ -78,7 +78,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.id">
+          <tr v-for="r in rows">
             <td><span class="req-link" @click="openReq(r.req_id)">{{ r.req_id }}</span></td>
             <td>
               <div class="ell" :title="r.description">{{ r.description }}</div>
@@ -104,7 +104,7 @@
         <div class="rv-form-item"><label>需求ID</label><input class="rv-input mono" v:value="nreq.req_id" /></div>
         <div class="rv-form-item"><label>所属域</label>
           <select class="rv-input" v:value="nreq.domain">
-            <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
+            <option v-for="d in domains" :value="d">{{ d }}</option>
           </select>
         </div>
         <div class="rv-form-item"><label>优先级</label>

@@ -37,7 +37,7 @@
         <div>
           <div class="desc" style="margin:0 0 6px">验证对象（选择后全页数据联动）</div>
           <select class="fin tsel" v:value="curId" @change="pick()">
-            <option v-for="s in softs" :key="s.id" :value="s.id">{{ s.name }}</option>
+            <option v-for="s in softs" :value="s.id">{{ s.name }}</option>
           </select>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -86,7 +86,7 @@
           <table>
             <thead><tr><th>验证判据</th><th>实测值</th><th>判定</th></tr></thead>
             <tbody>
-              <tr v-for="c in checks" :key="c.id">
+              <tr v-for="c in checks">
                 <td>{{ c.name }} <span v-if="c.forced" class="pill p-red" style="margin-left:4px">强制</span></td>
                 <td class="mono">{{ c.actual }}</td>
                 <td><span class="pill" :class="c.ok ? 'p-green' : 'p-red'">{{ c.ok ? '✓ 满足' : '✗ 不满足' }}</span></td>
@@ -124,7 +124,7 @@
             <table>
               <thead><tr><th>#</th><th>发生时刻(h)</th><th>间隔 Δt(h)</th><th>故障模式</th><th>严重度</th><th>构建</th><th>统计</th></tr></thead>
               <tbody>
-                <tr v-for="f in dispRows()" :key="f.id">
+                <tr v-for="f in dispRows()">
                   <td class="mono" style="color:var(--text-color-disabled)">{{ f.seq }}</td>
                   <td class="mono">{{ f.cum.toLocaleString() }}</td>
                   <td class="mono">{{ Number(f.delta_t).toLocaleString() }}</td>
@@ -190,7 +190,7 @@
         <div class="fld"><label>距上次失效间隔 Δt（小时）</label><input class="fin mono" type="number" v:value="form.dt"></div>
         <div class="fld"><label>故障模式</label>
           <select class="fin" v:value="form.mode">
-            <option v-for="m in modePool" :key="m" :value="m">{{ m }}</option>
+            <option v-for="m in modePool" :value="m">{{ m }}</option>
           </select></div>
         <div class="fld"><label>严重度</label>
           <select class="fin" v:value="form.sev">

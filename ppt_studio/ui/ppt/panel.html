@@ -241,7 +241,7 @@
         <input class="pp-color" type="color" :value="st.background || '#ffffff'" @change="onSlideBg">
         <div class="grow">
           <select class="pp-sel" :value="st.transition || 'morph'" @change="onSlideTrans">
-            <option :key="t" v-for="t in transitions" :value="t" :selected="(st.transition || 'morph') === t">{{
+            <option v-for="t in transitions" :value="t" :selected="(st.transition || 'morph') === t">{{
               $t('tb.trans.' + t) }}</option>
           </select>
         </div>
@@ -255,7 +255,7 @@
         <div class="grow">
           <select class="pp-sel" :value="slideStateOf()" @change="onSlideStateOf">
             <option value="">{{ $t('pn.stateNone') }}</option>
-            <option :key="s.id" v-for="s in otherSlides()" :value="s.id" :selected="slideStateOf() === s.id">{{
+            <option v-for="s in otherSlides()" :value="s.id" :selected="slideStateOf() === s.id">{{
               slideLabel(s) }}</option>
           </select>
         </div>
@@ -293,7 +293,7 @@
         <label>{{ $t('pn.blend') }}</label>
         <div class="grow">
           <select class="pp-sel" :value="sel().blend || ''" @change="onBlend">
-            <option :key="b" v-for="b in blends" :value="b" :selected="(sel().blend || '') === b">{{ b ? b :
+            <option v-for="b in blends" :value="b" :selected="(sel().blend || '') === b">{{ b ? b :
               $t('pn.blendNormal') }}</option>
           </select>
         </div>
@@ -309,7 +309,7 @@
         <div class="grow">
           <select class="pp-sel" :value="sel().link || ''" @change="onLink">
             <option value="">{{ $t('pn.linkNone') }}</option>
-            <option :key="s.id" v-for="s in st.slides || []" :value="s.id" :selected="(sel().link || '') === s.id">{{
+            <option v-for="s in st.slides || []" :value="s.id" :selected="(sel().link || '') === s.id">{{
               slideLabel(s) }}</option>
           </select>
         </div>
@@ -329,7 +329,7 @@
         <div class="grow">
           <select class="pp-sel" :value="fxVal('enter') || ''" @change="onFxEnter">
             <option value="">{{ $t('pn.fxNone') }}</option>
-            <option :key="f" v-for="f in enters" :value="f" :selected="(fxVal('enter') || '') === f">{{ $t('pn.fx.' + f)
+            <option v-for="f in enters" :value="f" :selected="(fxVal('enter') || '') === f">{{ $t('pn.fx.' + f)
               }}</option>
           </select>
         </div>
@@ -364,7 +364,7 @@
         <div class="pp-field">
           <label>{{ $t('pn.weight') }}</label>
           <select class="pp-sel" :value="String(sel().fontWeight || 400)" @change="onWeight">
-            <option :key="w" v-for="w in weights" :value="w" :selected="String(sel().fontWeight || 400) === w">{{ w }}
+            <option v-for="w in weights" :value="w" :selected="String(sel().fontWeight || 400) === w">{{ w }}
             </option>
           </select>
         </div>
@@ -476,7 +476,7 @@
           <label>{{ $t('pn.lineStart') }}</label>
           <div class="grow">
             <select class="pp-sel" :value="sel().lineStart || 'none'" @change="onLineEnd('lineStart', $event)">
-              <option :key="e" v-for="e in lineEnds" :value="e" :selected="(sel().lineStart || 'none') === e">{{
+              <option v-for="e in lineEnds" :value="e" :selected="(sel().lineStart || 'none') === e">{{
                 $t('pn.le.' + e) }}</option>
             </select>
           </div>
@@ -485,7 +485,7 @@
           <label>{{ $t('pn.lineEnd') }}</label>
           <div class="grow">
             <select class="pp-sel" :value="sel().lineEnd || 'none'" @change="onLineEnd('lineEnd', $event)">
-              <option :key="e" v-for="e in lineEnds" :value="e" :selected="(sel().lineEnd || 'none') === e">{{
+              <option v-for="e in lineEnds" :value="e" :selected="(sel().lineEnd || 'none') === e">{{
                 $t('pn.le.' + e) }}</option>
             </select>
           </div>
@@ -536,7 +536,7 @@
         <label>{{ $t('pn.chartType') }}</label>
         <div class="grow">
           <select class="pp-sel" :value="chartType()" @change="onChartType">
-            <option :key="t" v-for="t in chartTypes" :value="t" :selected="chartType() === t">{{ $t('pn.ct.' + t) }}
+            <option v-for="t in chartTypes" :value="t" :selected="chartType() === t">{{ $t('pn.ct.' + t) }}
             </option>
           </select>
         </div>

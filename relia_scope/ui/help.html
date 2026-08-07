@@ -60,13 +60,13 @@
     </div>
 
     <div class="srow"><h2>功能模块</h2><div class="ln"></div><div class="navchips">
-      <span class="chip" v-for="(s, i) in secs" :key="s.t" @click="jump('s' + i)">{{ s.t }}</span>
+      <span class="chip" v-for="(s, i) in secs" @click="jump('s' + i)">{{ s.t }}</span>
     </div></div>
 
-    <div class="card" v-for="(s, i) in secs" :key="s.t" :id="'s' + i" style="margin-bottom:15px">
+    <div class="card" v-for="(s, i) in secs" :id="'s' + i" style="margin-bottom:15px">
       <h3>{{ s.t }} <span class="tag" v-if="s.tag">{{ s.tag }}</span></h3>
       <div class="desc">{{ s.d }}</div>
-      <ul class="pts"><li v-for="p in s.pts" :key="p" v-html="p"></li></ul>
+      <ul class="pts"><li v-for="p in s.pts" v-html="p"></li></ul>
       <img class="shot" :src="'help/' + s.img" :alt="s.t" loading="lazy" />
     </div>
 

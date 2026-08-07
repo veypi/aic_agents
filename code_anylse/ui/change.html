@@ -35,7 +35,7 @@
         <div class="rv-panel acc-secondary">
           <h3>变更事件流（Agent 自动解析 · 级联标记）</h3>
           <div class="vtl">
-            <div v-for="ev in events" :key="ev.id" class="vtl-item" :class="{ warn: ev.change_type === '指标收紧' }">
+            <div v-for="ev in events" class="vtl-item" :class="{ warn: ev.change_type === '指标收紧' }">
               <div class="vtl-h">
                 <span class="vtl-title" @click="goTrace(ev.req_id)">{{ ev.title }}</span>
                 <span class="rv-tag" :class="typeTone(ev.change_type)">{{ ev.change_type }}</span>
@@ -53,7 +53,7 @@
             <table class="rv-table">
               <thead><tr><th>基线</th><th>需求数</th><th>覆盖率</th><th>得分</th><th>状态</th><th>发布时间</th></tr></thead>
               <tbody>
-                <tr v-for="b in baselines" :key="b.id">
+                <tr v-for="b in baselines">
                   <td class="mono" style="font-weight:600;color:var(--color-primary)">{{ b.code }}</td>
                   <td class="mono">{{ b.req_count }}</td>
                   <td class="mono">{{ b.coverage }}%</td>

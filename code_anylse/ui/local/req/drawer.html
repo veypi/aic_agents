@@ -41,7 +41,7 @@
 
       <div class="rv-sec">
         <h4>追踪链接（{{ links.length }}）</h4>
-        <div class="rv-kv" v-for="l in links" :key="l.id">
+        <div class="rv-kv" v-for="l in links">
           <b class="mono">{{ l.comp_code }}</b>
           <span>
             <span class="rv-tag" :class="l.link_type === 'F' ? 't-info' : 't-vio'">{{ l.link_type === 'F' ? '完整实现' : '部分实现' }}</span>
@@ -53,7 +53,7 @@
 
       <div class="rv-sec">
         <h4>关联验证用例（{{ cases.length }}）</h4>
-        <div class="rv-kv" v-for="c in cases" :key="c.id">
+        <div class="rv-kv" v-for="c in cases">
           <b class="mono">{{ c.case_id }}</b>
           <span>
             <span class="rv-tag" :class="resCls(c.last_result)"><i></i>{{ c.last_result }}</span>
@@ -67,7 +67,7 @@
 
       <div class="rv-sec">
         <h4>变更历史（{{ changes.length }}）</h4>
-        <div class="rv-kv" v-for="h in changes" :key="h.id">
+        <div class="rv-kv" v-for="h in changes">
           <b class="mono">{{ shortT(h.occurred_at) }}</b>
           <span>{{ h.title }}</span>
         </div>

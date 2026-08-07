@@ -1012,7 +1012,7 @@
       <div class="rv-mwrap">
         <div class="rv-prj">
           <select class="rv-input" v:value="curPrj" @change="onPrj($event)">
-            <option v-for="p in projects" :key="p.code" :value="p.code">{{ p.code }} · {{ p.name }}</option>
+            <option v-for="p in projects" :value="p.code">{{ p.code }} · {{ p.name }}</option>
           </select>
         </div>
         <div class="rv-search">
@@ -1021,9 +1021,9 @@
         </div>
 
         <nav class="rv-nav">
-          <template :key="g.group" v-for="g in navList">
+          <template v-for="g in navList">
             <div class="rv-mg">{{ g.group }}</div>
-            <a :key="it.key" v-for="it in g.items" class="rv-mi" :class="{ on: page === it.key }" :href="it.href">
+            <a v-for="it in g.items" class="rv-mi" :class="{ on: page === it.key }" :href="it.href">
               <span class="rv-mico">{{ it.icon }}</span>{{ it.label }}
               <span class="cnt" v-if="countOf(it.key)">{{ countOf(it.key) }}</span>
             </a>

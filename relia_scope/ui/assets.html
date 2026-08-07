@@ -27,12 +27,12 @@
       <h2>在管系统 · {{ softs.length }} 个</h2><div class="ln"></div>
       <div class="filter">
         <span class="chip" :class="{on: ftype === '全部'}" @click="ftype = '全部'">全部</span>
-        <span class="chip" v-for="t in types" :key="t" :class="{on: ftype === t}" @click="ftype = t">{{ t.replace('系统', '').replace('软件', '') }}</span>
+        <span class="chip" v-for="t in types" :class="{on: ftype === t}" @click="ftype = t">{{ t.replace('系统', '').replace('软件', '') }}</span>
       </div>
     </div>
 
     <div class="g g3">
-      <div class="card acard" v-for="s in filtered" :key="s.id">
+      <div class="card acard" v-for="s in filtered">
         <div class="top">
           <div>
             <h3>{{ s.name }}</h3>
@@ -65,7 +65,7 @@
         <div class="fld"><label>软件名称 *</label><input class="fin" v:value="nf.name" placeholder="如：XX·业务系统"></div>
         <div class="fld"><label>软件类型</label>
           <select class="fin" v:value="nf.stype">
-            <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+            <option v-for="t in types" :value="t">{{ t }}</option>
           </select></div>
         <div class="fld"><label>当前版本</label><input class="fin mono" v:value="nf.version" placeholder="v1.0.0"></div>
         <div class="g g2">

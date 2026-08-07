@@ -19,7 +19,7 @@
     </header>
 
     <div class="g g4">
-      <div class="card kpi" v-for="(k, i) in kpis" :key="k.lb">
+      <div class="card kpi" v-for="(k, i) in kpis">
         <div class="lb"><span class="dot" :style="{background: k.c}"></span>{{ k.lb }}</div>
         <div class="vl" :style="{color: k.c}"><span :id="'kv' + i">{{ k.v }}</span><span class="un">{{ k.un }}</span>
         </div>
@@ -76,7 +76,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.id" style="cursor:pointer" @click="goTarget(r.id)">
+          <tr v-for="r in rows" style="cursor:pointer" @click="goTarget(r.id)">
             <td><b>{{ r.name }}</b>
               <div style="color:var(--text-color-disabled);font-size:11px">{{ r.version }} · n={{ r.n }}</div>
             </td>

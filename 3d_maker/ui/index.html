@@ -462,7 +462,7 @@
   <header class="panel p-top" ref="topbar">
     <div class="bar">
       <div class="grp">
-        <button :key="m[0]" v-for="m in viewModes" :class="{ on: viewMode === m[0] }" @click="setMode(m[0])">{{ m[1]
+        <button v-for="m in viewModes" :class="{ on: viewMode === m[0] }" @click="setMode(m[0])">{{ m[1]
           }}</button>
       </div>
       <div class="sep"></div>
@@ -486,11 +486,11 @@
       <div class="grp">
         <select ref="exSel" @change="pickExample()" title="加载内置案例模型">
           <option value="">📦 案例…</option>
-          <option :key="e[0]" v-for="e in examples" :value="e[0]">{{ e[1] }}</option>
+          <option v-for="e in examples" :value="e[0]">{{ e[1] }}</option>
         </select>
         <button :class="{ on: showFiles }" @click="toggleFiles()" title="浏览并加载当前会话目录下的模型文件">📂 文件</button>
         <select ref="fmtSel" title="导出格式">
-          <option :key="f[0]" v-for="f in exportFormats" :value="f[0]">{{ f[1] }}</option>
+          <option v-for="f in exportFormats" :value="f[0]">{{ f[1] }}</option>
         </select>
         <button @click="doDownload()" title="下载模型">⬇ 下载</button>
         <button :class="{ on: isMobile ? mobileShowSide : showSide }" @click="togglePanel()" title="属性面板">☰</button>
@@ -548,7 +548,7 @@
         <div v-if="sessLoading" class="fempty"><i class="spin"></i>正在列出文件…</div>
         <div v-else-if="!sid" class="fempty">会话尚未连接，请稍后再试</div>
         <div v-else-if="!sessFiles.length" class="fempty">当前会话还没有 .js 模型文件<br>可以让 AI 生成模型并保存为文件</div>
-        <div class="fitem" :key="f.path" v-for="f in sessFiles" :title="'点击加载：' + f.path" @click="loadSessFile(f.path)">
+        <div class="fitem" v-for="f in sessFiles" :title="'点击加载：' + f.path" @click="loadSessFile(f.path)">
           <span class="fname">{{ f.path }}</span>
           <span class="fmeta"><span>{{ fmtAgo(f.mod_time) }}</span><span>{{ fmtSize(f.size) }}</span></span>
         </div>
@@ -565,7 +565,7 @@
   <aside class="panel p-right" v-show="isMobile ? mobileShowSide : showSide">
     <section v-if="params.length">
       <h4>🎛 参数面板</h4>
-      <div class="row" :key="p.name" v-for="p in params">
+      <div class="row" v-for="p in params">
         <label :title="p.name">{{ p.label }}</label>
         <input type="range" :min="p.min" :max="p.max" :step="p.step" v:value="p.value" @input="onParam(p)">
         <input type="number" :min="p.min" :max="p.max" :step="p.step" v:value="p.value" @change="onParam(p)">
@@ -605,7 +605,7 @@
     </section>
     <section v-if="selection.length">
       <h4>🖱 选中部件</h4>
-      <div class="kv" :key="s.index" v-for="s in selection"><span>{{ s.name }}</span><span>{{ fmtVol(s.volume) }}</span>
+      <div class="kv" v-for="s in selection"><span>{{ s.name }}</span><span>{{ fmtVol(s.volume) }}</span>
       </div>
       <div class="btns">
         <button @click="isolate()">👁 隔离显示</button>

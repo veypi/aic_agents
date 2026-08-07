@@ -434,18 +434,18 @@
 
   <div class="popover" v-if="showCases">
     <div class="pop-title">内置样例（只读，点击加载）</div>
-    <div v-for="c in cases" :key="c.id" class="pop-item" @click="openCase(c.id)">
+    <div v-for="c in cases" class="pop-item" @click="openCase(c.id)">
       <div class="t">{{ c.title }}</div>
       <div class="d">{{ c.desc }}</div>
     </div>
   </div>
 
   <div class="popover" v-if="showProjects">
-    <div class="pop-title">我的项目（浏览器本地存储）<a class="pop-link" href="@/settings/page" target="_blank" @click.stop>本地存储管理</a></div>
+    <div class="pop-title">我的项目（浏览器本地存储）<a class="pop-link" href="@/fs/page" target="_blank" @click.stop>本地存储管理</a></div>
     <div v-if="!projects.length" class="pop-item">
       <div class="d">暂无项目，点击「新建」开始创作</div>
     </div>
-    <div v-for="p in projects" :key="p.name" class="pop-item" @click="openProject(p.name)">
+    <div v-for="p in projects" class="pop-item" @click="openProject(p.name)">
       <div class="t">{{ p.title }} <span style="color:#64748b;font-weight:400">· {{ p.duration }}s · {{ p.scenes }}
           场景</span></div>
       <div class="d">{{ p.name }}</div>

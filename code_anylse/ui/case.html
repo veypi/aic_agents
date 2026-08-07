@@ -78,7 +78,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in pageRows()" :key="c.id">
+            <tr v-for="c in pageRows()">
               <td class="mono" style="color:var(--color-primary);font-weight:600">{{ c.case_id }}</td>
               <td><a v-if="c.req_id" class="tlink" href="javascript:;" @click="goReq(c.req_id)">{{ c.req_id }}</a><span
                   v-else class="dim">—</span></td>

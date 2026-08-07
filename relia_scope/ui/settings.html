@@ -29,7 +29,7 @@
         <table>
           <thead><tr><th>判据</th><th>判据值</th><th>状态</th><th>启用</th></tr></thead>
           <tbody>
-            <tr v-for="c in criterias" :key="c.id">
+            <tr v-for="c in criterias">
               <td>{{ c.name }} <span v-if="c.forced" class="pill p-red" style="margin-left:4px">强制</span></td>
               <td class="mono">{{ c.spec }}</td>
               <td>
@@ -49,7 +49,7 @@
         <table>
           <tbody>
             <tr><td>采集探针总数</td><td><span class="pill p-green">{{ probeTotal }} 个在线 · {{ channels }} 类通道</span></td></tr>
-            <tr v-for="g in intgs" :key="g.id">
+            <tr v-for="g in intgs">
               <td>{{ g.name }}<div style="font-size:10.5px;color:var(--text-color-disabled);margin-top:2px">{{ g.detail }}</div></td>
               <td><span class="pill" :class="intgClass(g.status)">{{ g.status }}{{ g.link_count ? ' · ' + g.link_count + ' 条' : '' }}</span></td>
             </tr>
